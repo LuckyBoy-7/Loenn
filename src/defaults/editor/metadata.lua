@@ -56,7 +56,10 @@ defaultMetadata.mode = {
     HeartIsEnd = false,
 
     SeekerSlowdown = true,
-    TheoInBubble = false
+    TheoInBubble = false,
+
+    -- Added by Everest
+    CoreModeIceTileOverlay = false,
 }
 
 defaultMetadata.audioState = {
