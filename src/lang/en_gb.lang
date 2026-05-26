@@ -1509,6 +1509,7 @@ metadata.mode.attribute.StartLevel=Starting Room
 metadata.mode.attribute.HeartIsEnd=End Level on Heart
 metadata.mode.attribute.SeekerSlowdown=Seeker Slowdown
 metadata.mode.attribute.TheoInBubble=Theo In Booster
+metadata.mode.attribute.CoreModeIceTileOverlay=Core Mode Ice Tile Overlay
 
 metadata.mode.description.IgnoreLevelAudioLayerData=Whether the layer data set on individual rooms should be ignored.
 metadata.mode.description.Inventory=Your inventory starting the map. Changes the player's abilities.\n Prologue: 0 dashes, Dream blocks disabled, wearing a backpack, ground refills enabled\n Default: 1 dash, Dream blocks enabled, wearing a backpack, ground refills enabled\n OldSite: 1 dash, Dream blocks disabled, wearing a backpack, ground refills enabled\n CH6End: 2 dashes, Dream blocks enabled, wearing a backpack, ground refills enabled\n TheSummit: 2 dashes, Dream blocks enabled, not wearing a backpack, ground refills enabled\n Core: 2 dashes, Dream blocks enabled, wearing a backpack, ground refills disabled\n Farewell: 1 dash, Dream blocks enabled, not wearing a backpack, ground refills enabled
@@ -1516,6 +1517,7 @@ metadata.mode.description.StartLevel=The room to start the map in. By default, i
 metadata.mode.description.HeartIsEnd=Whether collecting a heart counts as the end of the level. The easiest way to end a level.
 metadata.mode.description.SeekerSlowdown=Whether Seekers should be able to slow down time when attacking the player.
 metadata.mode.description.TheoInBubble=Whether player is allowed to hold crystal Theo and other holdables while in a booster.
+metadata.mode.description.CoreModeIceTileOverlay=Whether ice core mode should show overlay tiles.
 
 
 # From side.meta.audiostate
