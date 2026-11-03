@@ -1009,12 +1009,19 @@ function toolWindow.getWindow()
     })
     toolWindow.materialSearch = materialSearchField
 
+    local materialPanel = uiElements.panel({scrolledMaterialList}):with(uiUtils.fillHeight(false))
+
     local row = uiElements.row({
         toolWindow.leftColumn,
-        uiElements.panel({scrolledMaterialList}):with(uiUtils.fillHeight(false))
+        materialPanel
     }):with(uiUtils.fillHeight(true))
 
     local window = uiElements.window("Tools", row):with(uiUtils.fillHeight(false))
+
+    -- Lets overlays (notifications) know where the actual panel content starts, instead of
+    -- anchoring to the window edge: the tool column in front of it is a floating list which
+    -- does not reach the bottom, so the free space for overlays starts at the material list.
+    window._workspaceRightElement = materialPanel
 
     window:with({
         editorToolChanged = toolChangedCallback,

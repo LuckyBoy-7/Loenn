@@ -72,6 +72,12 @@ function uiRoot.updateWindows(windows)
     end
 end
 
+-- Group holding every currently loaded window. Used to figure out which parts of the
+-- screen are taken up by pinned panels, so overlays can stay inside the workspace.
+function uiRoot.getWindowGroup()
+    return windowGroup
+end
+
 function uiRoot.getRootElement(windows)
     uiRoot.updateWindows(windows)
 

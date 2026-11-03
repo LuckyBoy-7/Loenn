@@ -22,6 +22,9 @@ local function sidePanellayoutLateLazy(edge)
 end
 
 function simpleDocks.pinWidgetToEdge(edge, widget)
+    -- Let other UI code (e.g. notifications) know which screen edge this widget occupies
+    widget._pinnedEdge = edge
+
     widget:with(uiUtils.hook({
         layoutLateLazy = sidePanellayoutLateLazy(edge),
     }))

@@ -6,6 +6,7 @@
 local ui = require("ui")
 local uiElements = require("ui.elements")
 local uiUtils = require("ui.utils")
+local utf8 = require("utf8")
 
 local widgetUtils = require("ui.widgets.utils")
 
@@ -16,6 +17,104 @@ local notificationWindows = {}
 local notificationGroup = uiElements.group(notificationWindows)
 
 local edgePadding = 16
+
+-- Lazily required: ui.ui_root requires this module, so requiring it up here would be circular.
+local uiRoot
+
+local function getWindowGroup()
+    if uiRoot == nil then
+        local ok, module = pcall(require, "ui.ui_root")
+        uiRoot = ok and module or false
+    end
+
+    return uiRoot and uiRoot.getWindowGroup()
+end
+
+-- Notifications are anchored to the bottom right corner of the workspace (the screen space not
+-- taken up by panels pinned to the right / bottom edges), not to the bottom right corner of the
+-- whole window. Otherwise they cover UI elements living inside those panels, such as the
+-- material search field at the bottom of the tools window.
+--
+-- There can be more than one panel pinned to the right edge. Only the one reaching the bottom of
+-- the window is a real full height dock; the others are floating panels which happen to sit
+-- against the edge, and the notification should not be pushed to the left of those.
+local function getWorkspaceBounds()
+    local windowWidth, windowHeight = love.graphics.getDimensions()
+    local group = getWindowGroup()
+
+    if not group or not group.children then
+        return 0, windowWidth, windowHeight
+    end
+
+    local left, right, bottom = 0, windowWidth, windowHeight
+    local rightBounds = {}
+    local rightDockBound = nil
+
+    for _, child in ipairs(group.children) do
+        local screenX, screenY, width, height = child.screenX, child.screenY, child.width, child.height
+
+        if screenX and screenY and width and height then
+            -- Only consider windows which are actually flush with an edge, as pinned panels are
+            if child._pinnedEdge == "right" and screenX > 0 and screenX + width >= windowWidth - 64 then
+                -- A dock can expose the element its content starts at, for docks which keep a
+                -- floating column in front of it (the tool column of the tools window)
+                local contentElement = child._workspaceRightElement
+                local contentX = contentElement and contentElement.screenX
+
+                if contentX and contentX > screenX then
+                    screenX = contentX
+                end
+
+                table.insert(rightBounds, screenX)
+
+                if screenY + height >= windowHeight - 8 then
+                    rightDockBound = rightDockBound and math.min(rightDockBound, screenX) or screenX
+                end
+
+            elseif child._pinnedEdge == "left" and width > 0 and screenX <= 0 then
+                left = math.max(left, screenX + width)
+
+            elseif child._pinnedEdge == "bottom" and screenY > 0 and screenY + height >= windowHeight - 64 then
+                bottom = math.min(bottom, screenY)
+            end
+        end
+    end
+
+    if rightDockBound then
+        right = rightDockBound
+
+    else
+        for _, bound in ipairs(rightBounds) do
+            right = math.min(right, bound)
+        end
+    end
+
+    return left, right, bottom
+end
+
+-- Long messages (map paths and the like) would stretch the popup across a large part of the
+-- workspace, which makes a corner popup look like it is centered. Trim them to fit instead.
+local function trimToWidth(text, font, maxWidth)
+    if font:getWidth(text) <= maxWidth then
+        return text
+    end
+
+    local suffix = "..."
+    local length = utf8.len(text) or #text
+
+    while length > 0 do
+        local cut = utf8.offset(text, length) or 1
+        local candidate = text:sub(1, cut - 1) .. suffix
+
+        if font:getWidth(candidate) <= maxWidth then
+            return candidate
+        end
+
+        length = length - 1
+    end
+
+    return suffix
+end
 
 local popupStartDuration = 0.4
 local popupStopDuration = 0.4
@@ -42,6 +141,19 @@ end
 local function createPopupWindow(popup)
     local widgets = widgetUtils.getSimpleOverlayWidget(popup.widget, popup)
     local row = uiElements.row(widgets)
+
+    if type(popup.widget) == "string" then
+        local label = widgets[1] or widgets
+
+        if label.style and label.style.font then
+            local workspaceLeft, workspaceRight = getWorkspaceBounds()
+            -- Leave room for the close button and the panel padding
+            local available = workspaceRight - workspaceLeft - edgePadding * 2 - 48
+            local maxTextWidth = math.max(160, math.min(available, notificationPopup.maxTextWidth))
+
+            label.text = trimToWidth(popup.widget, label.style.font, maxTextWidth)
+        end
+    end
 
     row.style.bg = {}
     row.style.padding = 0
@@ -121,6 +233,7 @@ function notificationPopup.clearNotifications(tag)
 end
 
 notificationPopup.defaultDuration = 3
+notificationPopup.maxTextWidth = 420
 
 function notificationPopup.notify(widget, duration, settings)
     local popup = {
@@ -161,9 +274,10 @@ function notificationPopup.update(orig, self, dt)
     if popup and not popup.done then
         local stateDuration = popup.durations[popup.stateIndex]
 
-        local windowWidth, windowHeight = love.graphics.getDimensions()
-        local startX, startY = windowWidth - self.width - edgePadding, windowHeight + self.height + edgePadding
-        local stopX, stopY = startX, windowHeight - self.height - edgePadding
+        local workspaceLeft, workspaceRight, workspaceBottom = getWorkspaceBounds()
+        local startX = math.max(workspaceLeft + edgePadding, workspaceRight - self.width - edgePadding)
+        local startY = workspaceBottom + self.height + edgePadding
+        local stopX, stopY = startX, workspaceBottom - self.height - edgePadding
 
         popup.timeAcc += dt
 
