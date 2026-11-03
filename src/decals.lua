@@ -139,7 +139,15 @@ function decals.getDecalNames(specificMods, removeAnimationFrames, yield)
                 added[sprite.meta.filename] = true
 
                 table.insert(names, name)
-                table.insert(associatedMods, false)
+
+                -- "internalFile" is not a reliable "this is vanilla" marker: sprites parsed
+                -- from a .data atlas always have it set, and a mod sprite can end up in that
+                -- batch too. The atlas sprite itself knows which mods it belongs to, so prefer
+                -- that over assuming vanilla; otherwise the mod association is lost and the
+                -- decal shows up as a vanilla one.
+                -- Must not insert nil here: names and associatedMods are parallel arrays, and a
+                -- nil would shift every following entry onto the wrong mod.
+                table.insert(associatedMods, sprite.associatedMods or false)
             end
         end
     end

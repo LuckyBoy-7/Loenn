@@ -10,6 +10,7 @@ local simpleDocks = require("ui.widgets.simple_docks")
 local contextMenu = require("ui.context_menu")
 local listItemUtils = require("ui.utils.list_item")
 local notifications = require("ui.notification")
+local hoverPreview = require("ui.hover_preview")
 
 local configs = require("configs")
 local languageRegistry = require("language_registry")
@@ -25,6 +26,8 @@ local subLayers = require("sub_layers")
 local history = require("history")
 local selectionUtils = require("selections")
 local celesteRender = require("celeste_render")
+local atlases = require("atlases")
+local virtualFs = require("virtual_fs")
 local utf8 = require("utf8")
 
 local toolWindow = {}
@@ -83,6 +86,29 @@ local function getDecalSourceLabel(language, associatedMods)
     return modHandler.formatAssociatedMods(language, associatedMods) or vanillaDecalSource
 end
 
+-- Some mods ship no usable everest.yaml (or their metadata cannot be looked up), so their decals
+-- end up without associated mods and would be filed under vanilla. Fall back to the mod which
+-- actually provides the decal file.
+local function getDecalOwnerModName(name)
+    local owner = virtualFs.getOwner("Graphics/Atlases/Gameplay/" .. name .. ".png")
+
+    if not owner then
+        return nil
+    end
+
+    local metadata = modHandler.modMetadata and modHandler.modMetadata[owner]
+
+    if metadata then
+        local names = modHandler.getModNamesFromMetadata(metadata)
+
+        if names and #names > 0 then
+            return names[1]
+        end
+    end
+
+    return (owner:gsub("_zip$", ""):gsub("_folder$", ""))
+end
+
 -- Turns flat decal paths ("decals/LuckyHelper/objects/test/xxx") into a tree of list rows:
 -- a source header, one row per directory and the decal itself as the leaf.
 local function getDecalMaterialItems(materials, currentTool, currentLayer, favoritesLookup, language)
@@ -94,6 +120,15 @@ local function getDecalMaterialItems(materials, currentTool, currentLayer, favor
 
         if name then
             local associatedMods = isTable and material.associatedMods or nil
+
+            if not associatedMods or #associatedMods == 0 then
+                local ownerMod = getDecalOwnerModName(name)
+
+                if ownerMod then
+                    associatedMods = {ownerMod}
+                end
+            end
+
             local path = string.match(name, "^decals/(.*)$") or name
 
             -- Also searchable by the mod it comes from: most mod decals do not contain the mod
@@ -633,6 +668,33 @@ local function materialDataToElement(list, data, element)
             element.label._bold = data.isHeader or false
         end
 
+        -- Hover preview: decals resolve to a sprite in the gameplay atlas. Other material lists
+        -- can hook the same generic preview with their own content.
+        local material = data.data
+
+        if type(material) == "string" and utils.startsWith(material, "decals/") then
+            element.onEnter = function(self)
+                local meta = atlases.getResource(material, "Gameplay")
+
+                if meta then
+                    hoverPreview.show(self.screenX, self.screenY, self.height, {
+                        image = meta.image,
+                        quad = meta.quad,
+                        width = meta.width,
+                        height = meta.height
+                    })
+                end
+            end
+
+            element.onLeave = function()
+                hoverPreview.hide()
+            end
+
+        else
+            element.onEnter = false
+            element.onLeave = false
+        end
+
         updateListItemFavoriteVisuals(element)
     end
 
@@ -640,6 +702,9 @@ local function materialDataToElement(list, data, element)
 end
 
 getMaterialItems = function(layer)
+    -- A rebuilt list invalidates whatever row was hovered before
+    hoverPreview.hide()
+
     local currentTool = toolHandler.currentTool
     local currentLayer = layer or toolHandler.getLayer(currentTool)
     local materials = toolHandler.getMaterials(nil, layer or currentLayer)

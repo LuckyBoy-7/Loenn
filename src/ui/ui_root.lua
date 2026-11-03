@@ -6,6 +6,7 @@ local menubar = require("ui.menubar")
 local notifications = require("ui.notification")
 local tooltips = require("ui.tooltip")
 local contextMenus = require("ui.context_menu")
+local hoverPreviews = require("ui.hover_preview")
 
 local uiRoot = {}
 
@@ -52,7 +53,8 @@ function uiRoot.updateWindows(windows)
             mainColumn,
             notifications.getPopupWindow(),
             contextMenus.getContextMenu(),
-            tooltips.getTooltipWindow()
+            tooltips.getTooltipWindow(),
+            hoverPreviews.getWindow()
         }):with({
             style = {
                 bg = {},

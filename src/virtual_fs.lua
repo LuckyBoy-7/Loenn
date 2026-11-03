@@ -350,6 +350,37 @@ function virtualFs.isMounted(modFolder)
     return mountRoots[modFolder] ~= nil
 end
 
+-- Returns the mod folder which provides a file (relative path inside the mods), or nil when the
+-- file comes from the base game content. Used for things like tagging decals by their source mod
+-- when the mod metadata is missing or unusable.
+function virtualFs.getOwner(path)
+    if type(path) ~= "string" then
+        return nil
+    end
+
+    local rel = relativePath(path)
+
+    if not rel then
+        -- Also accept a plain relative path such as "Graphics/Atlases/...", not only a path
+        -- inside the shared "@ModsCommon@" namespace
+        rel = normalizeRelative(path)
+    end
+
+    if not rel or rel == "" then
+        return nil
+    end
+
+    local owner = fileOwner[rel]
+
+    if owner then
+        return owner
+    end
+
+    local folderHit = folderOwners[rel:lower()]
+
+    return folderHit and folderHit.modFolder or nil
+end
+
 -- Returns the "$ModFolder$/..." path that actually contains `path`, or nil.
 function virtualFs.resolve(path)
     if type(path) ~= "string" then
