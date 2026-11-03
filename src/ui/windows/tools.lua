@@ -16,6 +16,7 @@ local languageRegistry = require("language_registry")
 local toolHandler = require("tools")
 local toolUtils = require("tool_utils")
 local persistence = require("persistence")
+local modHandler = require("mods")
 local textSearching = require("utils.text_search")
 local utils = require("utils")
 local hotkeyHandler = require("hotkey_handler")
@@ -58,6 +59,221 @@ local layersWithBlankIcon = {
     allLayers = true,
 }
 
+-- Layers whose materials are decal paths. Those are shown as a path hierarchy instead of a flat
+-- list of full paths, which makes a long list of mod decals much easier to navigate.
+local layersWithDecalPaths = {
+    decalsFg = true,
+    decalsBg = true,
+}
+
+local decalPathIndent = "    "
+local vanillaDecalSource = "[Celeste/Vanilla]"
+
+local function splitDecalPath(path)
+    local segments = {}
+
+    for segment in string.gmatch(path, "[^/]+") do
+        table.insert(segments, segment)
+    end
+
+    return segments
+end
+
+local function getDecalSourceLabel(language, associatedMods)
+    return modHandler.formatAssociatedMods(language, associatedMods) or vanillaDecalSource
+end
+
+-- Turns flat decal paths ("decals/LuckyHelper/objects/test/xxx") into a tree of list rows:
+-- a source header, one row per directory and the decal itself as the leaf.
+local function getDecalMaterialItems(materials, currentTool, currentLayer, favoritesLookup, language)
+    local entries = {}
+
+    for _, material in ipairs(materials or {}) do
+        local isTable = type(material) == "table"
+        local name = isTable and material.name or material
+
+        if name then
+            local associatedMods = isTable and material.associatedMods or nil
+            local path = string.match(name, "^decals/(.*)$") or name
+
+            -- Also searchable by the mod it comes from: most mod decals do not contain the mod
+            -- name in their path at all
+            local searchNames = {}
+
+            for _, modName in ipairs(associatedMods or {}) do
+                table.insert(searchNames, modName)
+            end
+
+            for _, altName in ipairs(isTable and material.alternativeDisplayNames or {}) do
+                table.insert(searchNames, altName)
+            end
+
+            if #searchNames == 0 then
+                table.insert(searchNames, "Celeste")
+                table.insert(searchNames, "Vanilla")
+            end
+
+            table.insert(entries, {
+                name = name,
+                segments = splitDecalPath(path),
+                sourceLabel = getDecalSourceLabel(language, associatedMods),
+                sourceKey = (associatedMods and associatedMods[1]) or "",
+                associatedMods = associatedMods,
+                tooltip = isTable and material.tooltipText or nil,
+                alternativeNames = searchNames
+            })
+        end
+    end
+
+    table.sort(entries, function(lhs, rhs)
+        if lhs.sourceKey ~= rhs.sourceKey then
+            -- Vanilla decals first
+            if lhs.sourceKey == "" then
+                return true
+            elseif rhs.sourceKey == "" then
+                return false
+            end
+
+            return lhs.sourceKey < rhs.sourceKey
+        end
+
+        return table.concat(lhs.segments, "/") < table.concat(rhs.segments, "/")
+    end)
+
+    local items = {}
+
+    local function addItem(item)
+        item.currentTool = currentTool
+        item.currentToolName = currentTool.name
+        item.currentLayer = currentLayer
+
+        table.insert(items, item)
+    end
+
+    local previousSource
+    local previousSegments = {}
+    local chain = {}
+
+    -- Favorites get their own root group on top instead of being sorted to the front of the tree.
+    -- They are left out of the tree below: the same entry twice would make selecting it ambiguous.
+    local favorites = {}
+    local treeEntries = {}
+
+    for _, entry in ipairs(entries) do
+        if favoritesLookup[entry.name] then
+            table.insert(favorites, entry)
+
+        else
+            table.insert(treeEntries, entry)
+        end
+    end
+
+    if #favorites > 0 then
+        addItem({
+            text = "[Favorites]",
+            textNoMods = "",
+            data = false,
+            isHeader = true,
+            isSource = true,
+            isFavoritesHeader = true,
+            indent = 0,
+            ancestors = {}
+        })
+
+        for _, entry in ipairs(favorites) do
+            addItem({
+                text = table.concat(entry.segments, "/"),
+                textNoMods = table.concat(entry.segments, "/"),
+                data = entry.name,
+                indent = 0,
+                tooltip = entry.tooltip,
+                alternativeNames = entry.alternativeNames,
+                associatedMods = entry.associatedMods,
+                itemFavorited = true,
+                isFavoritesGroup = true,
+                ancestors = {}
+            })
+        end
+    end
+
+    for _, entry in ipairs(treeEntries) do
+        if entry.sourceLabel ~= previousSource then
+            previousSource = entry.sourceLabel
+            previousSegments = {}
+
+            local sourceItem = {
+                text = entry.sourceLabel,
+                textNoMods = "",
+                data = false,
+                isHeader = true,
+                isSource = true,
+                indent = 0,
+                ancestors = {}
+            }
+
+            addItem(sourceItem)
+
+            chain = { sourceItem }
+        end
+
+        local segments = entry.segments
+        local commonPrefix = 0
+
+        while commonPrefix < #previousSegments and commonPrefix < #segments - 1
+            and previousSegments[commonPrefix + 1] == segments[commonPrefix + 1] do
+            commonPrefix = commonPrefix + 1
+        end
+
+        if #chain > commonPrefix + 1 then
+            local shortened = {}
+
+            for i = 1, commonPrefix + 1 do
+                shortened[i] = chain[i]
+            end
+
+            chain = shortened
+        end
+
+        for i = commonPrefix + 1, #segments - 1 do
+            local dirItem = {
+                text = segments[i],
+                textNoMods = "",
+                data = false,
+                isHeader = true,
+                indent = i,
+                ancestors = chain
+            }
+
+            addItem(dirItem)
+
+            local nextChain = table.shallowcopy(chain)
+            nextChain[#nextChain + 1] = dirItem
+            chain = nextChain
+        end
+
+        addItem({
+            text = segments[#segments],
+            textNoMods = table.concat(segments, "/"),
+            data = entry.name,
+            indent = #segments,
+            tooltip = entry.tooltip,
+            alternativeNames = entry.alternativeNames,
+            associatedMods = entry.associatedMods,
+            itemFavorited = not not favoritesLookup[entry.name],
+            ancestors = chain
+        })
+
+        previousSegments = segments
+    end
+
+    -- Keep the generated tree order and ignore the favorite-first sorting of the material list
+    for i, item in ipairs(items) do
+        item.sortIndex = i
+    end
+
+    return items
+end
+
 local function getLanguageOrDefault(languagePath, default)
     if languagePath._exists then
         return tostring(languagePath)
@@ -92,12 +308,17 @@ local function layerItemToggleVisibilityHandler(listItem, button)
 end
 
 local function materialSortFunction(lhs, rhs)
+    -- Items which already come in a meaningful order (the decal path tree)
+    if lhs.sortIndex and rhs.sortIndex then
+        return lhs.sortIndex < rhs.sortIndex
+    end
+
     if lhs.itemFavorited ~= rhs.itemFavorited then
         return lhs.itemFavorited
     end
 
     if configs.ui.searching.sortByScore then
-        if lhs._filterScore ~= rhs._filterScore then
+        if lhs._filterScore and rhs._filterScore and lhs._filterScore ~= rhs._filterScore then
             return lhs._filterScore > rhs._filterScore
         end
     end
@@ -111,43 +332,38 @@ end
 -- TODO - Config for text vs textNoMods?
 -- TODO - Score checks could potentially be cached, for mod names there is a lot of redundant checks
 local function getMaterialScore(item, searchParts, caseSensitive, fuzzy)
-    local totalScore = 0
-    local hasMatch = false
-
     -- Always match with empty search
     if #searchParts == 0 then
         return math.huge
     end
 
-    for _, part in ipairs(searchParts) do
-        local mode = part.mode
+    local totalScore = 0
 
-        if mode == "name" then
+    -- Every term has to match (AND): "crystal flower" only finds entries matching both
+    for _, part in ipairs(searchParts) do
+        local partScore = nil
+
+        if part.mode == "name" then
             local search = part.text
-            local text = item.textNoMods
-            local score = textSearching.searchScore(text, search, caseSensitive, fuzzy)
+            local text = item.textNoMods or ""
+            partScore = textSearching.searchScore(text, search, caseSensitive, fuzzy)
 
             if item.alternativeNames then
                 for _, altName in ipairs(item.alternativeNames) do
                     local altScore = textSearching.searchScore(altName, search, caseSensitive, fuzzy)
 
-                    if altScore then
-                        score = math.max(score or altScore, altScore)
+                    if altScore and (not partScore or altScore > partScore) then
+                        partScore = altScore
                     end
                 end
             end
 
-            if score then
-                totalScore += score
-                hasMatch = true
-            end
-
-        elseif mode == "modName" then
+        elseif part.mode == "modName" then
             -- If we have additional search text it should search for entries within the given mod
             local associatedMods = item.associatedMods
             local searchModName = part.text
             local search = part.additional
-            local text = item.textNoMods
+            local text = item.textNoMods or ""
 
             -- Assume that mods with no associatedMods is from Celeste
             if not associatedMods or #associatedMods == 0 then
@@ -159,17 +375,22 @@ local function getMaterialScore(item, searchParts, caseSensitive, fuzzy)
                 local score = textSearching.searchScore(text, search, caseSensitive, fuzzy)
 
                 -- Only include the additional search if it matches
-                if modScore and (score or #search == 0) then
-                    totalScore += modScore + (score or 0)
-                    hasMatch = true
+                if modScore and (#search == 0 or score) then
+                    partScore = modScore + (score or 0)
+
+                    break
                 end
             end
         end
+
+        if not partScore then
+            return nil
+        end
+
+        totalScore += partScore
     end
 
-    if hasMatch then
-        return totalScore
-    end
+    return totalScore
 end
 
 local function prepareMaterialSearch(search)
@@ -180,18 +401,36 @@ local function prepareMaterialSearch(search)
         if utils.startsWith(searchPart, "@") then
             -- First space or the end of the string, used to extract additional search terms
             local spaceIndex = utils.findCharacter(searchPart, " ") or #searchPart + 1
+            local modName = string.sub(searchPart, 2, spaceIndex - 1)
+            local additional = string.sub(searchPart, spaceIndex + 1)
+            local addedTerm = false
 
-            table.insert(parts, {
-                mode = "modName",
-                text = string.sub(searchPart, 2, spaceIndex - 1),
-                additional = string.sub(searchPart, spaceIndex + 1)
-            })
+            -- Separate words are independent terms (a union), not one long substring
+            for word in additional:gmatch("%S+") do
+                addedTerm = true
+
+                table.insert(parts, {
+                    mode = "modName",
+                    text = modName,
+                    additional = word
+                })
+            end
+
+            if not addedTerm then
+                table.insert(parts, {
+                    mode = "modName",
+                    text = modName,
+                    additional = ""
+                })
+            end
 
         else
-            table.insert(parts, {
-                mode = "name",
-                text = searchPart
-            })
+            for word in searchPart:gmatch("%S+") do
+                table.insert(parts, {
+                    mode = "name",
+                    text = word
+                })
+            end
         end
     end
 
@@ -205,6 +444,79 @@ local function prepareMaterialSearch(search)
     return parts
 end
 
+-- Search filter for the decal path tree: a matching decal keeps the directory rows above it, so
+-- the result stays readable instead of being a pile of indented leaves.
+local function filterMaterialItems(items, search, options)
+    if not search or search == "" then
+        -- Keep the scores consistent: a stale mix of numbers and nils makes the sorting
+        -- comparator compare a number with nil
+        for _, item in ipairs(items) do
+            item._filterScore = math.huge
+        end
+
+        return items
+    end
+
+    local fuzzy = configs.ui.searching.searchFuzzy
+    local caseSensitive = configs.ui.searching.searchCaseSensitive
+
+    if caseSensitive == "contextual" then
+        caseSensitive = search ~= search:lower()
+
+    elseif type(caseSensitive) == "string" then
+        caseSensitive = caseSensitive == "always"
+    end
+
+    if utils.startsWith(search, "~") then
+        fuzzy = true
+        search = string.sub(search, 2)
+    end
+
+    local parts = prepareMaterialSearch(search)
+
+    if #parts == 0 then
+        return items
+    end
+
+    local keep = {}
+    local favoritesHeader
+
+    for _, item in ipairs(items) do
+        if item.isFavoritesHeader then
+            favoritesHeader = item
+
+        elseif not item.isHeader then
+            local score = getMaterialScore(item, parts, caseSensitive, fuzzy)
+
+            if score then
+                item._filterScore = score
+                keep[item] = true
+
+                -- Favorites are not part of the tree, so keep their own root row with them
+                if item.isFavoritesGroup and favoritesHeader then
+                    keep[favoritesHeader] = true
+                end
+
+                for _, ancestor in ipairs(item.ancestors or {}) do
+                    keep[ancestor] = true
+                end
+            end
+        end
+    end
+
+    local filtered = {}
+
+    for _, item in ipairs(items) do
+        if keep[item] then
+            table.insert(filtered, item)
+        end
+    end
+
+    return filtered
+end
+
+local getMaterialItems
+
 local function updateFavorite(materialList, itemData, tool, layer, material, favorite)
     if favorite then
         toolUtils.addPersistenceFavorites(tool, layer, material)
@@ -215,11 +527,12 @@ local function updateFavorite(materialList, itemData, tool, layer, material, fav
 
     itemData.itemFavorited = favorite
 
-    materialList:sort()
+    -- Rebuild the whole list so the favorites root group reflects the change right away
+    materialList:updateItems(getMaterialItems(), material)
 end
 
 local function materialFavoriteDoubleClickedCallback(self, button)
-    if button ~= 1 then
+    if button ~= 1 or not self.data then
         return
     end
 
@@ -251,18 +564,74 @@ local function addMaterialContextMenu(language, tool, layer, listItem)
     return contextMenu.addContextMenu(listItem, content)
 end
 
+-- The editor only ships a single (bitmap) font, so bold text is emulated by drawing the label
+-- once more with a one pixel offset.
+local function installBoldLabelHook(listItem)
+    local label = listItem and listItem.label
+
+    if label and not label._boldHooked then
+        label._boldHooked = true
+
+        label:hook({
+            draw = function(orig, self)
+                orig(self)
+
+                if self._bold and self._text then
+                    love.graphics.draw(self._text, self.screenX + 1, self.screenY)
+                end
+            end
+        })
+    end
+end
+
 local function materialDataToElement(list, data, element)
     if not element then
         element = uiElements.listItem()
     end
 
     if data then
-        element.text = data.text
+        local indent = data.indent or 0
+        local text = data.text
+
+        if indent > 0 then
+            text = string.rep(decalPathIndent, indent) .. text
+        end
+
+        element.text = text
         element.data = data.data
         element.tooltipText = data.tooltip
         element.itemFavorited = data.itemFavorited
         element.originalText = data.text
         element.itemData = data
+
+        -- Path tree rows are just labels: no interaction at all (hit testing uses the raw
+        -- "interactive" field, not getInteractive)
+        if data.isHeader then
+            element.interactive = -1
+
+            -- Directory rows get their own background: the topmost is the darkest and every
+            -- deeper level gets a little lighter, always staying darker than a decal row.
+            -- This has to be normalBG: the list item's update fades style.bg from normalBG every
+            -- frame, so writing style.bg directly is simply overwritten.
+            local shade = math.min(0.11, 0.06 + (data.indent or 0) * 0.01)
+
+            element.style.normalBG = { shade, shade, shade, 1 }
+            element.style.disabledBG = { shade, shade, shade, 1 }
+
+        else
+            element.interactive = 1
+            element.style.normalBG = { 0.13, 0.13, 0.13, 0.9 }
+            element.style.disabledBG = { 0.05, 0.05, 0.05, 0.7 }
+        end
+
+        -- The UI only ships one (bitmap) font, so "bold" is emulated by drawing the label twice.
+        -- Every path tree row (source and directories) is bold, decals themselves are not. The
+        -- label must not be cached, otherwise a recycled label keeps its old (not bold) canvas.
+        if element.label then
+            element.label.cacheable = false
+            installBoldLabelHook(element)
+            element.label._bold = data.isHeader or false
+        end
 
         updateListItemFavoriteVisuals(element)
     end
@@ -270,7 +639,7 @@ local function materialDataToElement(list, data, element)
     return element
 end
 
-local function getMaterialItems(layer)
+getMaterialItems = function(layer)
     local currentTool = toolHandler.currentTool
     local currentLayer = layer or toolHandler.getLayer(currentTool)
     local materials = toolHandler.getMaterials(nil, layer or currentLayer)
@@ -278,6 +647,10 @@ local function getMaterialItems(layer)
     local favorites = toolUtils.getPersistenceFavorites(currentTool, currentLayer) or {}
     local favoritesLookup = table.flip(favorites)
     local language = languageRegistry.getLanguage()
+
+    if layersWithDecalPaths[currentLayer] then
+        return getDecalMaterialItems(materials, currentTool, currentLayer, favoritesLookup, language)
+    end
 
     for i, material in ipairs(materials or {}) do
         local materialTooltip
@@ -314,6 +687,11 @@ local function getMaterialItems(layer)
 end
 
 local function materialCallback(list, material)
+    -- Header rows of the decal path tree have no material behind them
+    if not material then
+        return
+    end
+
     local sameMaterial = material == toolWindow.eventStates.material
 
     if not sameMaterial then
@@ -968,6 +1346,7 @@ function toolWindow.getWindow()
         listItemDoubleClicked = materialFavoriteDoubleClickedCallback,
         dataToElement = materialDataToElement,
         sortingFunction = materialSortFunction,
+        filterItems = filterMaterialItems,
         searchScore = getMaterialScore,
         searchRawItem = true,
         searchPreprocessor = prepareMaterialSearch,
@@ -1011,12 +1390,27 @@ function toolWindow.getWindow()
 
     local materialPanel = uiElements.panel({scrolledMaterialList}):with(uiUtils.fillHeight(false))
 
+    -- Solid background: while a virtualized list catches up with fast scrolling there can be a
+    -- frame without rows, and the window background would otherwise show through as black.
+    materialPanel.style.bg = { 0.07, 0.07, 0.07, 1 }
+    materialPanel.style.patch = false
+    materialPanel.style.radius = 0
+
+    -- The list area changes every frame while scrolling, so its containers must not be drawn
+    -- into a cached canvas: a cache invalidated at the wrong moment shows up as a black frame
+    -- when dragging the scrollbar quickly.
+    materialPanel.cacheable = false
+    scrolledMaterialList.cacheable = false
+
     local row = uiElements.row({
         toolWindow.leftColumn,
         materialPanel
     }):with(uiUtils.fillHeight(true))
 
     local window = uiElements.window("Tools", row):with(uiUtils.fillHeight(false))
+
+    -- Same reason as the material panel: don't cache the window which contains the live list
+    window.cacheable = false
 
     -- Lets overlays (notifications) know where the actual panel content starts, instead of
     -- anchoring to the window edge: the tool column in front of it is a floating list which

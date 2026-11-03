@@ -137,7 +137,17 @@ function listWidgets.setSelection(list, target, preventCallback, callbackRequire
         end
 
         if not newSelection then
-            newSelection = dataList[1]
+            -- Skip non selectable header rows (grouping rows of tree like lists)
+            for i, item in ipairs(dataList) do
+                if not item.isHeader then
+                    newSelection = item
+                    selectedIndex = magicList and item._magicIndex or i
+
+                    break
+                end
+            end
+
+            newSelection = newSelection or dataList[1]
         end
     end
 
@@ -798,10 +808,22 @@ local function handleListKeyboardNavigation(list, key, hookOptions)
             end
 
         else
-            listWidgets.setSelection(list, list.selectedIndex + direction, preventCallback)
-            listWidgets.scrollSelectionVisible(list)
+            -- Skip non selectable header rows (grouping rows of tree like lists)
+            local newIndex = list.selectedIndex + direction
 
-            handled = true
+            while dataList[newIndex] and dataList[newIndex].isHeader do
+                newIndex = newIndex + direction
+            end
+
+            if dataList[newIndex] then
+                listWidgets.setSelection(list, newIndex, preventCallback)
+                listWidgets.scrollSelectionVisible(list)
+
+                handled = true
+
+            else
+                handled = false
+            end
         end
     end
 
