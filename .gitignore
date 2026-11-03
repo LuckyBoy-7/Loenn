@@ -17,3 +17,6 @@
 /src/celesteResources/*
 /src/*.dll
 /src/*.so
+
+# local handoff / memory notes
+/docs/handoff-*.md
