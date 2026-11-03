@@ -3,6 +3,7 @@ local utils = require("utils")
 local languageRegistry = require("language_registry")
 local persistence = require("persistence")
 local viewportHandler = require("viewport_handler")
+local logging = require("logging")
 
 local loadingScene = {}
 
@@ -66,43 +67,76 @@ function loadingScene:firstEnter()
     -- Load assets and entity, trigger, effect etc modules
     tasks.newTask(
         function()
+            local timings = {}
+            local phaseStart = love.timer.getTime()
+
+            local function phaseDone(name)
+                local now = love.timer.getTime()
+
+                table.insert(timings, string.format("%s=%.0fms", name, (now - phaseStart) * 1000))
+
+                if configs.debug.logStartupTiming then
+                    logging.info(string.format("[startup] %s done at %.0fms (+%.0fms)",
+                        name, now * 1000, (now - phaseStart) * 1000))
+                end
+
+                phaseStart = now
+            end
+
             atlases.loadCelesteAtlases()
+            phaseDone("celesteAtlases")
 
             mods.mountMods()
+            phaseDone("mountMods")
 
             -- Internal scenes are already loaded, how else would we be here
             sceneHandler.loadExternalScenes()
 
             languageRegistry.loadExternalFiles()
             languageRegistry.setFallbackLanguage(defaultConfig.general.language)
+            phaseDone("scenes+language")
 
             libraries.loadInternalLibraries()
             libraries.loadExternalLibraries()
+            phaseDone("libraries")
 
             entities.loadInternalEntities()
             entities.loadExternalEntities()
+            phaseDone("entities")
 
             triggers.loadInternalTriggers()
             triggers.loadExternalTriggers()
+            phaseDone("triggers")
 
             effects.loadInternalEffects()
             effects.loadExternalEffects()
+            phaseDone("effects")
 
             toolHandler.loadInternalTools()
             toolHandler.loadExternalTools()
+            phaseDone("tools")
 
             saveSanitizers.loadInternalSanitizers()
             saveSanitizers.loadExternalSanitizers()
+            phaseDone("saveSanitizers")
 
             if userInterfaceDevice.initializeDevice then
                 userInterfaceDevice.initializeDevice()
             end
+            phaseDone("userInterface")
 
             -- This can take a while depending on the amount of installed mods
             -- By default it is lazy loaded
             if not configs.editor.lazyLoadExternalAtlases then
                 atlases.loadExternalAtlases()
+                phaseDone("externalAtlases")
             end
+
+            require("virtual_fs").report()
+            logging.info("[compile_cache] " .. require("compile_cache").report())
+
+            logging.info(string.format("[startup] boot=%.0fms %s",
+                love.timer.getTime() * 1000, table.concat(timings, " ")))
         end
     )
 

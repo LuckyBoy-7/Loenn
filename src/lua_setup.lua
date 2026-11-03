@@ -21,4 +21,10 @@ _G._selene.notypecheck = true
 ]]
 
 require("selene").load()
-require("selene/selene/wrappers/searcher/love2d/searcher").load()
+
+-- Keep the Selene environment but install Lönn's caching searcher in place of
+-- the plain Selene one, so the Selene -> Lua translation is only recomputed when
+-- a source file actually changed
+local seleneSearcher = require("selene/selene/wrappers/searcher/love2d/searcher")
+
+require("compile_cache").install(seleneSearcher.libenv)

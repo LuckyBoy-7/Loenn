@@ -51,6 +51,12 @@ return {
     -- Loading
     lazyLoadExternalAtlases = true,
 
+    -- Mount every mod at the shared "@ModsCommon@/" namespace in addition to
+    -- its own mount point. Costs one extra archive parse per mod (slow startup
+    -- with many mods); off by default, shared paths are resolved by virtual_fs.
+    mountSharedModView = false,
+    logUnresolvedVirtualPaths = true,
+
     -- History
     historyEntryLimit = false,
 

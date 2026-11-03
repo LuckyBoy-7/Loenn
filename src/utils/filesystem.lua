@@ -1,11 +1,67 @@
 local lfs = require("lib.lfs_ffi")
-local nfd = require("nfd")
 local physfs = require("lib.physfs")
 local requireUtils = require("utils.require")
 local threadHandler = require("utils.threads")
 local osUtils = require("utils.os")
+local logging = require("logging")
 
 local hasRequest, request = requireUtils.tryrequire("lib.luajit-request.luajit-request")
+
+local function toUnixPath(path)
+    return (path:gsub("\\", "/"))
+end
+
+-- Candidate directories for nfd.dll: the directory the executable lives in and
+-- the game source directory. Absolute on purpose, because relative lookups
+-- depend on the working directory, which Lönn changes temporarily for file
+-- operations (and threads inherit it).
+local function dialogDirectories()
+    local directories = {}
+
+    local successBase, sourceBase = pcall(love.filesystem.getSourceBaseDirectory)
+
+    if successBase and sourceBase then
+        table.insert(directories, toUnixPath(sourceBase))
+    end
+
+    local successSource, source = pcall(love.filesystem.getSource)
+
+    if successSource and source then
+        table.insert(directories, toUnixPath(source))
+    end
+
+    return directories
+end
+
+local nfd
+
+-- Loads nfd from an absolute path so it does not depend on the working
+-- directory. Threads get the same absolute cpath from utils/threads.lua.
+local function prepareNfd()
+    if nfd then
+        return nfd
+    end
+
+    local originalCpath = package.cpath
+
+    for _, directory in ipairs(dialogDirectories()) do
+        package.cpath = package.cpath .. ";" .. directory .. "/?.dll"
+    end
+
+    local success, module = pcall(require, "nfd")
+
+    package.cpath = originalCpath
+
+    if success and type(module) == "table" then
+        nfd = module
+    else
+        logging.warning("Could not load 'nfd', file dialogs will not work")
+    end
+
+    return nfd
+end
+
+prepareNfd()
 
 local filesystem = {}
 
@@ -200,11 +256,17 @@ function filesystem.changeDirectoryThenCallback(func, path, ...)
 
     filesystem.chdir(dirname)
 
-    local result = func(filename, ...)
+    -- pcall so the working directory is restored even when the callback fails:
+    -- a stuck working directory breaks every relative path lookup afterwards
+    local results = {pcall(func, filename, ...)}
 
     filesystem.chdir(previousCwd)
 
-    return result
+    if not results[1] then
+        error(results[2], 0)
+    end
+
+    return unpack(results, 2)
 end
 
 function filesystem.remove(path)
@@ -334,10 +396,22 @@ local function fixNFDPath(path)
     end
 end
 
+filesystem.dialogDirectories = dialogDirectories
+
+function filesystem.prepareDialogs()
+    return prepareNfd() ~= nil
+end
+
 -- Return thread if called with callback
 -- Otherwise block and return the selected file
 function filesystem.saveDialog(path, filter, callback)
     path = fixNFDPath(path)
+
+    local nfd = prepareNfd()
+
+    if not nfd then
+        return false
+    end
 
     if callback then
         if filesystem.supportWindowsInThreads() then
@@ -369,6 +443,12 @@ end
 -- Otherwise block and return the selected file
 function filesystem.openDialog(path, filter, callback)
     path = fixNFDPath(path)
+
+    local nfd = prepareNfd()
+
+    if not nfd then
+        return false
+    end
 
     if callback then
         if filesystem.supportWindowsInThreads() then
@@ -404,6 +484,12 @@ end
 -- Otherwise block and return the selected file
 function filesystem.openFolderDialog(path, callback)
     path = fixNFDPath(path)
+
+    local nfd = prepareNfd()
+
+    if not nfd then
+        return false
+    end
 
     if callback then
         if filesystem.supportWindowsInThreads() then

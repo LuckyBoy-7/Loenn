@@ -41,6 +41,10 @@ logging.log(nil, getInstallInformation(), nil, true)
 require("lib.love_filesystem_unsandboxing")
 require("input_handler")
 
+-- Resolve shared mod paths ("@ModsCommon@/...") through virtual_fs; has to be
+-- installed before any plugin code is loaded
+require("virtual_fs").install()
+
 sceneHandler.loadInternalScenes()
 sceneHandler.changeScene("Startup")
 

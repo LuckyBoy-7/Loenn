@@ -5,6 +5,7 @@ local config = require("utils.config")
 local configs = require("configs")
 local filesystem = require("utils.filesystem")
 local logging = require("logging")
+local virtualFs = require("virtual_fs")
 
 local modHandler = {}
 
@@ -30,6 +31,12 @@ modHandler.knownPluginRequires = {}
 modHandler.modMetadata = {}
 modHandler.modSettings = {}
 modHandler.modPersistence = {}
+
+-- Parsed filename caches, keyed by mod folder name
+modHandler.filenamesCache = {}
+
+-- Mod folders that are actually mounted; everything else is mounted on demand
+modHandler.mountedMods = {}
 
 modHandler.modNamesFormat = "[%s]"
 modHandler.modNamesSeparator = " + "
@@ -508,51 +515,311 @@ function modHandler.invalidateFilenamesCacheFromPath(path)
     end
 end
 
+-- Mod metadata as it is stored in the filename cache (runtime fields stripped)
+local function metadataForCache(metadata)
+    local copy = {}
+
+    for key, value in pairs(metadata or {}) do
+        if type(key) ~= "string" or key:sub(1, 1) ~= "_" then
+            copy[key] = value
+        end
+    end
+
+    return copy
+end
+
+local function pluginMountPointFromFilenames(modFolderName, filenames)
+    if not filenames then
+        return
+    end
+
+    local root = "$" .. modFolderName .. "$"
+
+    for _, folderName in ipairs(modHandler.pluginFolderNames) do
+        local prefix = root .. "/" .. folderName .. "/"
+
+        for i = 1, #filenames do
+            if filenames[i]:sub(1, #prefix) == prefix then
+                return root .. "/" .. folderName
+            end
+        end
+    end
+end
+
+local function metadataFromCache(data, path, modFolderName)
+    local metadata = {}
+
+    for key, value in pairs(data or {}) do
+        metadata[key] = value
+    end
+
+    metadata._mountPoint = string.format(modHandler.specificModContent, modFolderName)
+    metadata._path = path
+    metadata._folderName = modFolderName
+
+    return metadata
+end
+
+-- Mods that ship Lönn plugin content have to be readable at startup: plugin
+-- code addresses its own files through the per-mod mount point
+local function filenamesHavePluginContent(modFolderName, filenames)
+    if not filenames then
+        return false
+    end
+
+    local root = "$" .. modFolderName .. "$"
+
+    for _, folderName in ipairs(modHandler.pluginFolderNames) do
+        local prefix = root .. "/" .. folderName .. "/"
+
+        for i = 1, #filenames do
+            if filenames[i]:sub(1, #prefix) == prefix then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 function modHandler.invalidateFilenamesCache(modFolderName)
-    modHandler.getOrCacheFilenames(modFolderName, true, true)
+    modHandler.filenamesCache[modFolderName] = nil
+
+    local modInfo = modHandler.loadedMods[modFolderName]
+
+    if modInfo and modInfo.path then
+        modHandler.registerModInfo(modInfo.path, modFolderName, true)
+    end
 end
 
 function modHandler.getOrCacheFilenames(modFolderName, useYield, force)
-    local storageDir = fileLocations.getStorageDir()
-    local storageCacheDir = utils.joinpath(storageDir, "Cache", "ModFilenames")
-    local modCacheConfig = utils.joinpath(storageCacheDir, modFolderName .. ".conf")
-    local cacheConfig = config.readConfig(modCacheConfig)
+    if force then
+        modHandler.invalidateFilenamesCache(modFolderName)
+    end
 
-    if not filesystem.isDirectory(storageCacheDir) then
-        filesystem.mkpath(storageCacheDir)
+    local cached = modHandler.filenamesCache[modFolderName]
+
+    if cached then
+        return cached
     end
 
     local modInfo = modHandler.loadedMods[modFolderName]
 
-    if not modInfo then
+    if not modInfo or not modInfo.path then
         return
     end
 
-    local isZip = modInfo.zipFile
-    local mtime = modInfo.mtime
+    modHandler.registerModInfo(modInfo.path, modFolderName, force)
 
-    local updateCache = force or not cacheConfig.filenames
+    return modHandler.filenamesCache[modFolderName]
+end
 
-    -- Invalidate cache if zip file is newer than our cache
-    if cacheConfig.createdAt and isZip then
-        updateCache = updateCache or mtime > cacheConfig.createdAt
+local function cachePath(cacheFolder, modFolderName)
+    local storageDir = fileLocations.getStorageDir()
+
+    return utils.joinpath(storageDir, "Cache", cacheFolder, modFolderName .. ".conf")
+end
+
+local function isCacheValid(cache, attributes, force)
+    if force or not cache or not cache.createdAt then
+        return false
     end
 
-    if updateCache then
-        if configs.debug.logModFilenamesCache then
-            local message = string.format("Updated filename cache for '%s'", modFolderName)
+    -- Mod authors rarely bump their version, so compare file metadata instead:
+    -- a re-exported archive changes both modification time and size
+    if attributes.modification and attributes.modification > cache.createdAt then
+        return false
+    end
 
-            logging.info(message)
+    if cache.size and attributes.size and cache.size ~= attributes.size then
+        return false
+    end
+
+    return true
+end
+
+local function readCache(cacheFolder, modFolderName, attributes, force)
+    local cache = config.readConfig(cachePath(cacheFolder, modFolderName))
+
+    if not isCacheValid(cache, attributes, force) then
+        return nil
+    end
+
+    return cache
+end
+
+local function writeCache(cacheFolder, modFolderName, attributes, data)
+    local target = cachePath(cacheFolder, modFolderName)
+
+    filesystem.mkpath(utils.dirname(target))
+
+    data.createdAt = attributes.modification
+    data.size = attributes.size
+
+    local cache = config.createConfig(target, data, -1, 0, false)
+
+    return config.writeConfig(cache, true)
+end
+
+-- File lists live in their own cache file: they are large (tens of MB in total)
+-- and only change when an archive changes, while metadata is small
+local function readModFilenamesCache(modFolderName, attributes, force)
+    local cache = readCache("ModFilenames", modFolderName, attributes, force)
+
+    if cache and cache.filenames then
+        return cache
+    end
+end
+
+local function writeModFilenamesCache(modFolderName, attributes, filenames)
+    return writeCache("ModFilenames", modFolderName, attributes, {
+        filenames = filenames
+    })
+end
+
+local function readModMetadataCache(modFolderName, attributes, force)
+    local cache = readCache("ModMetadata", modFolderName, attributes, force)
+
+    if cache and cache.metadata then
+        return cache
+    end
+end
+
+local function writeModMetadataCache(modFolderName, attributes, metadata)
+    return writeCache("ModMetadata", modFolderName, attributes, {
+        metadata = metadataForCache(metadata)
+    })
+end
+
+-- Mounts a mod's archive/folder at its own mount point (and the shared one when
+-- enabled). Idempotent.
+function modHandler.mountModFiles(modFolderName, path)
+    if modHandler.mountedMods[modFolderName] then
+        return true
+    end
+
+    if not path or not modHandler.mountable(path) then
+        return false
+    end
+
+    local directory, filename = utils.dirname(path), utils.filename(path)
+    local specificMountPoint = string.format(modHandler.specificModContent, modFolderName)
+
+    -- The shared "@ModsCommon@/" mount point is what makes every archive be
+    -- parsed a second time; virtual_fs resolves shared paths when it is off
+    if configs.editor.mountSharedModView ~= false then
+        -- Can't mount the same path twice, trick physfs into loading both
+        love.filesystem.mountUnsandboxed(path, modHandler.commonModContent .. "/", 1)
+    end
+
+    love.filesystem.mountUnsandboxed(utils.joinpath(directory, ".", filename), specificMountPoint, 1)
+
+    modHandler.mountedMods[modFolderName] = true
+
+    local modInfo = modHandler.loadedMods[modFolderName]
+
+    if modInfo then
+        modInfo.mounted = true
+    end
+
+    virtualFs.markMounted()
+
+    return true
+end
+
+-- Mounts a mod on first use. virtual_fs calls this when a shared path resolves
+-- to a mod that was not mounted at startup.
+function modHandler.ensureModMounted(modFolderName)
+    local modInfo = modHandler.loadedMods[modFolderName]
+
+    if not modInfo then
+        return false
+    end
+
+    if modHandler.mountedMods[modFolderName] then
+        return true
+    end
+
+    return modHandler.mountModFiles(modFolderName, modInfo.path)
+end
+
+-- Registers a mod: metadata, filename list and virtual_fs index entry. The
+-- archive is only mounted when it is actually needed (plugin content, or a
+-- missing/stale filename or metadata cache).
+function modHandler.registerModInfo(path, modFolderName, force)
+    local attributes = filesystem.pathAttributes(path) or {}
+    local zipFile = attributes.mode == "file"
+    local specificMountPoint = string.format(modHandler.specificModContent, modFolderName)
+    local filenames, metadata
+
+    if zipFile then
+        local filenamesCache = readModFilenamesCache(modFolderName, attributes, force)
+        local metadataCache = readModMetadataCache(modFolderName, attributes, force)
+
+        if filenamesCache then
+            filenames = filenamesCache.filenames
         end
 
-        local specificMountPoint = string.format(modHandler.specificModContent, modFolderName)
-        local modFilenames = utils.getFilenames(specificMountPoint, true, {}, nil, useYield)
+        if metadataCache then
+            metadata = metadataFromCache(metadataCache.metadata, path, modFolderName)
+        end
 
-        cacheConfig.createdAt = mtime
-        cacheConfig.filenames = modFilenames
+        if not filenames or not metadata then
+            if not modHandler.mountModFiles(modFolderName, path) then
+                return false
+            end
+
+            if not metadata then
+                metadata = modHandler.readModMetadata(path, specificMountPoint, modFolderName)
+
+                writeModMetadataCache(modFolderName, attributes, metadata)
+            end
+
+            if not filenames then
+                filenames = utils.getFilenames(specificMountPoint, true, {}, nil, true)
+
+                writeModFilenamesCache(modFolderName, attributes, filenames)
+
+                if configs.debug.logModFilenamesCache then
+                    logging.info(string.format("Updated filename cache for '%s'", modFolderName))
+                end
+            end
+        end
+
+    else
+        -- Folder mods have no archive to parse and change constantly while
+        -- developing, so mount and walk them every time
+        if not modHandler.mountModFiles(modFolderName, path) then
+            return false
+        end
+
+        filenames = utils.getFilenames(specificMountPoint, true, {}, nil, true)
+        metadata = modHandler.readModMetadata(path, specificMountPoint, modFolderName)
     end
 
-    return cacheConfig.filenames
+    metadata._mountPointLoenn = metadata._mountPointLoenn or pluginMountPointFromFilenames(modFolderName, filenames)
+
+    modHandler.modMetadata[modFolderName] = metadata
+    modHandler.loadedMods[modFolderName] = {
+        zipFile = zipFile,
+        mtime = attributes.modification,
+        size = attributes.size,
+        path = path,
+        mounted = modHandler.mountedMods[modFolderName] or false,
+        metadata = metadata
+    }
+    modHandler.filenamesCache[modFolderName] = filenames
+
+    virtualFs.registerMod(modFolderName, filenames, zipFile)
+
+    -- Plugin code addresses its own files through the per-mod mount point, so
+    -- mods with plugin content have to be mounted from the start. Everything
+    -- else is mounted on first access (see ensureModMounted).
+    if not modHandler.mountedMods[modFolderName] and filenamesHavePluginContent(modFolderName, filenames) then
+        modHandler.mountModFiles(modFolderName, path)
+    end
+
+    return true
 end
 
 function modHandler.mountMod(path, force)
@@ -563,30 +830,14 @@ function modHandler.mountMod(path, force)
     local startTime = love.timer.getTime()
 
     -- Replace "." in ".zip" to prevent require from getting confused
-    local directory, filename = utils.dirname(path), utils.filename(path)
+    local filename = utils.filename(path)
     local modFolderName = filename:gsub("%.", "_")
     local loaded = not not modHandler.loadedMods[modFolderName]
     local gotLoaded = false
 
     if not loaded or force then
         if modHandler.mountable(path) then
-            local specificMountPoint = string.format(modHandler.specificModContent, modFolderName)
-
-            -- Can't mount the same path twice, trick physfs into loading both
-            love.filesystem.mountUnsandboxed(path, modHandler.commonModContent .. "/", 1)
-            love.filesystem.mountUnsandboxed(utils.joinpath(directory, ".", filename), specificMountPoint, 1)
-
-            local modMetadata = modHandler.readModMetadata(path, specificMountPoint, modFolderName)
-
-            modHandler.getOrCacheFilenames(modFolderName, true)
-            modHandler.modMetadata[modFolderName] = modMetadata
-            modHandler.loadedMods[modFolderName] = {
-                zipFile = filesystem.isFile(path),
-                mtime = filesystem.mtime(path),
-                metadata = modMetadata,
-            }
-
-            gotLoaded = true
+            gotLoaded = modHandler.registerModInfo(path, modFolderName, force) or false
         end
     end
 
@@ -827,5 +1078,8 @@ function modHandler.checkForMissingMods(filename)
     return missing
 end
 
+-- Shared namespace paths are resolved by virtual_fs; this makes it mount a mod
+-- the first time one of its files is actually needed
+virtualFs.setMountHandler(modHandler.ensureModMounted)
 
 return modHandler
