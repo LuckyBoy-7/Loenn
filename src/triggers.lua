@@ -221,11 +221,6 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
 
     local textDrawable = drawableText.fromText(displayName, textX, textY, textWidth, textHeight, nil, fontSize, textColor)
 
-    -- Unselected rooms are rendered into a low resolution canvas where the thin
-    -- hi-res glyphs are unreadable, so those fall back to the vanilla font
-    textDrawable.canvasFont = fonts.vanillaFont
-    textDrawable.canvasFontSize = triggers.triggerFontSize
-
     local drawables = borderedRectangle:getDrawableSprite()
     table.insert(drawables, textDrawable)
 
@@ -236,9 +231,6 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
         -- only muddy them up
         local offset = fonts.size(1)
         local shadowDrawable = drawableText.fromText(displayName, textX + offset, textY + offset, textWidth, textHeight, nil, fontSize, {0, 0, 0, 1})
-
-        shadowDrawable.canvasFont = fonts.vanillaFont
-        shadowDrawable.canvasFontSize = triggers.triggerFontSize
 
         shadowDrawable.depth = depths.triggers - 0.9
         table.insert(drawables, shadowDrawable)
@@ -269,9 +261,6 @@ function triggers.getSelection(room, trigger)
 end
 
 function triggers.drawSelected(room, layer, trigger, color)
-    -- The trigger moved or was resized, its label neighbours have to be re-laid out
-    triggerText.invalidate(room)
-
     color = color or colors.selectionCompleteNodeLineColor
 
     local x, y = trigger.x or 0, trigger.y or 0

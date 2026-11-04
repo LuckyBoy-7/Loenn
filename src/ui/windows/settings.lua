@@ -646,6 +646,8 @@ local function applyNewSettings(newSettings, oldSettings)
     end
 
     if settingChanged("editor.triggersTrimModName") or settingChanged("editor.triggersUseCategoryColors") then
+        -- The display text changed, cached label layouts are stale
+        require("trigger_text").clearCache()
         debugUtils.redrawMap()
     end
 
@@ -659,6 +661,7 @@ local function applyNewSettings(newSettings, oldSettings)
 
     if fontChanged then
         require("fonts").applyConfig(newSettings.font)
+        require("trigger_text").clearCache()
         debugUtils.redrawMap()
     end
 

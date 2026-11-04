@@ -117,41 +117,19 @@ function tool.setSelectionTargets(targets)
 end
 
 -- Selected triggers draw their label in the highlight color. Labels live inside
--- the room batch, so the trigger layer has to be rebuilt when the selection
--- changes for the highlight to follow right away
-local function selectionSignature(previews)
-    if not previews then
-        return ""
+-- the room batch, so the trigger layer is rebuilt once the selection settled
+-- (not on every update while dragging, that would rebuild the room each frame)
+local function redrawTriggerLabels()
+    local room = state.getSelectedRoom()
+
+    if room and configs.font.highlightSelectedTriggerText then
+        toolUtils.redrawTargetLayer(room, {"triggers"})
     end
-
-    local parts = {}
-
-    for _, preview in ipairs(previews) do
-        table.insert(parts, tostring(preview.item))
-    end
-
-    table.sort(parts)
-
-    return table.concat(parts, ",")
 end
 
-local lastSelectionSignature = ""
-
 function tool.setSelectionPreviews(previews)
-    local newSignature = selectionSignature(previews)
-
     state.selectionToolPreviews = previews
     selectionPreviews = previews
-
-    if newSignature ~= lastSelectionSignature then
-        lastSelectionSignature = newSignature
-
-        local room = state.getSelectedRoom()
-
-        if room and configs.font.highlightSelectedTriggerText then
-            toolUtils.redrawTargetLayer(room, {"triggers"})
-        end
-    end
 end
 
 function tool.setLayer(layer, subLayer)
@@ -200,6 +178,7 @@ local function selectionChanged(x, y, width, height, fromClick)
                 end
 
                 tool.setSelectionPreviews(rects)
+                redrawTriggerLabels()
 
                 return
             end
@@ -1161,6 +1140,8 @@ local function selectionFinished(x, y, fromClick)
 
         tool.setSelectionPreviews({})
     end
+
+    redrawTriggerLabels()
 end
 
 local function resizeStarted(x, y)

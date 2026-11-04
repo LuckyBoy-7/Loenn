@@ -19,6 +19,7 @@ local modificationWarner = require("modification_warner")
 local entityHandler = require("entities")
 local triggerHandler = require("triggers")
 local decalHandler = require("decals")
+local fonts = require("fonts")
 
 local celesteRender = {}
 
@@ -899,6 +900,20 @@ local function drawRoomFromBatches(room, state, selected)
     end
 end
 
+-- Unselected rooms are cached in a canvas at room resolution. The hi-res font
+-- is drawn at half scale, which would be sampled unevenly at 1:1, so the canvas
+-- is rendered at the inverse scale and drawn back at the font scale: an exact
+-- 2x downsample, which keeps text as crisp as the selected rooms.
+local function canvasResolutionScale()
+    local pixelFactor = fonts.pixelFactor or 1
+
+    if pixelFactor <= 0 or pixelFactor >= 1 then
+        return 1
+    end
+
+    return math.max(1, math.floor(1 / pixelFactor + 0.5))
+end
+
 -- Return the canvas if it is ready, otherwise make a task for it
 local function getRoomCanvas(room, state, selected)
     local viewport = state.viewport
@@ -913,15 +928,26 @@ local function getRoomCanvas(room, state, selected)
     end
 
     if orderedBatches and not cache.canvas then
+        local resolutionScale = canvasResolutionScale()
+
         cache.canvas = tasks.newTask(
             function(task)
-                local canvas = love.graphics.newCanvas(room.width or 0, room.height or 0)
+                local canvas = love.graphics.newCanvas((room.width or 0) * resolutionScale, (room.height or 0) * resolutionScale)
 
                 canvas:renderTo(function()
+                    if resolutionScale ~= 1 then
+                        love.graphics.push()
+                        love.graphics.scale(resolutionScale, resolutionScale)
+                    end
+
                     for depth, batch in ipairs(orderedBatches) do
                         for _, drawable in ipairs(batch) do
                             drawable:draw()
                         end
+                    end
+
+                    if resolutionScale ~= 1 then
+                        love.graphics.pop()
                     end
                 end)
 
@@ -1024,7 +1050,9 @@ function celesteRender.drawRoom(room, state, selected, visible)
                 if canvas then
                     -- No need to draw the canvas if we can only see the border
                     if roomVisibleWidth > 2 and roomVisibleHeight > 2 then
-                        love.graphics.draw(canvas)
+                        local resolutionScale = canvasResolutionScale()
+
+                        love.graphics.draw(canvas, 0, 0, 0, 1 / resolutionScale, 1 / resolutionScale)
                     end
                 end
             end

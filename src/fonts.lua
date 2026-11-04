@@ -60,7 +60,12 @@ function font.setUseHires(useHires)
     font.useHires = useHires
     font.font = useHires and hiresFont or vanillaFont
     font.fontString = useHires and hires.glyphs or vanilla.glyphs
-    font.pixelFactor = vanillaFont:getHeight() / font.font:getHeight()
+
+    -- The hi-res glyphs are 11px tall against the vanilla 5px ones, so half the
+    -- scale gives the same visual size. Keeping it at exactly 0.5 also means
+    -- room canvases can be rendered at exactly 2x and downscaled without
+    -- resampling artifacts
+    font.pixelFactor = useHires and 0.5 or 1
     font.fontScale = 4 * font.pixelFactor
 
     love.graphics.setFont(font.font)

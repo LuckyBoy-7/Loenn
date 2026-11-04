@@ -87,35 +87,6 @@ function orderedDrawingBatchMt.__index:addFromDrawable(drawable)
     elseif typ == "drawableText" then
         local font = drawable.font
 
-        -- Text may need a different font when it ends up in the low resolution
-        -- canvas of an unselected room. Bake both and pick at draw time.
-        if drawable.canvasFont then
-            local mainText = love.graphics.newText(font)
-            local canvasText = love.graphics.newText(drawable.canvasFont)
-
-            drawable:addToBatch(mainText)
-            drawable:addToBatch(canvasText, drawable.canvasFont, drawable.canvasFontSize or 1)
-
-            table.insert(self._drawables, {
-                draw = function()
-                    local text = love.graphics.getCanvas() and canvasText or mainText
-
-                    love.graphics.draw(text, 0, 0)
-                end,
-
-                release = function()
-                    mainText:release()
-                    canvasText:release()
-                end
-            })
-
-            self._lastFont = nil
-            self._lastBatch = nil
-            self._lastType = typ
-
-            return
-        end
-
         if font ~= self._lastFont or self._lastType ~= "drawableText" or not self._lastBatch then
             self._lastFont = font
             self._lastBatch = love.graphics.newText(font)
@@ -158,9 +129,6 @@ end
 function orderedDrawingBatchMt.__index:release()
     for _, drawable in ipairs(self._drawables) do
         if utils.typeof(drawable) == "SpriteBatch" then
-            drawable:release()
-
-        elseif type(drawable) == "table" and drawable.release then
             drawable:release()
         end
     end

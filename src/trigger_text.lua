@@ -17,8 +17,7 @@ local NEIGHBOUR_PADDING_MAX = 6
 
 local wordWidthCache = {}
 local roomRects = {}
-local computedRooms = {}
-local staleRooms = {}
+local roomSignatures = {}
 
 -- --------------------------------------------------------------------------
 -- Text rectangle
@@ -60,7 +59,7 @@ function triggerText.getRect(text, x, y, width, height, font, fontSize)
 end
 
 -- Widens the box around its center when the longest word does not fit, so words
--- are not cut in half
+-- are not cut in half. Uses the same font metrics the label is drawn with.
 function triggerText.stretchRect(x, y, width, height, text, fontSize)
     if not configs.font.showCompleteTriggerText then
         return x, y, width, height
@@ -87,6 +86,10 @@ function triggerText.stretchRect(x, y, width, height, text, fontSize)
                 end
             end
         end
+
+        -- Wrapping divides the width by the font size again, rounding errors
+        -- would otherwise split an exactly fitting word into two lines
+        maxWidth = math.ceil(maxWidth) + 1
 
         wordWidthCache[text] = maxWidth
     end
@@ -143,48 +146,150 @@ local function sign(value)
     return value > 0 and 1 or value < 0 and -1 or 0
 end
 
+-- --------------------------------------------------------------------------
+-- Spatial grid
+--
+-- The solver only ever compares labels that are close to each other, so a
+-- uniform grid keeps it from testing every pair in the room (which made big
+-- rooms with many triggers very slow).
+-- --------------------------------------------------------------------------
+
+local GRID_CELL_SIZE = 64
+
+local function gridKey(gx, gy)
+    return gx * 100003 + gy
+end
+
+local function addToGrid(grid, index, rect)
+    local firstX = math.floor(rect.x / GRID_CELL_SIZE)
+    local firstY = math.floor(rect.y / GRID_CELL_SIZE)
+    local lastX = math.floor((rect.x + rect.width) / GRID_CELL_SIZE)
+    local lastY = math.floor((rect.y + rect.height) / GRID_CELL_SIZE)
+
+    for gx = firstX, lastX do
+        for gy = firstY, lastY do
+            local key = gridKey(gx, gy)
+            local cell = grid[key]
+
+            if not cell then
+                cell = {}
+                grid[key] = cell
+            end
+
+            cell[#cell + 1] = index
+        end
+    end
+end
+
+local function buildGrid(rects)
+    local grid = {}
+
+    for index, rect in ipairs(rects) do
+        addToGrid(grid, index, rect)
+    end
+
+    return grid
+end
+
+-- Calls the callback for every pair of labels that share a grid cell, each pair
+-- exactly once
+local function forEachNearbyPair(grid, callback)
+    local seen = {}
+
+    for _, cell in pairs(grid) do
+        local count = #cell
+
+        for i = 1, count - 1 do
+            local a = cell[i]
+
+            for j = i + 1, count do
+                local b = cell[j]
+                local low, high = a, b
+
+                if low > high then
+                    low, high = high, low
+                end
+
+                local key = low * 100003 + high
+
+                if not seen[key] then
+                    seen[key] = true
+
+                    callback(low, high)
+                end
+            end
+        end
+    end
+end
+
 -- Rectangles whose centers are close are arranged in a row or column instead of
 -- being pushed around
 local function disperseGroups(rects, roomRect)
+    local grid = {}
     local processed = {}
 
     for i = 1, #rects do
-        if not processed[i] and not isOutsideRoom(rects[i], roomRect) then
-            local group = {i}
-            processed[i] = true
+        if not isOutsideRoom(rects[i], roomRect) then
+            local cx, cy = center(rects[i])
 
-            for j = i + 1, #rects do
-                if not processed[j] and not isOutsideRoom(rects[j], roomRect) and centersClose(rects[i], rects[j]) then
-                    table.insert(group, j)
-                    processed[j] = true
-                end
+            local key = gridKey(math.floor(cx / GRID_CELL_SIZE), math.floor(cy / GRID_CELL_SIZE))
+            local cell = grid[key]
+
+            if not cell then
+                cell = {}
+                grid[key] = cell
             end
 
-            if #group > 1 then
-                local base = rects[group[1]]
-                local baseX, baseY = center(base)
-                local totalWidth = (PADDING + base.width) * #group - PADDING
-                local totalHeight = (PADDING + base.height) * #group - PADDING
-                local startX = baseX - totalWidth / 2
-                local startY = baseY - totalHeight / 2
+            cell[#cell + 1] = i
+        end
+    end
 
-                for index, rectIndex in ipairs(group) do
-                    local rect = rects[rectIndex]
-                    local newX, newY
+    for _, cell in pairs(grid) do
+        local count = #cell
 
-                    if rect.height > rect.width then
-                        newX = startX + (index - 1) * (PADDING + base.width)
-                        newY = baseY - rect.height / 2
+        for i = 1, count - 1 do
+            local firstIndex = cell[i]
 
-                    else
-                        newY = startY + (index - 1) * (PADDING + base.height)
-                        newX = baseX - rect.width / 2
+            if not processed[firstIndex] then
+                processed[firstIndex] = true
+
+                local group = {firstIndex}
+
+                for j = i + 1, count do
+                    local otherIndex = cell[j]
+
+                    if not processed[otherIndex] and centersClose(rects[firstIndex], rects[otherIndex]) then
+                        group[#group + 1] = otherIndex
+                        processed[otherIndex] = true
                     end
+                end
 
-                    rect.offsetX = (rect.offsetX or 0) + newX - rect.x
-                    rect.offsetY = (rect.offsetY or 0) + newY - rect.y
-                    rect.x = newX
-                    rect.y = newY
+                if #group > 1 then
+                    local base = rects[group[1]]
+                    local baseX, baseY = center(base)
+                    local totalWidth = (PADDING + base.width) * #group - PADDING
+                    local totalHeight = (PADDING + base.height) * #group - PADDING
+                    local startX = baseX - totalWidth / 2
+                    local startY = baseY - totalHeight / 2
+
+                    for position, rectIndex in ipairs(group) do
+                        local rect = rects[rectIndex]
+                        local newX, newY
+
+                        if rect.height > rect.width then
+                            newX = startX + (position - 1) * (PADDING + base.width)
+                            newY = baseY - rect.height / 2
+
+                        else
+                            newY = startY + (position - 1) * (PADDING + base.height)
+                            newX = baseX - rect.width / 2
+                        end
+
+                        rect.offsetX = (rect.offsetX or 0) + newX - rect.x
+                        rect.offsetY = (rect.offsetY or 0) + newY - rect.y
+                        rect.x = newX
+                        rect.y = newY
+                    end
                 end
             end
         end
@@ -198,49 +303,49 @@ local function separate(rects, roomRect, neighbourCount, outOfRoom)
         moves[i] = {dx = 0, dy = 0, count = 0}
     end
 
-    for i = 1, #rects do
-        if not outOfRoom[i] then
-            for j = i + 1, #rects do
-                if not outOfRoom[j] then
-                    local density = (neighbourCount[i] + neighbourCount[j]) / 2
-                    local padding = math.min(PADDING * density / NEIGHBOUR_PADDING_MAX, PADDING)
-                    local overlapX, overlapY = getOverlap(rects[i], rects[j], padding)
+    local grid = buildGrid(rects)
 
-                    if overlapX > 0 and overlapY > 0 then
-                        local ax, ay = center(rects[i])
-                        local bx, by = center(rects[j])
-                        local dx, dy = bx - ax, by - ay
-                        local distance = math.sqrt(dx * dx + dy * dy)
-
-                        if distance < 0.001 then
-                            dx, dy = 0, 1
-                            distance = 1
-                        end
-
-                        local directionX, directionY = dx / distance, dy / distance
-                        local separation = math.min(overlapX, overlapY) / 2
-
-                        if overlapX < overlapY then
-                            directionX = sign(directionX)
-                            directionY = 0
-
-                        else
-                            directionX = 0
-                            directionY = sign(directionY)
-                        end
-
-                        moves[i].dx = moves[i].dx - directionX * separation
-                        moves[i].dy = moves[i].dy - directionY * separation
-                        moves[i].count = moves[i].count + 1
-
-                        moves[j].dx = moves[j].dx + directionX * separation
-                        moves[j].dy = moves[j].dy + directionY * separation
-                        moves[j].count = moves[j].count + 1
-                    end
-                end
-            end
+    forEachNearbyPair(grid, function(i, j)
+        if outOfRoom[i] or outOfRoom[j] then
+            return
         end
-    end
+
+        local density = (neighbourCount[i] + neighbourCount[j]) / 2
+        local padding = math.min(PADDING * density / NEIGHBOUR_PADDING_MAX, PADDING)
+        local overlapX, overlapY = getOverlap(rects[i], rects[j], padding)
+
+        if overlapX > 0 and overlapY > 0 then
+            local ax, ay = center(rects[i])
+            local bx, by = center(rects[j])
+            local dx, dy = bx - ax, by - ay
+            local distance = math.sqrt(dx * dx + dy * dy)
+
+            if distance < 0.001 then
+                dx, dy = 0, 1
+                distance = 1
+            end
+
+            local directionX, directionY = dx / distance, dy / distance
+            local separation = math.min(overlapX, overlapY) / 2
+
+            if overlapX < overlapY then
+                directionX = sign(directionX)
+                directionY = 0
+
+            else
+                directionX = 0
+                directionY = sign(directionY)
+            end
+
+            moves[i].dx = moves[i].dx - directionX * separation
+            moves[i].dy = moves[i].dy - directionY * separation
+            moves[i].count = moves[i].count + 1
+
+            moves[j].dx = moves[j].dx + directionX * separation
+            moves[j].dy = moves[j].dy + directionY * separation
+            moves[j].count = moves[j].count + 1
+        end
+    end)
 
     for i = 1, #rects do
         local move = moves[i]
@@ -264,15 +369,15 @@ local function extrude(rects, roomRect)
 
     for i = 1, #rects do
         neighbourCount[i] = 0
-
-        for j = 1, #rects do
-            if i ~= j and isOverlapping(rects[i], rects[j], NEIGHBOUR_PADDING) then
-                neighbourCount[i] = neighbourCount[i] + 1
-            end
-        end
-
         outOfRoom[i] = isOutsideRoom(rects[i], roomRect)
     end
+
+    forEachNearbyPair(buildGrid(rects), function(i, j)
+        if isOverlapping(rects[i], rects[j], NEIGHBOUR_PADDING) then
+            neighbourCount[i] = neighbourCount[i] + 1
+            neighbourCount[j] = neighbourCount[j] + 1
+        end
+    end)
 
     disperseGroups(rects, roomRect)
 
@@ -285,19 +390,41 @@ end
 -- Per room cache
 -- --------------------------------------------------------------------------
 
--- Computes (and caches) where every trigger label is drawn in the room
+-- Computes (and caches) where every trigger label is drawn in the room.
+--
+-- This runs on every frame that rebuilds the room batches, so it first checks a
+-- cheap signature and only runs the (quadratic) overlap solver when a label
+-- actually changed.
 function triggerText.updateRoom(room, triggerList)
     local roomName = room.name
+    local triggers = require("triggers")
 
-    if computedRooms[roomName] and not staleRooms[roomName] then
+    -- Same size the label is drawn with, otherwise the boxes and the overlap
+    -- solver work with the wrong text metrics
+    local fontSize = fonts.size(triggers.triggerFontSize)
+
+    -- Cheap numeric signature: this runs on every frame that the room batches
+    -- are requested, so it must not build strings or call into trigger text
+    local signature = #triggerList
+
+    for index, trigger in ipairs(triggerList) do
+        signature = signature * 31
+            + (trigger.x or 0) * 3
+            + (trigger.y or 0) * 5
+            + (trigger.width or 16) * 7
+            + (trigger.height or 16) * 11
+
+        signature = signature % 1000000007
+    end
+
+    signature = signature + (fonts.useHires and 0.5 or 0)
+
+    if roomSignatures[roomName] == signature then
         return
     end
 
-    computedRooms[roomName] = true
-    staleRooms[roomName] = nil
+    roomSignatures[roomName] = signature
 
-    local triggers = require("triggers")
-    local fontSize = triggers.triggerFontSize
     local rects = {}
     local byTrigger = {}
 
@@ -323,8 +450,7 @@ end
 
 function triggerText.invalidate(room)
     if room and room.name then
-        computedRooms[room.name] = nil
-        staleRooms[room.name] = true
+        roomSignatures[room.name] = nil
     end
 end
 
@@ -356,8 +482,7 @@ end
 function triggerText.clearCache()
     wordWidthCache = {}
     roomRects = {}
-    computedRooms = {}
-    staleRooms = {}
+    roomSignatures = {}
 end
 
 -- Text metrics change with the font, and so do the cached label rectangles
