@@ -26,6 +26,27 @@ modHandler.pluginFolderNames = {
     fileLocations.loennSimpleFolderName
 }
 
+-- Root of the isolated editor plugin ecosystem. Content extensions (entities, triggers, effects,
+-- lang, ...) always stay under "Loenn"; the plugin categories listed below are read from here so
+-- editor plugins can't interfere with content extensions or with the editor itself. Editor plugins
+-- bootstrap from "libraries" too, so those are handled separately in findPluginFiletype.
+modHandler.isolatedPluginRoot = "Loenn2"
+
+modHandler.isolatedPluginCategories = {
+    tools = true,
+    ["ui/windows"] = true,
+    scenes = true
+}
+
+-- Returns the root folders that should be searched for a plugin category
+function modHandler.getPluginRoots(startFolder)
+    if modHandler.isolatedPluginCategories[startFolder] then
+        return { modHandler.isolatedPluginRoot }
+    end
+
+    return modHandler.pluginFolderNames
+end
+
 modHandler.loadedMods = {}
 modHandler.loadedNameLookup = {}
 modHandler.knownPluginRequires = {}
@@ -87,7 +108,20 @@ end
 function modHandler.findPluginFiletype(startFolder, filetype)
     local filenames = {}
 
-    for _, folderName in ipairs(modHandler.pluginFolderNames) do
+    if modHandler.isolatedPluginCategories[startFolder] or startFolder == "libraries" then
+        for modFolderName in pairs(modHandler.loadedMods) do
+            local pluginStartFolder = utils.convertToUnixPath(utils.joinpath(
+                modHandler.isolatedPluginRoot,
+                startFolder
+            ))
+
+            modHandler.findModFolderFiletype(modFolderName, filenames, pluginStartFolder, filetype)
+        end
+
+        return filenames
+    end
+
+    for _, folderName in ipairs(modHandler.getPluginRoots(startFolder)) do
         for modFolderName, _ in pairs(modHandler.loadedMods) do
             local pluginStartFolder = utils.convertToUnixPath(utils.joinpath(
                 folderName,

@@ -1,7 +1,6 @@
 /*
 
 # directories
-!/docs
 !/lib
 !/src
 
@@ -17,6 +16,7 @@
 /src/celesteResources/*
 /src/*.dll
 /src/*.so
+/docs/*
 
 # local handoff / memory notes
 /docs/handoff-*.md
