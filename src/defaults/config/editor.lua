@@ -1,6 +1,7 @@
 return {
     -- Display
     alwaysShowNodes = true,
+    extendedTriggerText = true,
 
     -- Tools and Interactions
     toolActionButton = 1,

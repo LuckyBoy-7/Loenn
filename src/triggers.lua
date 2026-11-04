@@ -141,17 +141,31 @@ function triggers.triggerText(room, trigger)
     local name = trigger._name
     local handler = triggers.registeredTriggers[name]
     local fallbackText = triggers.getDrawableDisplayText(trigger)
+    local text
 
     if handler.triggerText then
         if utils.isCallable(handler.triggerText) then
-            return handler.triggerText(room, trigger) or fallbackText
+            text = handler.triggerText(room, trigger) or fallbackText
 
         else
-            return handler.triggerText or fallbackText
+            text = handler.triggerText or fallbackText
+        end
+
+    else
+        text = fallbackText
+    end
+
+    -- "Extended text": handlers may provide a short extra line that describes
+    -- the trigger contents, it is drawn in parentheses below the name
+    if configs.editor.extendedTriggerText and handler._lonnExt_extendedText then
+        local extendedText = utils.callIfFunction(handler._lonnExt_extendedText, trigger)
+
+        if extendedText and extendedText ~= "" then
+            text = string.format("%s\n(%s)", text, tostring(extendedText))
         end
     end
 
-    return fallbackText
+    return text
 end
 
 local function triggerIsSelected(trigger)

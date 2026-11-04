@@ -16,4 +16,9 @@ wind.placements = {
     }
 }
 
+-- Extended text: shows the wind direction below the trigger name
+wind._lonnExt_extendedText = function(trigger)
+    return trigger.pattern
+end
+
 return wind

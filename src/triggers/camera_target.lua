@@ -22,4 +22,19 @@ cameraTarget.placements = {
     }
 }
 
+-- Extended text: which axis the target applies to
+cameraTarget._lonnExt_extendedText = function(trigger)
+    if trigger.xOnly and trigger.yOnly then
+        return "xy"
+    end
+
+    if trigger.xOnly then
+        return "x"
+    end
+
+    if trigger.yOnly then
+        return "y"
+    end
+end
+
 return cameraTarget

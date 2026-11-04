@@ -24,4 +24,14 @@ everestFlag.placements = {
     }
 }
 
+-- Extended text: the flag name, "!" meaning the flag is cleared
+everestFlag._lonnExt_extendedText = function(trigger)
+    if trigger.state then
+        return trigger.flag
+
+    else
+        return "!" .. tostring(trigger.flag or "")
+    end
+end
+
 return everestFlag

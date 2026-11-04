@@ -92,6 +92,7 @@ local defaultTabForms = {
                 fieldOrder = {
                     "editor.triggersTrimModName",
                     "editor.triggersUseCategoryColors",
+                    "editor.extendedTriggerText",
                 }
             },
             {
@@ -650,7 +651,8 @@ local function applyNewSettings(newSettings, oldSettings)
         themes.useTheme(newSettings.ui.theme.themeName)
     end
 
-    if settingChanged("editor.triggersTrimModName") or settingChanged("editor.triggersUseCategoryColors") then
+    if settingChanged("editor.triggersTrimModName") or settingChanged("editor.triggersUseCategoryColors")
+        or settingChanged("editor.extendedTriggerText") then
         -- The display text changed, cached label layouts are stale
         require("trigger_text").clearCache()
         debugUtils.redrawMap()

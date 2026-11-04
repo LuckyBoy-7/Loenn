@@ -1812,9 +1812,11 @@ settings.editor.description.itemAllowPixelPerfect=Allow moving rooms to position
 # Editor - Triggers
 settings.editor.attribute.triggersTrimModName=Trimmed Trigger Names
 settings.editor.attribute.triggersUseCategoryColors=Use Trigger Category Colours
+settings.editor.attribute.extendedTriggerText=Extended Trigger Text
 
 settings.editor.description.triggersTrimModName=Don't show the mod name on placed triggers in the map view.
 settings.editor.description.triggersUseCategoryColors=Colour triggers based on their category.
+settings.editor.description.extendedTriggerText=Show extra information below the trigger name, such as the wind direction of wind triggers.
 
 # Hotkeys - General
 settings.hotkeys.attribute.new=New Map

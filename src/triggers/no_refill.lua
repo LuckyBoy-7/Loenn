@@ -16,4 +16,9 @@ noRefill.placements = {
     }
 }
 
+-- Extended text: whether refills are enabled or disabled
+noRefill._lonnExt_extendedText = function(trigger)
+    return trigger.state and "On" or "Off"
+end
+
 return noRefill

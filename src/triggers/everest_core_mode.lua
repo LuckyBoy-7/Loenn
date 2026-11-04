@@ -18,4 +18,9 @@ everestCoreMode.placements = {
     }
 }
 
+-- Extended text: the core mode that is switched to
+everestCoreMode._lonnExt_extendedText = function(trigger)
+    return trigger.mode
+end
+
 return everestCoreMode
