@@ -30,6 +30,7 @@ local anchorX, anchorY, anchorHeight = 0, 0, 0
 local arrowY = 0
 local shown = false
 local currentKey
+local imageAreaWidth, imageAreaHeight = 0, 0
 
 local function ensureWindow()
     if rootGroup then
@@ -106,6 +107,10 @@ local function ensureWindow()
             local contentX, contentY = x + panelPadding, y + panelPadding
             local contentWidth = math.max(0, math.floor(width - panelPadding * 2))
             local contentHeight = math.max(0, math.floor(height - panelPadding * 2))
+
+            -- The grid only covers the image, not the description below it
+            contentWidth = math.min(contentWidth, math.ceil(imageAreaWidth))
+            contentHeight = math.min(contentHeight, math.ceil(imageAreaHeight))
 
             if contentWidth > 0 and contentHeight > 0 then
                 local columns = math.ceil(contentWidth / checkerSize)
@@ -208,6 +213,10 @@ function hoverPreview.getWindow()
     return rootGroup
 end
 
+function hoverPreview.isShown()
+    return shown and panel ~= nil and panel.visible == true
+end
+
 function hoverPreview.hide()
     if not rootGroup then
         return
@@ -281,10 +290,17 @@ function hoverPreview.show(left, top, height, content)
         interactive = -1
     })
 
+    imageAreaWidth = width * scale
+    imageAreaHeight = heightSource * scale
+
     local children = {imageElement}
 
     if content.title then
-        local label = uiElements.label(tostring(content.title))
+        -- Shown under the preview, wrapped to the image width so the bubble does not become a
+        -- long thin strip for a descriptive tooltip
+        local wrapWidth = math.min(maxWidth, math.max(140, imageAreaWidth))
+
+        local label = uiElements.label(uiu.getWrap(love.graphics.getFont(), tostring(content.title), math.floor(wrapWidth)))
         label.style.color = {0.75, 0.75, 0.75, 1}
         label.interactive = -1
 

@@ -1063,6 +1063,13 @@ local function updateHoverPreview(list)
         return
     end
 
+    -- The description goes under the preview image instead of a separate tooltip
+    local tooltip = item.tooltip
+
+    if type(tooltip) == "string" and tooltip ~= "" then
+        content.title = tooltip
+    end
+
     hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, content)
 end
 

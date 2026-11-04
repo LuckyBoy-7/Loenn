@@ -1,6 +1,7 @@
 local ui = require("ui")
 local uiElements = require("ui.elements")
 local uiUtils = require("ui.utils")
+local hoverPreview = require("ui.hover_preview")
 
 local widgetUtils = require("ui.widgets.utils")
 
@@ -50,7 +51,8 @@ function tooltipHandler.tooltipWindowUpdate(orig, self, dt)
         end
     end
 
-    if tooltipExists and waitedEnough then
+    -- The hover preview already shows the tooltip text under the image
+    if tooltipExists and waitedEnough and not hoverPreview.isShown() then
         widgetUtils.moveWindow(tooltipWindow, cursorX, cursorY - tooltipWindow.height)
 
     elseif tooltipWindow.x ~= -1024 or tooltipWindow.y ~= -1024 then
