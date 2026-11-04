@@ -27,6 +27,9 @@ local history = require("history")
 local selectionUtils = require("selections")
 local celesteRender = require("celeste_render")
 local atlases = require("atlases")
+local entities = require("entities")
+local selectionItemUtils = require("selection_item_utils")
+local placementUtils = require("placement_utils")
 local virtualFs = require("virtual_fs")
 local utf8 = require("utf8")
 
@@ -71,6 +74,9 @@ local layersWithDecalPaths = {
 
 local decalPathIndent = "    "
 local vanillaDecalSource = "[Celeste/Vanilla]"
+
+-- Cached entity previews (name -> preview content or false), rebuilt with the material list
+local entityPreviewCache = {}
 
 local function splitDecalPath(path)
     local segments = {}
@@ -176,7 +182,9 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
 
             table.insert(entries, {
                 name = name,
-                segments = splitDecalPath(path),
+                material = isTable and material or nil,
+                -- Flat lists (triggers, entities) only get a source header, no path hierarchy
+                segments = options.flat and {} or splitDecalPath(path),
                 displayName = isTable and material.displayNameNoMods or nil,
                 sourceLabel = getDecalSourceLabel(language, associatedMods),
                 sourceKey = (associatedMods and associatedMods[1]) or "",
@@ -199,7 +207,14 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
             return lhs.sourceKey < rhs.sourceKey
         end
 
-        return table.concat(lhs.segments, "/") < table.concat(rhs.segments, "/")
+        local lhsPath = table.concat(lhs.segments, "/")
+        local rhsPath = table.concat(rhs.segments, "/")
+
+        if lhsPath ~= rhsPath then
+            return lhsPath < rhsPath
+        end
+
+        return lhs.name < rhs.name
     end)
 
     local items = {}
@@ -253,6 +268,7 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
                 associatedMods = entry.associatedMods,
                 itemFavorited = true,
                 isFavoritesGroup = true,
+                placement = entry.material,
                 ancestors = {}
             })
         end
@@ -317,11 +333,12 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
             text = leafText(entry),
             textNoMods = searchText(entry),
             data = entry.name,
-            indent = #segments,
+            indent = options.flat and 1 or #segments,
             tooltip = entry.tooltip,
             alternativeNames = entry.alternativeNames,
             associatedMods = entry.associatedMods,
             itemFavorited = not not favoritesLookup[entry.name],
+            placement = entry.material,
             ancestors = chain
         })
 
@@ -708,6 +725,290 @@ end
 -- Rows are recycled and rebound to other data while scrolling or filtering (sometimes without
 -- an enter/leave event at all), so the hover preview is recomputed every frame from the element
 -- currently under the cursor instead of being started from an onEnter callback.
+
+-- Collects every actual sprite (something with an atlas image and a quad) from a drawable,
+-- looking through the table wrappers that animation frames / custom drawables use.
+local function collectSpriteDrawables(drawable, out, depth)
+    if type(drawable) ~= "table" or depth > 3 then
+        return
+    end
+
+    local meta = drawable.meta
+
+    if meta and meta.image and drawable.quad and drawable.quad.getViewport then
+        table.insert(out, drawable)
+
+        return
+    end
+
+    for _, value in ipairs(drawable) do
+        collectSpriteDrawables(value, out, depth + 1)
+    end
+end
+
+-- Turns a drawable (single sprite, animation frames, or a table of custom drawables) into
+-- preview content. Only real sprites are kept: that filters out the helper drawables used by
+-- custom rendering (lines, rectangles, the 1x1 white pixel, ...). Everything else is composited
+-- onto a canvas, so entities built out of many sprites (a zip mover and the like) show all of
+-- them, positioned relative to each other but without the entity's world offset.
+local function spriteToPreview(sprite)
+    local meta = sprite.meta
+
+    if not meta or not meta.image or not sprite.quad then
+        return nil
+    end
+
+    return {
+        image = meta.image,
+        quad = sprite.quad,
+        layer = meta.layer or sprite.layer,
+        width = meta.width,
+        height = meta.height
+    }
+end
+
+local function drawableToPreview(drawable)
+    local sprites = {}
+
+    collectSpriteDrawables(drawable, sprites, 0)
+
+    if #sprites == 0 then
+        return nil
+    end
+
+    if #sprites == 1 then
+        return spriteToPreview(sprites[1])
+    end
+
+    local minX, minY = math.huge, math.huge
+    local maxX, maxY = -math.huge, -math.huge
+
+    for _, sprite in ipairs(sprites) do
+        local _, _, width, height = sprite.quad:getViewport()
+        local x, y = sprite.x or 0, sprite.y or 0
+
+        minX = math.min(minX, x)
+        minY = math.min(minY, y)
+        maxX = math.max(maxX, x + width)
+        maxY = math.max(maxY, y + height)
+    end
+
+    local width = math.ceil(maxX - minX)
+    local height = math.ceil(maxY - minY)
+
+    -- Too big to be a sane preview (or degenerate): fall back to the biggest single sprite
+    if width <= 0 or height <= 0 or width > 512 or height > 512 then
+        local best, bestArea = nil, -1
+
+        for _, sprite in ipairs(sprites) do
+            local _, _, spriteWidth, spriteHeight = sprite.quad:getViewport()
+            local area = spriteWidth * spriteHeight
+
+            if area > bestArea then
+                best, bestArea = sprite, area
+            end
+        end
+
+        return best and spriteToPreview(best)
+    end
+
+    local canvas = love.graphics.newCanvas(width, height)
+    local previousCanvas = love.graphics.getCanvas()
+
+    love.graphics.setCanvas(canvas)
+    love.graphics.clear(0, 0, 0, 0)
+    uiUtils.setColor(1, 1, 1, 1)
+
+    for _, sprite in ipairs(sprites) do
+        local meta = sprite.meta
+        local layer = meta.layer or sprite.layer
+        local x = (sprite.x or 0) - minX
+        local y = (sprite.y or 0) - minY
+
+        if layer then
+            love.graphics.drawLayer(meta.image, layer, sprite.quad, x, y)
+
+        else
+            love.graphics.draw(meta.image, sprite.quad, x, y)
+        end
+    end
+
+    love.graphics.setCanvas(previousCanvas)
+    uiUtils.setColor(1, 1, 1, 1)
+
+    return {
+        image = canvas,
+        quad = love.graphics.newQuad(0, 0, width, height, width, height),
+        width = width,
+        height = height
+    }
+end
+
+-- Renders the drawable the same way the placement ghost does (including custom drawing such as
+-- the lines of a zip mover, and the entity nodes) into an offscreen canvas, then crops it to the
+-- drawn content.
+local function drawableToCanvasPreview(drawable, room, layer, entity)
+    local entityX = entity and entity.x or 0
+    local entityY = entity and entity.y or 0
+
+    -- The canvas has to cover the nodes as well, which can be far away from the entity
+    local extent = 80
+
+    for _, node in ipairs(entity and entity.nodes or {}) do
+        extent = math.max(extent,
+            math.abs((node.x or 0) - entityX) + 24,
+            math.abs((node.y or 0) - entityY) + 24)
+    end
+
+    local size = math.min(512, math.max(96, math.ceil(extent * 2)))
+
+    local drawn, canvas = pcall(function()
+        local target = love.graphics.newCanvas(size, size)
+        local previousCanvas = love.graphics.getCanvas()
+
+        love.graphics.setCanvas(target)
+        love.graphics.clear(0, 0, 0, 0)
+        uiUtils.setColor(1, 1, 1, 1)
+
+        love.graphics.push()
+        love.graphics.translate(size / 2 - entityX, size / 2 - entityY)
+
+        local ok
+
+        if utils.typeof(drawable) == "table" then
+            ok = pcall(function()
+                for _, part in ipairs(drawable) do
+                    if part.draw then
+                        part:draw(1)
+                    end
+                end
+            end)
+
+        else
+            ok = pcall(function()
+                if drawable.draw then
+                    drawable:draw(1)
+                end
+            end)
+        end
+
+        -- Node lines and node sprites are drawn by the same code the editor uses for a placed
+        -- entity, which is what the placement ghost shows too
+        if ok and room and entity then
+            pcall(selectionItemUtils.drawSelected, room, layer, entity)
+        end
+
+        love.graphics.pop()
+        love.graphics.setCanvas(previousCanvas)
+        uiUtils.setColor(1, 1, 1, 1)
+
+        if not ok then
+            error("drawable failed to draw")
+        end
+
+        return target
+    end)
+
+    if not drawn or not canvas then
+        return nil
+    end
+
+    local data = canvas:newImageData()
+    local minX, minY = size, size
+    local maxX, maxY = -1, -1
+
+    for y = 0, size - 1 do
+        for x = 0, size - 1 do
+            local _, _, _, alpha = data:getPixel(x, y)
+
+            if alpha > 0.01 then
+                minX = math.min(minX, x)
+                minY = math.min(minY, y)
+                maxX = math.max(maxX, x)
+                maxY = math.max(maxY, y)
+            end
+        end
+    end
+
+    data:release()
+
+    if maxX < minX or maxY < minY then
+        return nil
+    end
+
+    local width, height = maxX - minX + 1, maxY - minY + 1
+
+    return {
+        image = canvas,
+        quad = love.graphics.newQuad(minX, minY, width, height, size, size),
+        width = width,
+        height = height
+    }
+end
+
+-- Entities are drawn from their handler, which needs a room and an entity instance. Both are
+-- best effort: if the handler needs something we can't provide, there is simply no preview.
+local function getEntityPreview(placement)
+    if not placement or not placement.itemTemplate then
+        return nil
+    end
+
+    local cacheKey = placement.name
+
+    if cacheKey and entityPreviewCache[cacheKey] ~= nil then
+        return entityPreviewCache[cacheKey] or nil
+    end
+
+    local name = placement.itemTemplate._name
+    local handler = name and entities.registeredEntities[name]
+    local preview
+
+    if handler then
+        local room = loadedState.getSelectedRoom()
+        local entity = utils.deepcopy(placement.itemTemplate)
+
+        entity.x = entity.x or 0
+        entity.y = entity.y or 0
+
+        -- The placement ghost adds the mandatory nodes to the item before drawing it (see
+        -- placement.lua updatePlacementNodes); without them a node based entity would preview
+        -- just its main sprite. Mirror that here.
+        if room then
+            local minimumNodes = placementUtils.nodeLimits(room, "entities", entity)
+
+            if minimumNodes and minimumNodes > 0 then
+                entity.nodes = entity.nodes or {}
+
+                while #entity.nodes < minimumNodes do
+                    local index = #entity.nodes + 1
+                    local widthOffset = (entity.width or 0) * index
+                    local nodeOffsetX = index * 16
+
+                    table.insert(entity.nodes, {
+                        x = entity.x + widthOffset + nodeOffsetX,
+                        y = entity.y
+                    })
+                end
+            end
+        end
+
+        local ok, drawable = pcall(entities.getEntityDrawable, name, handler, room, entity, nil)
+
+        if ok and drawable then
+            -- Draw it exactly like the placement ghost does (custom rendering, lines, sprite
+            -- tables, nodes, ...) into a canvas; only if that produces nothing, fall back to
+            -- pulling the sprites out of the drawable
+            preview = drawableToCanvasPreview(drawable, room, "entities", entity) or drawableToPreview(drawable)
+        end
+    end
+
+    if cacheKey then
+        entityPreviewCache[cacheKey] = preview or false
+    end
+
+    return preview
+end
+
 local function updateHoverPreview(list)
     local hovered = ui.hovering
 
@@ -720,37 +1021,55 @@ local function updateHoverPreview(list)
         return
     end
 
-    local material = hovered.itemData.data
+    local item = hovered.itemData
+    local material = item.data
+    local content
 
-    if type(material) ~= "string" or not utils.startsWith(material, "decals/") then
+    if type(material) ~= "string" then
         hoverPreview.hide()
         return
     end
 
-    -- getResource returns the atlas sprite. Its quad is on the sprite itself (meta has no quad),
-    -- so use the sprite fields: the image is the whole atlas page otherwise.
-    local sprite = atlases.getResource(material, "Gameplay")
+    if utils.startsWith(material, "decals/") then
+        -- getResource returns the atlas sprite. Its quad is on the sprite itself (meta has no
+        -- quad), so use the sprite fields: the image is the whole atlas page otherwise.
+        local sprite = atlases.getResource(material, "Gameplay")
 
-    if not sprite then
+        if sprite then
+            content = {
+                key = "decal:" .. material,
+                image = sprite.image,
+                quad = sprite.quad,
+                -- Sprites live in a runtime texture array; without the layer the wrong slice of
+                -- the atlas is drawn
+                layer = sprite.layer,
+                width = sprite.width,
+                height = sprite.height
+            }
+        end
+
+    elseif item.currentLayer == "entities" then
+        local preview = getEntityPreview(item.placement)
+
+        if preview then
+            preview.key = "entity:" .. material
+
+            content = preview
+        end
+    end
+
+    if not content then
         hoverPreview.hide()
         return
     end
 
-    hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, {
-        key = material,
-        image = sprite.image,
-        quad = sprite.quad,
-        -- Sprites live in a runtime texture array; without the layer the wrong slice of the
-        -- atlas is drawn
-        layer = sprite.layer,
-        width = sprite.width,
-        height = sprite.height
-    })
+    hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, content)
 end
 
 getMaterialItems = function(layer)
     -- A rebuilt list invalidates whatever row was hovered before
     hoverPreview.hide()
+    entityPreviewCache = {}
 
     local currentTool = toolHandler.currentTool
     local currentLayer = layer or toolHandler.getLayer(currentTool)
@@ -769,13 +1088,10 @@ getMaterialItems = function(layer)
         })
     end
 
-    if currentLayer == "triggers" then
-        -- Trigger names look like "modFile/triggerFile#placement". The path becomes the
-        -- hierarchy and the readable placement name is the leaf.
+    if currentLayer == "triggers" or currentLayer == "entities" then
+        -- Triggers and entities have no meaningful path hierarchy: group them by source mod only
         return getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, {
-            pathOf = function(name)
-                return string.match(name, "^([^#]*)#") or name
-            end,
+            flat = true,
             leafText = function(entry)
                 return entry.displayName or entry.segments[#entry.segments]
             end,
