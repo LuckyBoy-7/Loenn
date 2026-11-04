@@ -24,23 +24,15 @@ end
 function subLayers.getShouldLayerRender(layer, subLayer)
     subLayer = subLayer or -1
 
-    local groupVisible = loadedState.getLayerVisible(layer)
-    local groupForcedVisible = loadedState.getLayerForceRendered(layer)
+    if not loadedState.getLayerVisible(layer) then
+        return false
+    end
 
     if subLayer == -1 then
-        return groupVisible or groupForcedVisible
+        return true
     end
 
-    local subLayerName = subLayers.formatLayerName(layer, subLayer)
-
-    if groupVisible then
-        -- Check if visible or selected
-        return loadedState.getLayerShouldRender(subLayerName)
-
-    else
-        -- Check if selected
-        return loadedState.getLayerForceRendered(subLayerName)
-    end
+    return loadedState.getLayerVisible(subLayers.formatLayerName(layer, subLayer))
 end
 
 function subLayers.getLayerVisible(layer, subLayer)
@@ -53,21 +45,6 @@ function subLayers.setLayerVisible(layer, subLayer, visible, silent)
     local layerName = subLayers.formatLayerName(layer, subLayer or -1)
 
     return loadedState.setLayerVisible(layerName, visible, silent)
-end
-
-function subLayers.setLayerForceRender(layer, subLayer, currentValue, otherValue)
-    subLayer = subLayer or -1
-
-    local layerName = subLayers.formatLayerName(layer, subLayer)
-
-    if subLayer ~= -1 then
-        -- Force main layer and the sub layer
-        local layers = {layerName, layer}
-
-        return loadedState.setLayerForceRender(layer, layers, currentValue, otherValue)
-    end
-
-    return loadedState.setLayerForceRender(layer, layerName, currentValue, otherValue)
 end
 
 function subLayers.getLayerName(layer, subLayer)

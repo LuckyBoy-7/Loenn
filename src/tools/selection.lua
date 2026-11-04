@@ -136,13 +136,8 @@ function tool.setLayer(layer, subLayer)
     if layer == "allLayers" then
         tool.layer = allLayers
 
-        -- Set all layers to forced visible
-        subLayers.setLayerForceRender(layer, subLayer, true, true)
-
     else
         tool.layer = layer
-
-        subLayers.setLayerForceRender(layer, subLayer, true)
     end
 
     tool.subLayer = subLayer
@@ -157,7 +152,7 @@ local function selectionChanged(x, y, width, height, fromClick)
 
     -- Clicking a trigger label selects the trigger even when the click misses the
     -- (often small) trigger rectangle itself
-    if fromClick and room and configs.font.selectTriggerByClickingText then
+    if fromClick and room and configs.font.selectTriggerByClickingText and subLayers.getShouldLayerRender("triggers", -1) then
         local layer = tool.layer
         local onTriggers = layer == "triggers" or (type(layer) == "table" and layer._persistenceName == "AllLayers")
 
@@ -255,6 +250,11 @@ local function drawSelectionArea(room)
     end
 end
 
+-- Selections of hidden layers are not drawn either
+local function targetIsVisible(target)
+    return subLayers.getShouldLayerRender(target.layer or tool.layer, -1)
+end
+
 local function drawItemSelections(room )
     local drawnItems = {}
     local completeColor = colors.selectionCompleteNodeLineColor
@@ -264,7 +264,7 @@ local function drawItemSelections(room )
             for _, preview in ipairs(selectionPreviews) do
                 local item = preview.item
 
-                if not drawnItems[item] then
+                if not drawnItems[item] and targetIsVisible(preview) then
                     drawnItems[item] = true
 
                     selectionItemUtils.drawSelected(room, preview.layer, item, previewColor)
@@ -274,7 +274,7 @@ local function drawItemSelections(room )
         for _, target in ipairs(selectionTargets) do
             local item = target.item
 
-            if not drawnItems[item] then
+            if not drawnItems[item] and targetIsVisible(target) then
                 drawnItems[item] = true
 
                 selectionItemUtils.drawSelected(room, target.layer, item, completeColor)
@@ -298,7 +298,7 @@ local function drawSelectionRectanglesCommon(room, targets, borderColor, fillCol
                     local x, y = target.x, target.y
                     local width, height = target.width, target.height
 
-                    if not alreadyDrawn[target.item] then
+                    if not alreadyDrawn[target.item] and targetIsVisible(target) then
                         love.graphics.rectangle("fill", x, y, width, height)
                     end
                 end
@@ -316,7 +316,7 @@ local function drawSelectionRectanglesCommon(room, targets, borderColor, fillCol
 
                     alreadyDrawn[item] = alreadyDrawn[item] or {}
 
-                    if not alreadyDrawn[item][node] then
+                    if not alreadyDrawn[item][node] and targetIsVisible(target) then
                         love.graphics.rectangle("line", x - lineWidth / 2, y - lineWidth / 2, width + lineWidth, height + lineWidth)
 
                         alreadyDrawn[item][node] = true

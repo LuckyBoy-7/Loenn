@@ -102,6 +102,11 @@ end
 function selectionUtils.getLayerSelectionsForRoom(room, layer, subLayer, rectangles)
     rectangles = rectangles or {}
 
+    -- Hidden layers can not be selected
+    if not subLayers.getShouldLayerRender(layer, subLayer) then
+        return rectangles
+    end
+
     local handler = layerHandlers.getHandler(layer)
 
     if room and handler and handler.getSelection then
@@ -160,7 +165,8 @@ function selectionUtils.orderSelectionsByScore(selections)
 end
 
 local function addTileSelection(layer, room, rectangle, selected)
-    if tiles.tileLayers[layer] then
+    -- Hidden layers can not be selected
+    if tiles.tileLayers[layer] and subLayers.getShouldLayerRender(layer, -1) then
         local selection = tiles.getSelectionFromRectangle(room, layer, rectangle)
 
         if selection then

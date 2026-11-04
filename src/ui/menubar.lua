@@ -69,18 +69,6 @@ local function saveMapImage()
     end)
 end
 
-local function getLayerToggleFunction(layer)
-    return function()
-        loadedState.setLayerVisible(layer, not loadedState.getLayerVisible(layer))
-    end
-end
-
-local function getLayerValueFunction(layer)
-    return function()
-        return loadedState.getLayerVisible(layer) ~= false
-    end
-end
-
 local function toggleOnlyShowDependencies(layer)
     return function()
         if type(layer) == "table" then
@@ -105,17 +93,6 @@ local function getOnlyShowDependencies(layer)
     end
 end
 
-local function getToggleTriggerCategory(category)
-    return function()
-        local hiddenCategories = loadedState.getLayerInformation("triggers", "hiddenCategories", {})
-
-        hiddenCategories[category] = not hiddenCategories[category]
-
-        loadedState.setLayerInformation("triggers", "hiddenCategories", hiddenCategories)
-        loadedState.clearRoomRenderCache()
-    end
-end
-
 -- The node overlay is baked into the room batches, so toggling it has to throw
 -- those away to be picked up
 local function toggleAlwaysShowNodes()
@@ -131,14 +108,6 @@ end
 
 local function getAlwaysShowNodes()
     return configs.editor.alwaysShowNodes
-end
-
-local function getShowTriggerCategory(category)
-    return function()
-        local hiddenCategories = loadedState.getLayerInformation("triggers", "hiddenCategories", {})
-
-        return not hiddenCategories[category]
-    end
 end
 
 local function noRecentFilesNotification()
@@ -254,20 +223,6 @@ menubar.menubar = {
         {"settings", settingsEditor.editSettings},
     }},
     {"view", {
-        {"view_layer", {
-            {"view_tiles_fg", getLayerToggleFunction("tilesFg"), "checkbox", getLayerValueFunction("tilesFg")},
-            {"view_tiles_bg", getLayerToggleFunction("tilesBg"), "checkbox", getLayerValueFunction("tilesBg")},
-            {"view_entities", getLayerToggleFunction("entities"), "checkbox", getLayerValueFunction("entities")},
-            {"view_triggers", getLayerToggleFunction("triggers"), "checkbox", getLayerValueFunction("triggers")},
-            {"view_decals_fg", getLayerToggleFunction("decalsFg"), "checkbox", getLayerValueFunction("decalsFg")},
-            {"view_decals_bg", getLayerToggleFunction("decalsBg"), "checkbox", getLayerValueFunction("decalsBg")},
-            {"view_trigger_categories", {
-                {"view_trigger_category_general", getToggleTriggerCategory("general"), "checkbox", getShowTriggerCategory("general")},
-                {"view_trigger_category_camera", getToggleTriggerCategory("camera"), "checkbox", getShowTriggerCategory("camera")},
-                {"view_trigger_category_audio", getToggleTriggerCategory("audio"), "checkbox", getShowTriggerCategory("audio")},
-                {"view_trigger_category_visual", getToggleTriggerCategory("visual"), "checkbox", getShowTriggerCategory("visual")},
-            }},
-        }},
         {"view_only_depended_on", {
             {"view_depended_on_entities", toggleOnlyShowDependencies("entities"), "checkbox", getOnlyShowDependencies("entities")},
             {"view_depended_on_triggers", toggleOnlyShowDependencies("triggers"), "checkbox", getOnlyShowDependencies("triggers")},

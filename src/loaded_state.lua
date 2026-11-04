@@ -523,56 +523,10 @@ function state.clearRoomRenderCache()
     celesteRender.forceRedrawVisibleRooms(rooms, state, selectedItem, selectedItemType)
 end
 
-function state.getLayerForceRendered(layer)
-    return state.getLayerInformation(layer, "forceRender", false)
-end
-
+-- A layer is drawn when it is visible, which is what the eye icons in the tools
+-- window toggle. Selecting a layer never overrides that
 function state.getLayerShouldRender(layer)
-    return state.getLayerInformation(layer, "visible", true) or state.getLayerInformation(layer, "forceRender", false)
-end
-
--- Check if layers is same as target, or target is part of layers
-local function layerNameCheck(target, layers)
-    if target == layers then
-        return true
-    end
-
-    if type(layers) == "table" then
-        return utils.contains(target, layers)
-    end
-
-    return false
-end
-
--- Layer can be a single layer or a table of layers
-function state.setLayerForceRender(baseLayer, layer, currentValue, otherValue, silent)
-    otherValue = otherValue or false
-
-    local changesVisibility = false
-    local baseLayerVisible = state.getLayerVisible(baseLayer)
-
-    -- Initialize the layer information if it does not exist
-    utils.callIterateFirstIfTable(state.initLayerInformation, layer)
-
-    for target in pairs(state.layerInformation) do
-        local layerVisibleBefore = state.getLayerShouldRender(target)
-        local targetValue = otherValue or false
-
-        if layerNameCheck(target, layer) then
-            targetValue = currentValue
-        end
-
-        local infoChanged = state.setLayerInformation(target, "forceRender", targetValue)
-        local layerVisibleAfter = state.getLayerShouldRender(target)
-
-        if layerVisibleBefore ~= layerVisibleAfter or not baseLayerVisible and infoChanged then
-            changesVisibility = true
-        end
-    end
-
-    if changesVisibility and silent ~= false then
-        state.clearRoomRenderCache()
-    end
+    return state.getLayerInformation(layer, "visible", true)
 end
 
 function state.getLayerVisible(layer)

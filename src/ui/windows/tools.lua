@@ -1591,8 +1591,8 @@ local function updateLayerList(toolName, tool, targetLayer, preventCallback)
 end
 
 local function layerInformationChangedCallback(window, key, value)
-    -- Only update if its a visibility/render change
-    if key ~= "visible" and key ~= "forceRender" then
+    -- Only update if its a visibility change
+    if key ~= "visible" then
         return
     end
 
