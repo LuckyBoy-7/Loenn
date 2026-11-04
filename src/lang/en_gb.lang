@@ -1824,6 +1824,7 @@ settings.hotkeys.attribute.saveAs=Save As
 settings.hotkeys.attribute.undo=Undo
 settings.hotkeys.attribute.redo=Redo
 settings.hotkeys.attribute.toggleFullscreen=Toggle Fullscreen
+settings.hotkeys.attribute.toggleCoordinatePanel=Coordinate Panel
 
 settings.hotkeys.description.new=Create and open a new, empty map.
 settings.hotkeys.description.open=Open an existing map from a file.
@@ -1832,6 +1833,7 @@ settings.hotkeys.description.saveAs=Save the map as a new file.
 settings.hotkeys.description.undo=Revert the previous action.
 settings.hotkeys.description.redo=Re-apply a previously undone action.
 settings.hotkeys.description.toggleFullscreen=Toggle fullscreen on the application.
+settings.hotkeys.description.toggleCoordinatePanel=Open or close the panel showing the tile, room pixel and map coordinates under the cursor.
 
 # Hotkeys - Map View
 settings.editor.attribute.toolActionButton=Tool Action

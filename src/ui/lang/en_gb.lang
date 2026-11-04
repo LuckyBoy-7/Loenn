@@ -334,3 +334,14 @@ ui.menubar.open_storage_directory=Open Config Directory
 
 ui.menubar.not_yet_implemented=This feature is not implemented yet.
 ui.menubar.no_recent_files=No recent files.
+
+# Coordinate window
+ui.coordinate_window.title=Debug Info
+ui.coordinate_window.roomName=Room
+ui.coordinate_window.screen=Screen
+ui.coordinate_window.world=World
+ui.coordinate_window.worldTiles=World Tile
+ui.coordinate_window.worldSnap=World Snap
+ui.coordinate_window.room=Room Pixel
+ui.coordinate_window.roomTiles=Room Tile
+ui.coordinate_window.roomSnap=Room Snap

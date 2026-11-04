@@ -60,6 +60,10 @@ function hotkeys.addStandardHotkeys(hotkeyHandler)
 
     -- Window
     hotkeyHandler.addHotkey("global", configs.hotkeys.toggleFullscreen, windowUtils.toggleFullscreen)
+    hotkeyHandler.addHotkey("global", configs.hotkeys.toggleCoordinatePanel, function()
+        -- Same module path the window registry uses, so this is the same instance
+        require("ui/windows/coordinate_window").toggle()
+    end)
 end
 
 return hotkeys

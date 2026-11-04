@@ -155,7 +155,9 @@ local defaultTabForms = {
                     "spacer",
                     "hotkeys.cameraZoomIn",
                     "hotkeys.cameraZoomOut",
-                    "editor.canvasZoomExtentsButton"
+                    "editor.canvasZoomExtentsButton",
+                    "spacer",
+                    "hotkeys.toggleCoordinatePanel"
                 }
             },
             {
@@ -329,6 +331,9 @@ local defaultFieldInformation = {
         fieldType = "keyboard_hotkey"
     },
     ["hotkeys.cameraZoomOut"] = {
+        fieldType = "keyboard_hotkey"
+    },
+    ["hotkeys.toggleCoordinatePanel"] = {
         fieldType = "keyboard_hotkey"
     },
     ["hotkeys.debugMode"] = {

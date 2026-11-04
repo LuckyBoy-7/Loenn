@@ -49,6 +49,9 @@ local defaultHotkeys = {
     roomConfigureCurrent = "ctrl + shift + t",
     roomDelete = "alt + delete",
 
+    -- View
+    toggleCoordinatePanel = "`",
+
     -- Debug
     debugReloadEntities = "f5",
     debugRedrawMap = "f6",
