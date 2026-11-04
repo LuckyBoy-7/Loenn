@@ -38,10 +38,82 @@ modHandler.isolatedPluginCategories = {
     scenes = true
 }
 
+-- Old mods whose editor plugins still need to work. They keep loading the
+-- isolated categories from their "Loenn" folder as well
+modHandler.isolatedPluginWhitelistFallback = {
+    "AltSidesHelper",
+}
+
+local isolatedPluginWhitelistLookup
+
+-- Mod folder names are the mod folder or archive name with dots replaced, e.g.
+-- "AltSidesHelper_zip" for "AltSidesHelper.zip", so the whitelist compares
+-- without that suffix and case insensitively
+local function normalizeModName(name)
+    if type(name) ~= "string" then
+        return nil
+    end
+
+    return string.lower(name):gsub("_zip$", "")
+end
+
+local function getIsolatedPluginWhitelist()
+    if not isolatedPluginWhitelistLookup then
+        isolatedPluginWhitelistLookup = {}
+
+        local list = modHandler.isolatedPluginWhitelistFallback
+
+        if type(configs.general) == "table" and type(configs.general.isolatedPluginWhitelist) == "table" then
+            list = configs.general.isolatedPluginWhitelist
+        end
+
+        for _, modName in ipairs(list) do
+            local normalized = normalizeModName(modName)
+
+            if normalized then
+                isolatedPluginWhitelistLookup[normalized] = true
+            end
+        end
+    end
+
+    return isolatedPluginWhitelistLookup
+end
+
+function modHandler.isIsolatedPluginWhitelisted(modFolderName)
+    if not modFolderName then
+        return false
+    end
+
+    local lookup = getIsolatedPluginWhitelist()
+    local normalized = normalizeModName(modFolderName)
+
+    if lookup[normalized] then
+        return true
+    end
+
+    -- Also accept the name declared in the mod metadata (everest.yaml)
+    local modInfo = modHandler.loadedMods[modFolderName]
+    local metadata = modInfo and modInfo.metadata
+
+    if metadata and lookup[normalizeModName(metadata.name)] then
+        return true
+    end
+
+    return false
+end
+
 -- Returns the root folders that should be searched for a plugin category
-function modHandler.getPluginRoots(startFolder)
-    if modHandler.isolatedPluginCategories[startFolder] then
-        return { modHandler.isolatedPluginRoot }
+function modHandler.getPluginRoots(startFolder, modFolderName)
+    if modHandler.isolatedPluginCategories[startFolder] or startFolder == "libraries" then
+        local roots = {modHandler.isolatedPluginRoot}
+
+        if modHandler.isIsolatedPluginWhitelisted(modFolderName) then
+            for _, folderName in ipairs(modHandler.pluginFolderNames) do
+                table.insert(roots, folderName)
+            end
+        end
+
+        return roots
     end
 
     return modHandler.pluginFolderNames
@@ -110,12 +182,14 @@ function modHandler.findPluginFiletype(startFolder, filetype)
 
     if modHandler.isolatedPluginCategories[startFolder] or startFolder == "libraries" then
         for modFolderName in pairs(modHandler.loadedMods) do
-            local pluginStartFolder = utils.convertToUnixPath(utils.joinpath(
-                modHandler.isolatedPluginRoot,
-                startFolder
-            ))
+            for _, folderName in ipairs(modHandler.getPluginRoots(startFolder, modFolderName)) do
+                local pluginStartFolder = utils.convertToUnixPath(utils.joinpath(
+                    folderName,
+                    startFolder
+                ))
 
-            modHandler.findModFolderFiletype(modFolderName, filenames, pluginStartFolder, filetype)
+                modHandler.findModFolderFiletype(modFolderName, filenames, pluginStartFolder, filetype)
+            end
         end
 
         return filenames
