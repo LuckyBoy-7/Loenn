@@ -668,37 +668,57 @@ local function materialDataToElement(list, data, element)
             element.label._bold = data.isHeader or false
         end
 
-        -- Hover preview: decals resolve to a sprite in the gameplay atlas. Other material lists
-        -- can hook the same generic preview with their own content.
-        local material = data.data
-
-        if type(material) == "string" and utils.startsWith(material, "decals/") then
-            element.onEnter = function(self)
-                local meta = atlases.getResource(material, "Gameplay")
-
-                if meta then
-                    hoverPreview.show(self.screenX, self.screenY, self.height, {
-                        image = meta.image,
-                        quad = meta.quad,
-                        width = meta.width,
-                        height = meta.height
-                    })
-                end
-            end
-
-            element.onLeave = function()
-                hoverPreview.hide()
-            end
-
-        else
-            element.onEnter = false
-            element.onLeave = false
-        end
-
+        -- Hover preview is driven from the list update (see updateHoverPreview): enter/leave
+        -- callbacks are not reliable here, because a row element can be rebound to different
+        -- data (scrolling, filtering) without the hover ever leaving it, which showed a stale
+        -- preview for a different decal.
         updateListItemFavoriteVisuals(element)
     end
 
     return element
+end
+
+-- Rows are recycled and rebound to other data while scrolling or filtering (sometimes without
+-- an enter/leave event at all), so the hover preview is recomputed every frame from the element
+-- currently under the cursor instead of being started from an onEnter callback.
+local function updateHoverPreview(list)
+    local hovered = ui.hovering
+
+    while hovered and hovered ~= list and not hovered.itemData do
+        hovered = hovered.parent
+    end
+
+    if not hovered or hovered == list or not hovered.itemData then
+        hoverPreview.hide()
+        return
+    end
+
+    local material = hovered.itemData.data
+
+    if type(material) ~= "string" or not utils.startsWith(material, "decals/") then
+        hoverPreview.hide()
+        return
+    end
+
+    -- getResource returns the atlas sprite. Its quad is on the sprite itself (meta has no quad),
+    -- so use the sprite fields: the image is the whole atlas page otherwise.
+    local sprite = atlases.getResource(material, "Gameplay")
+
+    if not sprite then
+        hoverPreview.hide()
+        return
+    end
+
+    hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, {
+        key = material,
+        image = sprite.image,
+        quad = sprite.quad,
+        -- Sprites live in a runtime texture array; without the layer the wrong slice of the
+        -- atlas is drawn
+        layer = sprite.layer,
+        width = sprite.width,
+        height = sprite.height
+    })
 end
 
 getMaterialItems = function(layer)
@@ -1442,6 +1462,15 @@ function toolWindow.getWindow()
     toolWindow.toolList = toolList
     toolWindow.layerList = layerList
     toolWindow.materialList = materialList
+
+    -- Drive the decal hover preview from the list itself (rows are recycled, so enter/leave
+    -- events alone are not reliable)
+    materialList:with(uiUtils.hook({
+        update = function(orig, self)
+            orig(self)
+            updateHoverPreview(self)
+        end
+    }))
     toolWindow.modeList = modeList
     toolWindow.toolPanel = uiElements.panel({toolList})
     toolWindow.layerPanel = uiElements.panel({layerList})

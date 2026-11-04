@@ -24,6 +24,7 @@ local panel
 local anchorX, anchorY, anchorHeight = 0, 0, 0
 local arrowY = 0
 local shown = false
+local currentKey
 
 local function ensureWindow()
     if rootGroup then
@@ -177,6 +178,7 @@ function hoverPreview.hide()
     end
 
     shown = false
+    currentKey = nil
     panel.visible = false
 end
 
@@ -199,6 +201,16 @@ function hoverPreview.show(left, top, height, content)
 
     anchorX, anchorY = left or 0, top or 0
     anchorHeight = height or 0
+
+    -- Cheap path: same content as the already shown preview, only the anchors (and therefore
+    -- the position) changed, so the children don't have to be rebuilt
+    if content.key ~= nil and content.key == currentKey and panel.visible then
+        shown = true
+
+        return
+    end
+
+    currentKey = content.key
 
     local area = content.area or defaultArea
 
@@ -227,7 +239,7 @@ function hoverPreview.show(left, top, height, content)
     local scale = math.sqrt(area / (width * heightSource))
     scale = math.min(scale, maxWidth / width, maxHeight / heightSource)
 
-    local imageElement = uiElements.image(content.image, content.quad):with({
+    local imageElement = uiElements.image(content.image, content.quad, content.layer):with({
         scaleX = scale,
         scaleY = scale,
         interactive = -1
