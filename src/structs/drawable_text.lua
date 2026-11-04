@@ -6,6 +6,20 @@ local drawableTextMt = {}
 drawableTextMt.__index = {}
 
 function drawableTextMt.__index:draw()
+    -- Direct draws (like the placement preview, which tints everything white)
+    -- have to respect the color of this drawable, otherwise e.g. the dark
+    -- trigger label shadow would show up white. The current alpha is kept so
+    -- previews still fade out.
+    local previousColor
+
+    if self.color then
+        local r, g, b, a = love.graphics.getColor()
+
+        previousColor = {r, g, b, a}
+
+        love.graphics.setColor(self.color[1] or 1, self.color[2] or 1, self.color[3] or 1, (self.color[4] or 1) * a)
+    end
+
     if self.width and self.height then
         drawing.printCenteredText(self.text, self.x, self.y, self.width, self.height, self.font, self.fontSize)
 
@@ -23,6 +37,10 @@ function drawableTextMt.__index:draw()
         if self.font then
             love.graphics.setFont(previousFont)
         end
+    end
+
+    if previousColor then
+        love.graphics.setColor(previousColor)
     end
 end
 
