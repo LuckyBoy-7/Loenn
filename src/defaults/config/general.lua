@@ -9,4 +9,7 @@ return {
     persistWindowSize = true,
     persistWindowPosition = true,
     persistWindowFullscreen = true,
+
+    -- How long notifications stay on screen, in seconds
+    notificationDuration = 8,
 }

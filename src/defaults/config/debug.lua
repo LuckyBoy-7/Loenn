@@ -19,7 +19,7 @@ return {
     logImageLoading = false,
 
     -- Hotkeys / UI
-    enableDebugOptions = false,
+    enableDebugOptions = true,
 
     -- Logging
     loggingLevel = 1,

@@ -82,12 +82,24 @@ function viewportHandler.cameraFromPersistence()
     viewport.scale = persistence.cameraPositionScale or 1
 end
 
+-- Switches between the vanilla and the hi-res font depending on the zoom level,
+-- when "automatic font switching" is enabled
+local function applyAutomaticFont()
+    local configs = require("configs")
+
+    if configs.font and configs.font.autoSwitchFont then
+        require("fonts").setUseHires(viewport.scale > 1)
+    end
+end
+
 function viewportHandler.zoomIn()
     local mouseX, mouseY = viewportHandler.getMousePosition()
 
     viewport.scale *= 2
     viewport.x = viewport.x * 2 + mouseX
     viewport.y = viewport.y * 2 + mouseY
+
+    applyAutomaticFont()
 
     viewportHandler.persistCamera()
 end
@@ -98,6 +110,8 @@ function viewportHandler.zoomOut()
     viewport.scale /= 2
     viewport.x = (viewport.x - mouseX) / 2
     viewport.y = (viewport.y - mouseY) / 2
+
+    applyAutomaticFont()
 
     viewportHandler.persistCamera()
 end

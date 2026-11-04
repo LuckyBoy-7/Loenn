@@ -156,6 +156,27 @@ local function clearCache()
     notifications.notify(tostring(language.ui.notifications.cacheCleared))
 end
 
+-- Restores the built-in defaults in settings.conf. The previous file is kept as
+-- settings.backup.conf next to it, since a reset is easy to trigger by accident
+local function resetSettings()
+    local defaultConfig = require("default_config")
+    local config = require("utils.config")
+
+    local settingsPath = fileLocations.getSettingsPath()
+    local backupPath = utils.joinpath(fileLocations.getStorageDir(), "settings.backup.conf")
+
+    if filesystem.isFile(settingsPath) then
+        filesystem.copy(settingsPath, backupPath)
+    end
+
+    rawset(configs, "data", utils.deepcopy(defaultConfig))
+    config.writeConfig(configs, true)
+
+    local language = languageRegistry.getLanguage()
+
+    notifications.notify(tostring(language.ui.notifications.settingsReset))
+end
+
 local function featureToggleWrapper(enabled, funcEnabled, funcDisabled, ...)
     local args = {...}
 
@@ -188,6 +209,7 @@ local debugMenu = {"debug", {
     {"redraw_map", debugUtils.redrawMap},
     {},
     {"clear_cache", clearCache},
+    {"reset_settings", resetSettings},
     {"test_console", debugUtils.debug}
 }}
 

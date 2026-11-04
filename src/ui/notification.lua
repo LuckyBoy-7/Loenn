@@ -93,7 +93,8 @@ local function getWorkspaceBounds()
 end
 
 -- Long messages (map paths and the like) would stretch the popup across a large part of the
--- workspace, which makes a corner popup look like it is centered. Trim them to fit instead.
+-- workspace, which makes a corner popup look like it is centered. Wrap them to the available
+-- width instead, and only trim with an ellipsis when even that would take too many lines.
 local function trimToWidth(text, font, maxWidth)
     if font:getWidth(text) <= maxWidth then
         return text
@@ -114,6 +115,51 @@ local function trimToWidth(text, font, maxWidth)
     end
 
     return suffix
+end
+
+-- Word wraps the text to maxWidth, keeping explicit line breaks. Returns at most
+-- maxLines lines, the last one ellipsized when not everything fits
+local function wrapToWidth(text, font, maxWidth, maxLines)
+    local lines = {}
+
+    for paragraph in (text .. "\n"):gmatch("(.-)\n") do
+        if paragraph == "" then
+            table.insert(lines, "")
+
+        else
+            local current = ""
+
+            for word in paragraph:gmatch("%S+") do
+                local candidate = current == "" and word or (current .. " " .. word)
+
+                if current == "" or font:getWidth(candidate) <= maxWidth then
+                    current = candidate
+
+                else
+                    table.insert(lines, current)
+                    current = word
+                end
+            end
+
+            if current ~= "" then
+                table.insert(lines, current)
+            end
+        end
+    end
+
+    if #lines <= maxLines then
+        return table.concat(lines, "\n")
+    end
+
+    local kept = {}
+
+    for i = 1, maxLines do
+        kept[i] = lines[i]
+    end
+
+    kept[maxLines] = trimToWidth(kept[maxLines] .. " " .. lines[maxLines + 1], font, maxWidth)
+
+    return table.concat(kept, "\n")
 end
 
 local popupStartDuration = 0.4
@@ -151,7 +197,7 @@ local function createPopupWindow(popup)
             local available = workspaceRight - workspaceLeft - edgePadding * 2 - 48
             local maxTextWidth = math.max(160, math.min(available, notificationPopup.maxTextWidth))
 
-            label.text = trimToWidth(popup.widget, label.style.font, maxTextWidth)
+            label.text = wrapToWidth(popup.widget, label.style.font, maxTextWidth, notificationPopup.maxLines)
         end
     end
 
@@ -232,15 +278,36 @@ function notificationPopup.clearNotifications(tag)
     ui.root:recollect()
 end
 
-notificationPopup.defaultDuration = 3
-notificationPopup.maxTextWidth = 420
+notificationPopup.defaultDuration = 6
+
+-- Notifications are allowed to get wide enough to read comfortably; anything
+-- wider is wrapped, and only gets an ellipsis when it would take too many lines
+notificationPopup.maxTextWidth = 720
+notificationPopup.maxLines = 8
+
+-- Duration comes from the settings (General -> Notification Duration), with the
+-- default above as a fallback. Negative durations are sticky.
+local function getDuration(duration)
+    if duration then
+        return duration
+    end
+
+    local success, configs = pcall(require, "configs")
+    local configured = success and configs.general and configs.general.notificationDuration
+
+    if type(configured) == "number" and configured > 0 then
+        return configured
+    end
+
+    return notificationPopup.defaultDuration
+end
 
 function notificationPopup.notify(widget, duration, settings)
     local popup = {
         widget = widget,
         durations = {
             popupStartDuration,
-            duration or notificationPopup.defaultDuration,
+            getDuration(duration),
             popupStopDuration
         },
         settings = settings,

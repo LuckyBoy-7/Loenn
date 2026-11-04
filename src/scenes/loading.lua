@@ -19,6 +19,16 @@ function loadingScene:setText(text)
     self.textOffsetY = self.quadSize / 2
 end
 
+-- Runs every time the loading scene is entered (opening a map goes through it
+-- again), so the loading text always uses the configured font, not whatever
+-- zoom based font the editor was using
+function loadingScene:enter()
+    local configs = require("configs")
+
+    fonts.setUseHires(configs.font.useHiresPixelFont)
+    self:setText(languageRegistry.getLanguage().scenes.loading.loading)
+end
+
 function loadingScene:loaded()
     self.spriteSheet = love.graphics.newImage("assets/loading-256.png")
     self.quadSize = 256
@@ -37,6 +47,10 @@ function loadingScene:loaded()
 
     -- Faded base logo the liquid is drawn on top of
     self.logoAlpha = 0.35
+
+    -- The logo and the loading text sit slightly above the window center, which
+    -- looks more balanced than centering the logo itself
+    self.logoOffset = 26
 
     self.duration = 1
     self.currentTime = 0
@@ -68,6 +82,11 @@ function loadingScene:firstEnter()
     local viewerState = require("loaded_state")
 
     local userInterfaceDevice = require("ui.ui_device")
+
+    -- The configured font has to be applied before the loading text is
+    -- measured. Automatic zoom switching only applies to map text, so the
+    -- loading screen always uses the configured font
+    fonts.setUseHires(configs.font.useHiresPixelFont)
 
     self:setText(language.scenes.loading.loading)
 
@@ -199,10 +218,10 @@ function loadingScene:draw()
 
         local dots = string.rep(".", utils.mod1(math.floor(self.currentTime / self.duration * 4) + 1, 4))
 
-        love.graphics.printf(self.text .. dots, windowWidth / 2 - self.textOffsetX, windowHeight / 2 + self.textOffsetY, windowWidth, self.alignment, 0, self.textScale)
+        love.graphics.printf(self.text .. dots, windowWidth / 2 - self.textOffsetX, windowHeight / 2 + self.textOffsetY - self.logoOffset, windowWidth, self.alignment, 0, self.textScale)
 
         local x = (windowWidth - self.quadSize) / 2
-        local y = (windowHeight - self.quadSize) / 2
+        local y = (windowHeight - self.quadSize) / 2 - self.logoOffset
 
         self:drawLogo(x, y)
     end

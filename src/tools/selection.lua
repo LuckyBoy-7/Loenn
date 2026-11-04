@@ -116,9 +116,42 @@ function tool.setSelectionTargets(targets)
     selectionTargets = targets
 end
 
+-- Selected triggers draw their label in the highlight color. Labels live inside
+-- the room batch, so the trigger layer has to be rebuilt when the selection
+-- changes for the highlight to follow right away
+local function selectionSignature(previews)
+    if not previews then
+        return ""
+    end
+
+    local parts = {}
+
+    for _, preview in ipairs(previews) do
+        table.insert(parts, tostring(preview.item))
+    end
+
+    table.sort(parts)
+
+    return table.concat(parts, ",")
+end
+
+local lastSelectionSignature = ""
+
 function tool.setSelectionPreviews(previews)
+    local newSignature = selectionSignature(previews)
+
     state.selectionToolPreviews = previews
     selectionPreviews = previews
+
+    if newSignature ~= lastSelectionSignature then
+        lastSelectionSignature = newSignature
+
+        local room = state.getSelectedRoom()
+
+        if room and configs.font.highlightSelectedTriggerText then
+            toolUtils.redrawTargetLayer(room, {"triggers"})
+        end
+    end
 end
 
 function tool.setLayer(layer, subLayer)
@@ -143,6 +176,35 @@ end
 
 local function selectionChanged(x, y, width, height, fromClick)
     local room = state.getSelectedRoom()
+
+    -- Clicking a trigger label selects the trigger even when the click misses the
+    -- (often small) trigger rectangle itself
+    if fromClick and room and configs.font.selectTriggerByClickingText then
+        local layer = tool.layer
+        local onTriggers = layer == "triggers" or (type(layer) == "table" and layer._persistenceName == "AllLayers")
+
+        if onTriggers then
+            local trigger = require("trigger_text").findTriggerAt(room, x, y)
+
+            if trigger then
+                local rects = {}
+
+                selectionUtils.getSelectionsForItem(room, "triggers", trigger, rects)
+
+                -- Keep only the main node so the context window can resize it
+                for _, node in pairs(rects) do
+                    if node.node == 0 then
+                        rects = {node}
+                        break
+                    end
+                end
+
+                tool.setSelectionPreviews(rects)
+
+                return
+            end
+        end
+    end
 
     -- Only update if needed
     if fromClick or not selectionRectangle or x ~= selectionRectangle.x or y ~= selectionRectangle.y or math.abs(width) ~= selectionRectangle.width or math.abs(height) ~= selectionRectangle.height then

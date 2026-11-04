@@ -1763,6 +1763,7 @@ settings.general.attribute.persistWindowFullscreen=Remember Full Screen
 settings.general.attribute.persistWindowPosition=Remember Window Position
 settings.general.attribute.persistWindowSize=Remember Window Size
 settings.general.attribute.useEverestBlacklist=Use Everest Blacklist
+settings.general.attribute.notificationDuration=Notification Duration
 
 settings.description.celesteGameDirectory=Directory of the Celeste installation. Must contain Celeste.dll and the Content directory.\nSelect Celeste.exe, Celeste.dll, or Celeste.app in the file picker to change this.
 settings.general.description.language=Language used in the application.
@@ -1770,6 +1771,7 @@ settings.general.description.persistWindowFullscreen=Remember whether the editor
 settings.general.description.persistWindowPosition=Remember the position of the editor window between sessions.
 settings.general.description.persistWindowSize=Remember the size of the editor window between sessions.
 settings.general.description.useEverestBlacklist=Whether the Everest blacklist should be respected.\nPlugins in blacklisted mods will not be loaded.\nRequires restart.
+settings.general.description.notificationDuration=How long notifications stay on screen, in seconds.
 
 # General - Files
 settings.editor.attribute.recentFilesEntryLimit=Number of Recent Files

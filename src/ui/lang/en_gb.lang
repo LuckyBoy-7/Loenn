@@ -43,6 +43,8 @@ ui.notifications.mapImageSaveFailed=Failed to save map image
 
 ui.notifications.cacheCleared=Caches cleared.\nRestart Lönn to rebuild them.
 
+ui.notifications.settingsReset=Settings were reset to their defaults.\nThe previous file was kept as settings.backup.conf.\nRestart Lönn to apply them.
+
 
 # Styleground Window
 ui.styleground_window.window_title=Stylegrounds
@@ -93,6 +95,7 @@ ui.settings_window.tab.general=General
 ui.settings_window.group.general.startup=Startup
 ui.settings_window.group.general.backups=Backups
 ui.settings_window.group.general.files=Files
+ui.settings_window.group.general.notifications=Notifications
 
 ui.settings_window.tab.editor=Editor
 ui.settings_window.group.editor.interface=Interface
@@ -113,6 +116,10 @@ ui.settings_window.group.hotkeys.debug=Debug
 
 ui.settings_window.tab.graphics=Graphics
 
+ui.settings_window.tab.font=Font
+ui.settings_window.group.font.font=Font
+ui.settings_window.group.font.trigger_text=Trigger Text
+
 ui.settings_window.tab.debug=Debug
 
 # Settings - Editor - Interface
@@ -132,6 +139,27 @@ settings.ui.searching.attribute.sortByScore=Show Closest Matches First
 settings.ui.searching.description.searchCaseSensitive=When search should be case-sensitive.\n- Contextual: Match case when searching if the search term contains upper-case characters.\n- Always: Match case when searching.\n- Never: Ignore case when searching.
 settings.ui.searching.description.searchFuzzy=Force search to always do fuzzy matching.\nFuzzy search does not need entries to exactly match the search term, other closely matching results will be shown as well.\nIf disabled, fuzzy search may still be performed by starting the search with a ~ tilde sign.
 settings.ui.searching.description.sortByScore=Order search results such that the closest matches show up at the top.\nIf disabled, search results are sorted alphabetically.
+
+# Settings - Font
+settings.font.attribute.useHiresPixelFont=Use Hi-Resolution Pixel Font
+settings.font.attribute.autoSwitchFont=Switch Font When Zoomed In
+settings.font.attribute.addShadowToFont=Trigger Label Shadow
+settings.font.attribute.highlightSelectedTriggerText=Highlight Selected Label
+settings.font.attribute.highlightColor=Highlight Color
+settings.font.attribute.selectTriggerByClickingText=Select By Clicking Label
+settings.font.attribute.showCompleteTriggerText=Keep Whole Words Visible
+settings.font.attribute.extrudeOverlappingTriggerText=Separate Overlapping Labels
+settings.font.attribute.ignoreOutOfRoomTextExtruding=Ignore Labels Outside The Room
+
+settings.font.description.useHiresPixelFont=Draw text with a larger, sharper pixel font instead of the small vanilla font.\nGlyphs stay the same visual size.
+settings.font.description.autoSwitchFont=Use the hi-resolution font while zoomed in (above 100%) and the vanilla font while zoomed out.\nOverrides the manual choice while enabled.
+settings.font.description.addShadowToFont=Draw a dark copy of the trigger label behind it, so it stays readable on bright backgrounds.
+settings.font.description.highlightSelectedTriggerText=Draw the label of the selected trigger in the highlight color.
+settings.font.description.highlightColor=Color used for the label of selected triggers, as a hex value like ffff00 or an XNA color name.
+settings.font.description.selectTriggerByClickingText=Clicking on a trigger label selects its trigger, even when the click is outside the trigger itself.
+settings.font.description.showCompleteTriggerText=Widen the label box when the longest word does not fit, so words are not cut in half.
+settings.font.description.extrudeOverlappingTriggerText=Move labels of triggers that sit on top of each other apart, so all of them stay readable.
+settings.font.description.ignoreOutOfRoomTextExtruding=Labels that are completely outside the room do not take part in separating overlapping labels.
 
 # Settings - Hotkeys - General
 settings.ui.hotkeys.attribute.bypassDangerousActionWarningModifier=Skip Confirmation (Modifier)
@@ -296,6 +324,7 @@ ui.menubar.reload_user_interface=User Interface
 ui.menubar.reload_language_files=Language Files
 ui.menubar.redraw_map=Redraw Map
 ui.menubar.clear_cache=Clear Cache
+ui.menubar.reset_settings=Reset Settings
 ui.menubar.test_console=Test Console
 
 ui.menubar.help=Help

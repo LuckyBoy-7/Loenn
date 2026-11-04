@@ -14,6 +14,8 @@ local languageRegistry = require("language_registry")
 local drawing = require("utils.drawing")
 local drawableRectangle = require("structs.drawable_rectangle")
 local drawableText = require("structs.drawable_text")
+local fonts = require("fonts")
+local triggerText = require("trigger_text")
 
 local colors = require("consts.colors")
 
@@ -151,6 +153,36 @@ function triggers.triggerText(room, trigger)
     return fallbackText
 end
 
+local function triggerIsSelected(trigger)
+    local selectionTool = utils.getPath(require("tools"), {"tools", "selection"})
+
+    if not selectionTool then
+        return false
+    end
+
+    -- Previews hold the current selection, targets may still lag behind while a
+    -- selection is being updated
+    local candidates = {}
+
+    if selectionTool.getSelectionPreviews then
+        candidates[#candidates + 1] = selectionTool.getSelectionPreviews()
+    end
+
+    if selectionTool.getSelectionTargets then
+        candidates[#candidates + 1] = selectionTool.getSelectionTargets()
+    end
+
+    for _, selections in ipairs(candidates) do
+        for _, target in ipairs(selections or {}) do
+            if target.item == trigger then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
 -- Returns drawable, depth
 function triggers.getDrawable(name, handler, room, trigger, viewport)
     local displayName = triggers.triggerText(room, trigger)
@@ -161,14 +193,40 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
     local width = trigger.width or 16
     local height = trigger.height or 16
 
+    local fontSize = fonts.size(triggers.triggerFontSize)
+
     local fillColor, borderColor, textColor = triggers.triggerColor(room, trigger)
     local borderedRectangle = drawableRectangle.fromRectangle("bordered", x, y, width, height, fillColor, borderColor)
-    local textDrawable = drawableText.fromText(displayName, x, y, width, height, nil, triggers.triggerFontSize, textColor)
+
+    -- Labels can be stretched to fit whole words and moved aside so they do not
+    -- overlap each other
+    local textX, textY, textWidth, textHeight = triggerText.stretchRect(x, y, width, height, displayName, fontSize)
+
+    if configs.font.extrudeOverlappingTriggerText then
+        local offsetX, offsetY = triggerText.getOffset(trigger, room)
+
+        textX = textX + offsetX
+        textY = textY + offsetY
+    end
+
+    if configs.font.highlightSelectedTriggerText and triggerIsSelected(trigger) then
+        textColor = utils.getColor(configs.font.highlightColor) or {1, 1, 0, 1}
+    end
+
+    local textDrawable = drawableText.fromText(displayName, textX, textY, textWidth, textHeight, nil, fontSize, textColor)
 
     local drawables = borderedRectangle:getDrawableSprite()
     table.insert(drawables, textDrawable)
 
     textDrawable.depth = depths.triggers - 1
+
+    if configs.font.addShadowToFont then
+        local offset = fonts.size(1)
+        local shadowDrawable = drawableText.fromText(displayName, textX + offset, textY + offset, textWidth, textHeight, nil, fontSize, {0, 0, 0, 1})
+
+        shadowDrawable.depth = depths.triggers - 0.9
+        table.insert(drawables, shadowDrawable)
+    end
 
     return drawables, depths.triggers
 end
@@ -195,6 +253,9 @@ function triggers.getSelection(room, trigger)
 end
 
 function triggers.drawSelected(room, layer, trigger, color)
+    -- The trigger moved or was resized, its label neighbours have to be re-laid out
+    triggerText.invalidate(room)
+
     color = color or colors.selectionCompleteNodeLineColor
 
     local x, y = trigger.x or 0, trigger.y or 0

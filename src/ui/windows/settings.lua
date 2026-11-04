@@ -53,6 +53,12 @@ local defaultTabForms = {
                     "backups.backupRate",
                     "backups.maximumFiles",
                 }
+            },
+            {
+                title = "ui.settings_window.group.general.notifications",
+                fieldOrder = {
+                    "general.notificationDuration"
+                }
             }
         }
     },
@@ -98,6 +104,31 @@ local defaultTabForms = {
                 }
             }
         },
+    },
+    {
+        title = "ui.settings_window.tab.font",
+        groups = {
+            {
+                title = "ui.settings_window.group.font.font",
+                fieldOrder = {
+                    "font.useHiresPixelFont",
+                    "font.autoSwitchFont"
+                }
+            },
+            {
+                title = "ui.settings_window.group.font.trigger_text",
+                fieldOrder = {
+                    "font.addShadowToFont",
+                    "font.highlightSelectedTriggerText",
+                    "font.highlightColor",
+                    "font.selectTriggerByClickingText",
+                    "spacer",
+                    "font.showCompleteTriggerText",
+                    "font.extrudeOverlappingTriggerText",
+                    "font.ignoreOutOfRoomTextExtruding"
+                }
+            }
+        }
     },
     {
         title = "ui.settings_window.tab.hotkeys",
@@ -583,6 +614,14 @@ local defaultFieldInformation = {
     ["ui.hotkeys.focusMaterialSearch"] = {
         fieldType = "keyboard_hotkey"
     },
+
+    ["font.highlightColor"] = {
+        fieldType = "color"
+    },
+
+    ["general.notificationDuration"] = {
+        fieldType = "integer"
+    },
 }
 
 local settingsWindowGroup = uiElements.group({}):with({
@@ -607,6 +646,19 @@ local function applyNewSettings(newSettings, oldSettings)
     end
 
     if settingChanged("editor.triggersTrimModName") or settingChanged("editor.triggersUseCategoryColors") then
+        debugUtils.redrawMap()
+    end
+
+    local fontChanged = false
+
+    for _, key in ipairs({"useHiresPixelFont", "addShadowToFont", "highlightSelectedTriggerText",
+        "selectTriggerByClickingText", "showCompleteTriggerText", "extrudeOverlappingTriggerText",
+        "ignoreOutOfRoomTextExtruding"}) do
+        fontChanged = fontChanged or settingChanged("font." .. key)
+    end
+
+    if fontChanged then
+        require("fonts").applyConfig(newSettings.font)
         debugUtils.redrawMap()
     end
 

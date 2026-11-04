@@ -32,6 +32,10 @@ function editorScene:enter()
 
     viewportHandler.updateSize()
 
+    -- Entering the editor is when map text starts to matter, so this is where
+    -- the automatic zoom based font choice takes over
+    require("fonts").applyConfig(require("configs").font)
+
     self:propagateEvent("enter")
 end
 

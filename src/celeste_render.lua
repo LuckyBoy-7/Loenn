@@ -743,6 +743,9 @@ end
 function celesteRender.getTriggerBatch(room, triggers, viewport, registeredTriggers, forceRedraw)
     registeredTriggers = registeredTriggers or triggerHandler.registeredTriggers
 
+    -- Lay out the trigger labels for this room (cached until the triggers change)
+    require("trigger_text").updateRoom(room, triggers)
+
     local roomName = room.name
     local cache = roomCache[roomName]
 

@@ -204,6 +204,9 @@ function state.loadFile(filename, roomName)
 
     sceneHandler.changeScene("Loading")
 
+    -- Label layout caches belong to the map that was loaded before
+    require("trigger_text").clearCache()
+
     tasks.newTask(
         (-> filename and mapcoder.decodeFile(filename)),
         function(binTask)
