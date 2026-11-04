@@ -109,9 +109,35 @@ local function getDecalOwnerModName(name)
     return (owner:gsub("_zip$", ""):gsub("_folder$", ""))
 end
 
--- Turns flat decal paths ("decals/LuckyHelper/objects/test/xxx") into a tree of list rows:
--- a source header, one row per directory and the decal itself as the leaf.
-local function getDecalMaterialItems(materials, currentTool, currentLayer, favoritesLookup, language)
+-- Turns flat material names into a tree of list rows: a source header, one row per path segment
+-- and the material itself as the leaf. Used by the decal list and the trigger list, which both
+-- have mod/path style names.
+--
+-- options:
+--   pathOf(name)      -> the slash separated path used for the hierarchy
+--   leafText(entry)   -> display text of the actual material row
+--   searchText(entry) -> text used for searching that row
+--   favoritesText(entry) -> display text in the favorites group (defaults to the full path)
+--   resolveOwner      -> ask virtual_fs for the mod when the material has no associated mods
+local function getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, options)
+    options = options or {}
+
+    local function pathOf(name)
+        return options.pathOf and options.pathOf(name) or name
+    end
+
+    local function leafText(entry)
+        return options.leafText and options.leafText(entry) or entry.segments[#entry.segments]
+    end
+
+    local function searchText(entry)
+        return options.searchText and options.searchText(entry) or table.concat(entry.segments, "/")
+    end
+
+    local function favoritesText(entry)
+        return options.favoritesText and options.favoritesText(entry) or table.concat(entry.segments, "/")
+    end
+
     local entries = {}
 
     for _, material in ipairs(materials or {}) do
@@ -121,7 +147,7 @@ local function getDecalMaterialItems(materials, currentTool, currentLayer, favor
         if name then
             local associatedMods = isTable and material.associatedMods or nil
 
-            if not associatedMods or #associatedMods == 0 then
+            if options.resolveOwner and (not associatedMods or #associatedMods == 0) then
                 local ownerMod = getDecalOwnerModName(name)
 
                 if ownerMod then
@@ -129,10 +155,10 @@ local function getDecalMaterialItems(materials, currentTool, currentLayer, favor
                 end
             end
 
-            local path = string.match(name, "^decals/(.*)$") or name
+            local path = pathOf(name)
 
-            -- Also searchable by the mod it comes from: most mod decals do not contain the mod
-            -- name in their path at all
+            -- Also searchable by the mod it comes from: most mod materials do not contain the
+            -- mod name in their path at all
             local searchNames = {}
 
             for _, modName in ipairs(associatedMods or {}) do
@@ -151,6 +177,7 @@ local function getDecalMaterialItems(materials, currentTool, currentLayer, favor
             table.insert(entries, {
                 name = name,
                 segments = splitDecalPath(path),
+                displayName = isTable and material.displayNameNoMods or nil,
                 sourceLabel = getDecalSourceLabel(language, associatedMods),
                 sourceKey = (associatedMods and associatedMods[1]) or "",
                 associatedMods = associatedMods,
@@ -162,7 +189,7 @@ local function getDecalMaterialItems(materials, currentTool, currentLayer, favor
 
     table.sort(entries, function(lhs, rhs)
         if lhs.sourceKey ~= rhs.sourceKey then
-            -- Vanilla decals first
+            -- Vanilla materials first
             if lhs.sourceKey == "" then
                 return true
             elseif rhs.sourceKey == "" then
@@ -217,8 +244,8 @@ local function getDecalMaterialItems(materials, currentTool, currentLayer, favor
 
         for _, entry in ipairs(favorites) do
             addItem({
-                text = table.concat(entry.segments, "/"),
-                textNoMods = table.concat(entry.segments, "/"),
+                text = favoritesText(entry),
+                textNoMods = searchText(entry),
                 data = entry.name,
                 indent = 0,
                 tooltip = entry.tooltip,
@@ -287,8 +314,8 @@ local function getDecalMaterialItems(materials, currentTool, currentLayer, favor
         end
 
         addItem({
-            text = segments[#segments],
-            textNoMods = table.concat(segments, "/"),
+            text = leafText(entry),
+            textNoMods = searchText(entry),
             data = entry.name,
             indent = #segments,
             tooltip = entry.tooltip,
@@ -734,7 +761,31 @@ getMaterialItems = function(layer)
     local language = languageRegistry.getLanguage()
 
     if layersWithDecalPaths[currentLayer] then
-        return getDecalMaterialItems(materials, currentTool, currentLayer, favoritesLookup, language)
+        return getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, {
+            pathOf = function(name)
+                return string.match(name, "^decals/(.*)$") or name
+            end,
+            resolveOwner = true
+        })
+    end
+
+    if currentLayer == "triggers" then
+        -- Trigger names look like "modFile/triggerFile#placement". The path becomes the
+        -- hierarchy and the readable placement name is the leaf.
+        return getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, {
+            pathOf = function(name)
+                return string.match(name, "^([^#]*)#") or name
+            end,
+            leafText = function(entry)
+                return entry.displayName or entry.segments[#entry.segments]
+            end,
+            searchText = function(entry)
+                return entry.displayName or table.concat(entry.segments, "/")
+            end,
+            favoritesText = function(entry)
+                return entry.displayName or table.concat(entry.segments, "/")
+            end
+        })
     end
 
     for i, material in ipairs(materials or {}) do
