@@ -6,6 +6,17 @@ local drawableTextMt = {}
 drawableTextMt.__index = {}
 
 function drawableTextMt.__index:draw()
+    -- Unselected rooms are cached in a low resolution canvas, where thin hi-res
+    -- text turns into a blob. Such drawables can carry a canvas font which is
+    -- used instead whenever they are drawn into a canvas.
+    local font = self.font
+    local fontSize = self.fontSize
+
+    if self.canvasFont and love.graphics.getCanvas() then
+        font = self.canvasFont
+        fontSize = self.canvasFontSize or 1
+    end
+
     -- Direct draws (like the placement preview, which tints everything white)
     -- have to respect the color of this drawable, otherwise e.g. the dark
     -- trigger label shadow would show up white. The current alpha is kept so
@@ -21,20 +32,20 @@ function drawableTextMt.__index:draw()
     end
 
     if self.width and self.height then
-        drawing.printCenteredText(self.text, self.x, self.y, self.width, self.height, self.font, self.fontSize)
+        drawing.printCenteredText(self.text, self.x, self.y, self.width, self.height, font, fontSize)
 
     else
         local previousFont
 
-        if self.font then
+        if font then
             previousFont = love.graphics.getFont()
 
-            love.graphics.setFont(self.font)
+            love.graphics.setFont(font)
         end
 
-        love.graphics.print(self.text, self.x, self.y, 0, self.fontSize, self.fontSize, 0, 0)
+        love.graphics.print(self.text, self.x, self.y, 0, fontSize, fontSize, 0, 0)
 
-        if self.font then
+        if font then
             love.graphics.setFont(previousFont)
         end
     end
@@ -44,9 +55,13 @@ function drawableTextMt.__index:draw()
     end
 end
 
-function drawableTextMt.__index:addToBatch(batch)
+-- font/fontSize can be overridden to bake the same text for another font
+function drawableTextMt.__index:addToBatch(batch, font, fontSize)
+    font = font or self.font
+    fontSize = fontSize or self.fontSize
+
     if self.width and self.height then
-        drawing.addCenteredText(batch, self.text, self.x, self.y, self.width, self.height, self.font, self.fontSize, self.color)
+        drawing.addCenteredText(batch, self.text, self.x, self.y, self.width, self.height, font, fontSize, self.color)
 
     else
         local text = self.text
@@ -55,7 +70,7 @@ function drawableTextMt.__index:addToBatch(batch)
             text = {self.color, text}
         end
 
-        batch:add(text, self.x, self.y, 0, self.fontSize, self.fontSize, 0, 0)
+        batch:add(text, self.x, self.y, 0, fontSize, fontSize, 0, 0)
     end
 end
 

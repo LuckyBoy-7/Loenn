@@ -93,10 +93,20 @@ function drawing.printCenteredText(text, x, y, width, height, font, fontSize, tr
 
     love.graphics.push()
 
-    love.graphics.translate(x + offsetX, y + offsetY)
+    love.graphics.translate(math.floor(x) + offsetX, math.floor(y) + offsetY)
     love.graphics.scale(fontSize, fontSize)
 
-    love.graphics.printf(text, 0, 0, width / fontSize, "center")
+    -- Lines are placed at whole pixel offsets: printf() centers each line with
+    -- a fractional offset, which makes pixel fonts look broken when they are
+    -- drawn at their native scale
+    local lineHeight = fontHeight * fontLineHeight
+
+    for index, line in ipairs(lines) do
+        local lineX = math.floor((width / fontSize - font:getWidth(line)) / 2)
+        local lineY = math.floor((index - 1) * lineHeight)
+
+        love.graphics.print(line, lineX, lineY)
+    end
 
     love.graphics.pop()
 end
