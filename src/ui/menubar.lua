@@ -116,6 +116,23 @@ local function getToggleTriggerCategory(category)
     end
 end
 
+-- The node overlay is baked into the room batches, so toggling it has to throw
+-- those away to be picked up
+local function toggleAlwaysShowNodes()
+    configs.editor.alwaysShowNodes = not configs.editor.alwaysShowNodes
+
+    require("utils.config").writeConfig(configs, true)
+
+    local celesteRender = require("celeste_render")
+
+    celesteRender.clearBatchingTasks()
+    celesteRender.invalidateRoomCache()
+end
+
+local function getAlwaysShowNodes()
+    return configs.editor.alwaysShowNodes
+end
+
 local function getShowTriggerCategory(category)
     return function()
         local hiddenCategories = loadedState.getLayerInformation("triggers", "hiddenCategories", {})
@@ -257,6 +274,7 @@ menubar.menubar = {
             {"view_depended_on_decals", toggleOnlyShowDependencies({"decalsFg", "decalsBg"}), "checkbox", getOnlyShowDependencies({"decalsFg", "decalsBg"})},
         }},
         {"view_zoom_to_extents", viewportDevice.zoomToExtents},
+        {"view_always_show_trigger_nodes", toggleAlwaysShowNodes, "checkbox", getAlwaysShowNodes},
     }},
     {"map", {
         {"stylegrounds", stylegroundEditor.editStylegrounds},

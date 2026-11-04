@@ -300,6 +300,7 @@ ui.menubar.view_depended_on_entities=Entities
 ui.menubar.view_depended_on_triggers=Triggers
 ui.menubar.view_depended_on_decals=Decals
 ui.menubar.view_zoom_to_extents=Zoom to Extents
+ui.menubar.view_always_show_trigger_nodes=Always Show Trigger Nodes
 
 ui.menubar.mod=Mod
 

@@ -1,4 +1,7 @@
 return {
+    -- Display
+    alwaysShowNodes = true,
+
     -- Tools and Interactions
     toolActionButton = 1,
     contextMenuButton = 2,

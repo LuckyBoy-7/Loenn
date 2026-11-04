@@ -13,6 +13,7 @@ local languageRegistry = require("language_registry")
 
 local drawing = require("utils.drawing")
 local drawableRectangle = require("structs.drawable_rectangle")
+local drawableFunction = require("structs.drawable_function")
 local drawableText = require("structs.drawable_text")
 local fonts = require("fonts")
 local triggerText = require("trigger_text")
@@ -236,6 +237,14 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
 
         shadowDrawable.depth = depths.triggers - 0.9
         table.insert(drawables, shadowDrawable)
+    end
+
+    -- "Always Show Nodes". The node overlay is added to the room batch itself, so
+    -- it is drawn with the room and cached with it
+    if configs.editor.alwaysShowNodes and triggers.nodeVisibility("triggers", trigger) == "selected" then
+        local _, borderColor = triggers.triggerColor(room, trigger)
+
+        table.insert(drawables, drawableFunction.fromFunction(triggers.drawSelected, room, "triggers", trigger, borderColor))
     end
 
     return drawables, depths.triggers
