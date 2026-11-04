@@ -282,6 +282,40 @@ function filesystem.rename(from, to)
     end, from)
 end
 
+-- Removes a file or a whole directory tree. Returns true when the target is
+-- gone afterwards.
+function filesystem.removeDirectoryRecursive(path)
+    if not path then
+        return false
+    end
+
+    local attributes = lfs.attributes(path)
+
+    if not attributes then
+        return true
+    end
+
+    if attributes.mode ~= "directory" then
+        return filesystem.remove(path)
+    end
+
+    for entry in lfs.dir(path) do
+        if entry ~= "." and entry ~= ".." then
+            local target = path .. "/" .. entry
+            local targetAttributes = lfs.attributes(target)
+
+            if targetAttributes and targetAttributes.mode == "directory" then
+                filesystem.removeDirectoryRecursive(target)
+
+            else
+                filesystem.remove(target)
+            end
+        end
+    end
+
+    return filesystem.rmdir(path)
+end
+
 -- Use Unix paths
 local function findRecursive(filenames, path, recursive, predicate, useYields, counter)
     counter = counter or 0

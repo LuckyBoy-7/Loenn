@@ -143,6 +143,19 @@ local function reloadUI()
     debugUtils.reloadUI()
 end
 
+-- Deletes everything Loenn caches on disk (filename lists, mod metadata,
+-- compiled Lua and converted atlas images). They are all rebuilt on the next
+-- start, so this is the convenient way to test from a clean slate
+local function clearCache()
+    local cacheDirectory = utils.joinpath(fileLocations.getStorageDir(), "Cache")
+
+    filesystem.removeDirectoryRecursive(cacheDirectory)
+
+    local language = languageRegistry.getLanguage()
+
+    notifications.notify(tostring(language.ui.notifications.cacheCleared))
+end
+
 local function featureToggleWrapper(enabled, funcEnabled, funcDisabled, ...)
     local args = {...}
 
@@ -173,6 +186,8 @@ local debugMenu = {"debug", {
         {"reload_language_files", debugUtils.reloadLanguageFiles}
     }},
     {"redraw_map", debugUtils.redrawMap},
+    {},
+    {"clear_cache", clearCache},
     {"test_console", debugUtils.debug}
 }}
 

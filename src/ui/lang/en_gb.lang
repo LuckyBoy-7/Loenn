@@ -41,6 +41,8 @@ ui.notifications.saveSanitizerVanillaMapWarning=Are you sure you want to save ov
 
 ui.notifications.mapImageSaveFailed=Failed to save map image
 
+ui.notifications.cacheCleared=Caches cleared.\nRestart Lönn to rebuild them.
+
 
 # Styleground Window
 ui.styleground_window.window_title=Stylegrounds
@@ -293,6 +295,7 @@ ui.menubar.reload_effects=Effects
 ui.menubar.reload_user_interface=User Interface
 ui.menubar.reload_language_files=Language Files
 ui.menubar.redraw_map=Redraw Map
+ui.menubar.clear_cache=Clear Cache
 ui.menubar.test_console=Test Console
 
 ui.menubar.help=Help
