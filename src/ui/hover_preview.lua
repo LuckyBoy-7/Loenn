@@ -17,7 +17,12 @@ local edgePadding = 12
 local defaultArea = 300 * 400 * 0.6
 local defaultMaxWidth = 360
 local defaultMaxHeight = 420
-local panelPadding = 6
+local panelPadding = 10
+
+-- Transparency checkerboard
+local checkerSize = 16
+local checkerLight = { 0.72, 0.72, 0.72 }
+local checkerDark = { 0.52, 0.52, 0.52 }
 
 local rootGroup
 local panel
@@ -94,6 +99,37 @@ local function ensureWindow()
                 x + width, bubbleArrowY - arrowSize,
                 x + width + arrowSize, bubbleArrowY,
                 x + width, bubbleArrowY + arrowSize)
+
+            -- Classic transparency checkerboard behind the image. The cell size is fixed, the
+            -- cells are clipped to the content area so the grid can never spill over the padding
+            -- or the border.
+            local contentX, contentY = x + panelPadding, y + panelPadding
+            local contentWidth = math.max(0, math.floor(width - panelPadding * 2))
+            local contentHeight = math.max(0, math.floor(height - panelPadding * 2))
+
+            if contentWidth > 0 and contentHeight > 0 then
+                local columns = math.ceil(contentWidth / checkerSize)
+                local rows = math.ceil(contentHeight / checkerSize)
+
+                for row = 0, rows - 1 do
+                    local cellY = contentY + row * checkerSize
+                    local cellHeight = math.min(checkerSize, contentY + contentHeight - cellY)
+
+                    for column = 0, columns - 1 do
+                        local cellX = contentX + column * checkerSize
+                        local cellWidth = math.min(checkerSize, contentX + contentWidth - cellX)
+
+                        if (row + column) % 2 == 0 then
+                            uiu.setColor(checkerLight[1], checkerLight[2], checkerLight[3], 1)
+
+                        else
+                            uiu.setColor(checkerDark[1], checkerDark[2], checkerDark[3], 1)
+                        end
+
+                        love.graphics.rectangle("fill", cellX, cellY, cellWidth, cellHeight)
+                    end
+                end
+            end
 
             orig(self)
 
