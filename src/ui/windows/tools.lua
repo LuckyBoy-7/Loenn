@@ -185,7 +185,7 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
                 material = isTable and material or nil,
                 -- Flat lists (triggers, entities) only get a source header, no path hierarchy
                 segments = options.flat and {} or splitDecalPath(path),
-                displayName = isTable and material.displayNameNoMods or nil,
+                displayName = (isTable and material.displayNameNoMods) or name,
                 sourceLabel = getDecalSourceLabel(language, associatedMods),
                 sourceKey = (associatedMods and associatedMods[1]) or "",
                 associatedMods = associatedMods,
@@ -670,7 +670,7 @@ local function materialDataToElement(list, data, element)
 
     if data then
         local indent = data.indent or 0
-        local text = data.text
+        local text = data.text or ""
 
         if indent > 0 then
             text = string.rep(decalPathIndent, indent) .. text
