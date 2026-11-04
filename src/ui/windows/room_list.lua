@@ -108,9 +108,10 @@ local function getRoomItems()
     return roomItems
 end
 
+-- Updates the list from the editor state. Never fires the list callback: that one
+-- moves the camera, which should only happen when the user clicks a room.
 local function updateList(list, target)
     local roomItems = getRoomItems()
-    local preventCallback = false
 
     local selectedItem = state.getSelectedItem()
 
@@ -124,13 +125,15 @@ local function updateList(list, target)
 
         if currentRoom then
             target = cleanRoomName(currentRoom.name)
-            preventCallback = true
         end
     end
 
-    list:updateItems(roomItems, target, nil, preventCallback)
+    list:updateItems(roomItems, target, nil, true)
 end
 
+-- Following the selection with the camera is only wanted when the user clicks a
+-- room in the list. Deleting, adding or renaming a room changes the selection
+-- too and must not move the view.
 local function selectRoom(roomName, moveViewport)
     local currentRoom = state.getSelectedRoom()
     local sameRoomName = currentRoom and cleanRoomName(currentRoom.name) ~= roomName and currentRoom.name ~= roomName
@@ -142,7 +145,7 @@ local function selectRoom(roomName, moveViewport)
             -- TODO - Allow user to specify zoom after room selection in config
             state.selectItem(newRoom)
 
-            if moveViewport ~= false then
+            if moveViewport == true then
                 viewportHandler.moveToPosition(newRoom.x + newRoom.width / 2, newRoom.y + newRoom.height / 2, 1, true)
             end
         end
@@ -150,7 +153,9 @@ local function selectRoom(roomName, moveViewport)
 end
 
 function roomList.roomSelectedCallback(element, roomName)
-    selectRoom(roomName)
+    -- Reached when the user picks a room in the list, programmatic updates pass
+    -- preventCallback and do not get here
+    selectRoom(roomName, true)
 end
 
 function roomList:editorMapTargetChanged()
@@ -181,6 +186,9 @@ end
 
 function roomList:editorRoomDeleted()
     return function(list, room)
+        local viewport = viewportHandler.viewport
+        local cameraX, cameraY, cameraScale = viewport.x, viewport.y, viewport.scale
+
         local firstRoom = state.map.rooms[1]
 
         if firstRoom then
@@ -190,6 +198,10 @@ function roomList:editorRoomDeleted()
         else
             updateList(self)
         end
+
+        -- Deleting a room may move the focus to another one, but it must never
+        -- move the view with it
+        viewport.x, viewport.y, viewport.scale = cameraX, cameraY, cameraScale
     end
 end
 

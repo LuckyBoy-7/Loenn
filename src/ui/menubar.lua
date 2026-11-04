@@ -264,12 +264,6 @@ menubar.menubar = {
         {"dependencies", dependencyEditor.editDependencies},
         {"save_map_image", saveMapImage},
     }},
-    {"room", {
-        {"add", roomEditor.createNewRoom},
-        {"configure", roomEditor.editExistingRoom},
-        {},
-        {"delete", deleteCurrentRoom}
-    }},
     -- Only add if enabled
     addDebug and debugMenu or false,
     {"help", {

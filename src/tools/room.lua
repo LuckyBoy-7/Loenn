@@ -22,15 +22,12 @@ tool.manualRoomLogic = true
 
 tool.validLayers = {}
 
-tool.mode = "selection"
-tool.modes = {
-    "placement",
-    "selection",
-}
-
 local movementDrag = false
 local selectionDrag = false
 local placementDrag = false
+
+-- Rooms copied with Ctrl+C / Ctrl+X
+local copiedRooms = {}
 
 local dragStartX
 local dragStartY
@@ -175,6 +172,217 @@ local function getSelectionCover()
     return windowX, windowY, windowWidth, windowHeight
 end
 
+-- --------------------------------------------------------------------------
+-- Multi selection
+-- --------------------------------------------------------------------------
+
+local function isRoomSelected(room)
+    local selectedItem, selectedItemType = state.getSelectedItem()
+
+    if selectedItemType == "table" then
+        return selectedItem[room] ~= nil
+    end
+
+    return selectedItem == room
+end
+
+-- Ctrl + click: add the room to the selection, or remove it when it already is
+local function toggleRoomSelection(room)
+    local selectedItem, selectedItemType = state.getSelectedItem()
+
+    if selectedItemType ~= "table" then
+        if selectedItem == room then
+            state.selectItem(nil)
+
+        else
+            state.selectItem(selectedItem or room)
+
+            if selectedItem then
+                state.selectItem(room, true)
+            end
+        end
+
+        return
+    end
+
+    local remaining = {}
+
+    for item, itemType in pairs(selectedItem) do
+        if item ~= room then
+            table.insert(remaining, {item = item, itemType = itemType})
+        end
+    end
+
+    if not selectedItem[room] then
+        table.insert(remaining, {item = room, itemType = "room"})
+    end
+
+    state.selectItem(nil)
+
+    for index, entry in ipairs(remaining) do
+        if index == 1 then
+            state.selectItem(entry.item)
+
+        else
+            state.selectItem(entry.item, true)
+        end
+    end
+end
+
+-- --------------------------------------------------------------------------
+-- Room clipboard
+-- --------------------------------------------------------------------------
+
+local clipboardFormat = "loenn_rooms"
+
+-- Rooms are serialized in the same shape the map format uses, so a copied room
+-- can be pasted into another editor instance through the system clipboard.
+-- Meta keys (the "__children" of the map format) have to be kept, they hold the
+-- tiles, entities, triggers and decals of the room.
+local function writeRoomsToClipboard(rooms)
+    if not configs.editor.copyUsesClipboard then
+        return
+    end
+
+    local encoded = {}
+
+    for _, room in ipairs(rooms) do
+        table.insert(encoded, roomStruct.encode(room))
+    end
+
+    local success, text = utils.serialize({format = clipboardFormat, rooms = encoded}, true, true, false)
+
+    if success then
+        love.system.setClipboardText(text)
+    end
+end
+
+local function readRoomsFromClipboard()
+    if not configs.editor.copyUsesClipboard then
+        return nil
+    end
+
+    local text = love.system.getClipboardText()
+
+    if not text or text:sub(1, 1) ~= "{" then
+        return nil
+    end
+
+    local success, data = utils.unserialize(text, true, 3)
+
+    if not success or type(data) ~= "table" or data.format ~= clipboardFormat or type(data.rooms) ~= "table" then
+        return nil
+    end
+
+    local rooms = {}
+
+    for _, rawRoom in ipairs(data.rooms) do
+        if type(rawRoom) == "table" then
+            table.insert(rooms, roomStruct.decode(rawRoom))
+        end
+    end
+
+    if #rooms == 0 then
+        return nil
+    end
+
+    return rooms
+end
+
+local function copySelectedRooms()
+    local targets = getSelectionTargets()
+    local rooms = {}
+
+    for item, _ in pairs(targets) do
+        if utils.typeof(item) == "room" then
+            table.insert(rooms, utils.deepcopy(item))
+        end
+    end
+
+    copiedRooms = rooms
+
+    writeRoomsToClipboard(rooms)
+
+    return rooms
+end
+
+local function copyRoomsHotkey()
+    copySelectedRooms()
+end
+
+local function cutRoomsHotkey()
+    local map = state.map
+    local rooms = copySelectedRooms()
+
+    if not map or #rooms == 0 then
+        return
+    end
+
+    -- Deleting focuses the next room (see room_list), only the view stays put
+    for _, room in ipairs(rooms) do
+        mapItemUtils.deleteItem(map, state.getRoomByName(room.name) or room)
+    end
+end
+
+local function pasteRoomsHotkey()
+    local map = state.map
+
+    if not map then
+        return
+    end
+
+    -- Prefer the clipboard so rooms can be pasted between editor instances
+    local rooms = readRoomsFromClipboard() or copiedRooms
+
+    if #rooms == 0 then
+        return
+    end
+
+    -- Center whatever was copied on the cursor, snapped to whole tiles
+    local minX, minY = math.huge, math.huge
+    local maxX, maxY = -math.huge, -math.huge
+
+    for _, room in ipairs(rooms) do
+        minX = math.min(minX, room.x)
+        minY = math.min(minY, room.y)
+        maxX = math.max(maxX, room.x + room.width)
+        maxY = math.max(maxY, room.y + room.height)
+    end
+
+    local mouseX, mouseY = viewportHandler.getMapCoordinates()
+
+    local offsetX = math.floor((mouseX - (minX + maxX) / 2) / 8 + 0.5) * 8
+    local offsetY = math.floor((mouseY - (minY + maxY) / 2) / 8 + 0.5) * 8
+
+    local pasted = {}
+
+    for _, room in ipairs(rooms) do
+        local copy = utils.deepcopy(room)
+
+        local name = room.name .. "_copy"
+        local index = 2
+
+        while state.getRoomByName(name) do
+            name = room.name .. "_copy" .. index
+            index = index + 1
+        end
+
+        copy.name = name
+        copy.x = copy.x + offsetX
+        copy.y = copy.y + offsetY
+
+        mapItemUtils.addItem(map, copy)
+
+        table.insert(pasted, copy)
+    end
+
+    state.selectItem(nil)
+
+    for index, room in ipairs(pasted) do
+        state.selectItem(room, index > 1)
+    end
+end
+
 local function selectionFinished()
     if selectionDrag then
         selectionPreviews = mapItemsInRectangle(selectionRectangle)
@@ -217,10 +425,14 @@ local function selectionFinished()
             end
         end
 
+
         -- Overwrite with what the user inputted
         fakeRoom.x, fakeRoom.y, fakeRoom.width, fakeRoom.height = getFakeRoomPositionSize()
 
-        if fakeRoom.width > 0 and fakeRoom.height > 0 then
+        -- A plain click without dragging should not create a one tile room
+        local dragged = fakeRoom.width > 8 or fakeRoom.height > 8
+
+        if dragged and fakeRoom.width > 0 and fakeRoom.height > 0 then
             sceneHandler.sendEvent("editorRoomAdd", state.map, fakeRoom)
         end
     end
@@ -240,6 +452,45 @@ local function selectionFinished()
     selectionRectangle = nil
 end
 
+-- Right clicking a room opens a small menu with the same actions as the room
+-- list entries on the left side
+local function showRoomContextMenu(room)
+    local uiElements = require("ui.elements")
+    local contextMenu = require("ui.context_menu")
+    local languageRegistry = require("language_registry")
+
+    local language = languageRegistry.getLanguage().ui.room_list.action
+
+    local function editRoom()
+        sceneHandler.sendEvent("editorRoomConfigure", state.map, room)
+    end
+
+    local function deleteRoom()
+        -- Deleting from the context menu is explicit enough, no confirmation
+        -- popup. The next room gets focused by the room list, the view stays.
+        mapItemUtils.deleteItem(state.map, room)
+    end
+
+    local list = uiElements.list({
+        uiElements.listItem({
+            text = tostring(language.edit),
+            data = editRoom
+        }),
+        uiElements.listItem({
+            text = tostring(language.delete),
+            data = deleteRoom
+        })
+    }, function(element, action)
+        if action then
+            action()
+        end
+
+        element:removeSelf()
+    end)
+
+    contextMenu.showContextMenu(list, {mode = "focused"})
+end
+
 function tool.mouseclicked(x, y, button, istouch, pressed)
     local actionButton = configs.editor.actionButton
     local contextMenuButton = configs.editor.contextMenuButton
@@ -253,7 +504,8 @@ function tool.mouseclicked(x, y, button, istouch, pressed)
         local hovering = hoveringMapItem(mapX, mapY)
 
         if map and hovering and utils.typeof(hovering) == "room" then
-            sceneHandler.sendEvent("editorRoomConfigure", map, hovering)
+            state.selectItem(hovering)
+            showRoomContextMenu(hovering)
         end
     end
 end
@@ -328,49 +580,44 @@ end
 function tool.mousepressed(x, y, button, istouch, pressed)
     local actionButton = configs.editor.toolActionButton
 
-    if button == actionButton then
-        local mapX, mapY = viewportHandler.getMapCoordinates(x, y)
-        local selectionHovered = hoveringSelection(mapX, mapY)
-        local mapItemHovered = hoveringMapItem(mapX, mapY)
-
-        local placementMode = tool.mode == "placement"
-
-        if placementMode then
-            placementDrag = not mapItemHovered
-
-            if not placementDrag and selectionHovered then
-                movementDrag = true
-            end
-
-        else
-            movementDrag = not not selectionHovered
-            selectionDrag = not selectionHovered
-        end
-
-        if movementDrag then
-            coverX, coverY, coverWidth, coverHeight = getSelectionCover()
-        end
-
-        dragStartX = mapX
-        dragStartY = mapY
-
-        selectionRectangle = rectangleStruct.create(mapX, mapY, 1, 1)
+    if button ~= actionButton then
+        return
     end
+
+    local mapX, mapY = viewportHandler.getMapCoordinates(x, y)
+    local mapItemHovered = hoveringMapItem(mapX, mapY)
+    local addModifier = keyboardHelper.modifierHeld(configs.editor.selectionAddModifier)
+
+    dragStartX = mapX
+    dragStartY = mapY
+
+    selectionRectangle = rectangleStruct.create(mapX, mapY, 1, 1)
+
+    -- Clicking nothing starts a room placement drag, clicking a room moves it
+    if not mapItemHovered then
+        placementDrag = true
+
+        return
+    end
+
+    if addModifier then
+        toggleRoomSelection(mapItemHovered)
+
+        return
+    end
+
+    if not isRoomSelected(mapItemHovered) then
+        state.selectItem(mapItemHovered)
+    end
+
+    movementDrag = true
+    coverX, coverY, coverWidth, coverHeight = getSelectionCover()
 end
 
 function tool.mousereleased(x, y, button, istouch, presses, click)
     local actionButton = configs.editor.toolActionButton
 
     if button == actionButton then
-        -- Update selection if we click in placement mode
-        if click and tool.mode == "placement" then
-            local mapX, mapY = viewportHandler.getMapCoordinates(x, y)
-
-            selectionRectangle = rectangleStruct.create(mapX, mapY, 1, 1)
-            selectionDrag = true
-            placementDrag = false
-        end
-
         selectionFinished()
     end
 end
@@ -548,7 +795,7 @@ local function deselectHotkey()
 end
 
 function tool.draw()
-    if movementDrag or selectionDrag or tool.mode == "selection" then
+    if movementDrag or selectionDrag then
         local axisBound = keyboardHelper.modifierHeld(configs.editor.movementAxisBoundModifier)
 
         if axisBound and movementDrag then
@@ -569,6 +816,9 @@ function tool.load()
 
     hotkeyHandler.addHotkey(hotkeyScope, configs.hotkeys.itemsSelectAll, selectAllHotkey)
     hotkeyHandler.addHotkey(hotkeyScope, configs.hotkeys.itemsDeselect, deselectHotkey)
+    hotkeyHandler.addHotkey(hotkeyScope, configs.hotkeys.itemsCopy, copyRoomsHotkey)
+    hotkeyHandler.addHotkey(hotkeyScope, configs.hotkeys.itemsCut, cutRoomsHotkey)
+    hotkeyHandler.addHotkey(hotkeyScope, configs.hotkeys.itemsPaste, pasteRoomsHotkey)
 end
 
 return tool
