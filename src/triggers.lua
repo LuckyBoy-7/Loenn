@@ -193,6 +193,8 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
     local width = trigger.width or 16
     local height = trigger.height or 16
 
+    -- Size the label is drawn at. The drawable scales sizes designed for the
+    -- vanilla font itself, so this value is used for the layout only
     local fontSize = fonts.size(triggers.triggerFontSize)
 
     local fillColor, borderColor, textColor = triggers.triggerColor(room, trigger)
@@ -219,7 +221,7 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
         textColor = utils.getColor(configs.font.highlightColor) or {1, 1, 0, 1}
     end
 
-    local textDrawable = drawableText.fromText(displayName, textX, textY, textWidth, textHeight, nil, fontSize, textColor)
+    local textDrawable = drawableText.fromText(displayName, textX, textY, textWidth, textHeight, nil, triggers.triggerFontSize, textColor)
 
     local drawables = borderedRectangle:getDrawableSprite()
     table.insert(drawables, textDrawable)
@@ -230,7 +232,7 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
         -- Placement previews (no viewport) are drawn translucent, a shadow would
         -- only muddy them up
         local offset = fonts.size(1)
-        local shadowDrawable = drawableText.fromText(displayName, textX + offset, textY + offset, textWidth, textHeight, nil, fontSize, {0, 0, 0, 1})
+        local shadowDrawable = drawableText.fromText(displayName, textX + offset, textY + offset, textWidth, textHeight, nil, triggers.triggerFontSize, {0, 0, 0, 1})
 
         shadowDrawable.depth = depths.triggers - 0.9
         table.insert(drawables, shadowDrawable)

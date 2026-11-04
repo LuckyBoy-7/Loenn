@@ -1,5 +1,6 @@
 local drawing = require("utils.drawing")
 local utils = require("utils")
+local fonts = require("fonts")
 
 local drawableText = {}
 local drawableTextMt = {}
@@ -73,6 +74,9 @@ function drawableTextMt.__index:setColor(color)
     return setColor(self, color)
 end
 
+-- font/fontSize can be given explicitly. Sizes used throughout the editor are
+-- designed for the vanilla font, whose glyphs are half the height of the hi-res
+-- one, so sizes used with the editor font are scaled to it.
 function drawableText.fromText(text, x, y, width, height, font, fontSize, color)
     local drawable = {
         _type = "drawableText"
@@ -86,8 +90,16 @@ function drawableText.fromText(text, x, y, width, height, font, fontSize, color)
     drawable.width = width
     drawable.height = height
 
-    drawable.font = font or love.graphics.getFont()
-    drawable.fontSize = fontSize
+    local editorFont = love.graphics.getFont()
+
+    drawable.font = font or editorFont
+
+    if not font or font == editorFont then
+        drawable.fontSize = (fontSize or 1) * fonts.pixelFactor
+
+    else
+        drawable.fontSize = fontSize
+    end
 
     if color then
         setColor(drawable, color)
