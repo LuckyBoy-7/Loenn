@@ -1,6 +1,7 @@
 local utils = require("utils")
 local tasks = require("utils.tasks")
 local logging = require("logging")
+local startupProgress = require("startup_progress")
 
 local pluginLoader = {}
 
@@ -27,7 +28,10 @@ function pluginLoader.loadPlugins(path, registerAt, loadFunction, shouldYield, e
         end
     end
 
-    for _, filename in ipairs(filenames) do
+    for index, filename in ipairs(filenames) do
+        -- No-op unless the loading screen started a phase
+        startupProgress.reportFiles(#filenames, index)
+
         -- Make sure we only load valid plugins for the load function
         if extentionCheck(ext, filename) then
             local success, message = pcall(loadFunction, filename, registerAt)

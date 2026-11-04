@@ -4,6 +4,8 @@ local languageRegistry = require("language_registry")
 local persistence = require("persistence")
 local viewportHandler = require("viewport_handler")
 local logging = require("logging")
+local startupProgress = require("startup_progress")
+local liquidFill = require("ui.widgets.liquid_fill")
 
 local loadingScene = {}
 
@@ -27,6 +29,14 @@ function loadingScene:loaded()
             table.insert(self.quads, love.graphics.newQuad(x, y, self.quadSize, self.quadSize, self.spriteSheet:getDimensions()))
         end
     end
+
+    -- The sheet starts with an empty frame and a partly rotated one, the last
+    -- frame is the fully visible logo. The logo no longer animates, so just
+    -- keep that last frame
+    self.logoQuad = self.quads[#self.quads]
+
+    -- Faded base logo the liquid is drawn on top of
+    self.logoAlpha = 0.35
 
     self.duration = 1
     self.currentTime = 0
@@ -61,6 +71,17 @@ function loadingScene:firstEnter()
 
     self:setText(language.scenes.loading.loading)
 
+    startupProgress.reset()
+
+    -- A broken shader must not break startup, the logo is drawn plain instead
+    local created, liquidLogo = pcall(liquidFill.create, {baseAlpha = self.logoAlpha})
+
+    self.liquidLogo = created and liquidLogo or nil
+
+    if not created then
+        logging.warning("[loading] Could not create the liquid fill shader: " .. tostring(liquidLogo))
+    end
+
     -- Microbenchmark to estimate instructions per second
     sandboxUtils.calcIpsAndHookInterval()
 
@@ -83,46 +104,66 @@ function loadingScene:firstEnter()
                 phaseStart = now
             end
 
+            startupProgress.beginPhase("celesteAtlases", "Loading atlases")
             atlases.loadCelesteAtlases()
+            startupProgress.finishPhase()
             phaseDone("celesteAtlases")
 
+            startupProgress.beginPhase("mountMods", "Loading mods")
             mods.mountMods()
+            startupProgress.finishPhase()
             phaseDone("mountMods")
 
+            startupProgress.beginPhase("languages", "Loading languages")
             -- Internal scenes are already loaded, how else would we be here
             sceneHandler.loadExternalScenes()
 
             languageRegistry.loadExternalFiles()
             languageRegistry.setFallbackLanguage(defaultConfig.general.language)
+            startupProgress.finishPhase()
             phaseDone("scenes+language")
 
+            startupProgress.beginPhase("libraries", "Loading libraries")
             libraries.loadInternalLibraries()
             libraries.loadExternalLibraries()
+            startupProgress.finishPhase()
             phaseDone("libraries")
 
+            startupProgress.beginPhase("entities", "Loading entities")
             entities.loadInternalEntities()
             entities.loadExternalEntities()
+            startupProgress.finishPhase()
             phaseDone("entities")
 
+            startupProgress.beginPhase("triggers", "Loading triggers")
             triggers.loadInternalTriggers()
             triggers.loadExternalTriggers()
+            startupProgress.finishPhase()
             phaseDone("triggers")
 
+            startupProgress.beginPhase("effects", "Loading effects")
             effects.loadInternalEffects()
             effects.loadExternalEffects()
+            startupProgress.finishPhase()
             phaseDone("effects")
 
+            startupProgress.beginPhase("tools", "Loading tools")
             toolHandler.loadInternalTools()
             toolHandler.loadExternalTools()
+            startupProgress.finishPhase()
             phaseDone("tools")
 
+            startupProgress.beginPhase("saveSanitizers", "Loading save sanitizers")
             saveSanitizers.loadInternalSanitizers()
             saveSanitizers.loadExternalSanitizers()
+            startupProgress.finishPhase()
             phaseDone("saveSanitizers")
 
+            startupProgress.beginPhase("userInterface", "Building interface")
             if userInterfaceDevice.initializeDevice then
                 userInterfaceDevice.initializeDevice()
             end
+            startupProgress.finishPhase()
             phaseDone("userInterface")
 
             -- This can take a while depending on the amount of installed mods
@@ -135,8 +176,8 @@ function loadingScene:firstEnter()
             require("virtual_fs").report()
             logging.info("[compile_cache] " .. require("compile_cache").report())
 
-            logging.info(string.format("[startup] boot=%.0fms %s",
-                love.timer.getTime() * 1000, table.concat(timings, " ")))
+            logging.info(string.format("[startup] boot=%.0fms progress=%.0f%% %s",
+                love.timer.getTime() * 1000, startupProgress.get() * 100, table.concat(timings, " ")))
         end
     )
 
@@ -156,18 +197,39 @@ function loadingScene:draw()
     if type(self.text) == "string" then
         local windowWidth, windowHeight = love.graphics.getWidth(), love.graphics.getHeight()
 
-        local currentQuad = utils.mod1(math.floor(self.currentTime / self.duration * #self.quads) + 1, #self.quads)
-        local dots = string.rep(".", currentQuad - 1)
+        local dots = string.rep(".", utils.mod1(math.floor(self.currentTime / self.duration * 4) + 1, 4))
 
         love.graphics.printf(self.text .. dots, windowWidth / 2 - self.textOffsetX, windowHeight / 2 + self.textOffsetY, windowWidth, self.alignment, 0, self.textScale)
-        love.graphics.draw(self.spriteSheet, self.quads[currentQuad], (windowWidth - self.quadSize) / 2, (windowHeight - self.quadSize) / 2, 0, 1)
+
+        local x = (windowWidth - self.quadSize) / 2
+        local y = (windowHeight - self.quadSize) / 2
+
+        self:drawLogo(x, y)
     end
+end
+
+-- The liquid masks the logo: the part below the surface is drawn at full
+-- strength, the rest stays faded
+function loadingScene:drawLogo(x, y)
+    if not self.liquidLogo then
+        love.graphics.setColor(1, 1, 1, self.logoAlpha)
+        love.graphics.draw(self.spriteSheet, self.logoQuad, x, y)
+        love.graphics.setColor(1, 1, 1, 1)
+
+        return
+    end
+
+    liquidFill.drawLogo(self.liquidLogo, self.spriteSheet, self.logoQuad, x, y, self.quadSize, self.quadSize, startupProgress.get())
 end
 
 function loadingScene:update(dt)
     self.currentTime = self.currentTime + dt
     while self.currentTime >= self.duration do
         self.currentTime = self.currentTime - self.duration
+    end
+
+    if self.liquidLogo then
+        liquidFill.update(self.liquidLogo, dt)
     end
 end
 

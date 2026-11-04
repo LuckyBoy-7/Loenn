@@ -6,6 +6,7 @@ local configs = require("configs")
 local filesystem = require("utils.filesystem")
 local logging = require("logging")
 local virtualFs = require("virtual_fs")
+local startupProgress = require("startup_progress")
 
 local modHandler = {}
 
@@ -884,21 +885,29 @@ function modHandler.mountMods(directory, force)
     end
 
     if utils.isDirectory(directory) then
-        for filename, dir in utils.listDir(directory) do
+        local filenames = {}
+
+        for filename in utils.listDir(directory) do
             if filename ~= "." and filename ~= ".." then
-                if ignored[filename] then
-                    if configs.debug.logModLoading then
-                        local message = string.format("Skipped '%s' due to Everest blacklist", filename)
+                table.insert(filenames, filename)
+            end
+        end
 
-                        logging.info(message)
-                    end
+        for index, filename in ipairs(filenames) do
+            startupProgress.reportFiles(#filenames, index, string.format("Loading mod %s", filename))
 
-                else
-                    modHandler.mountMod(utils.joinpath(directory, filename), force)
+            if ignored[filename] then
+                if configs.debug.logModLoading then
+                    local message = string.format("Skipped '%s' due to Everest blacklist", filename)
+
+                    logging.info(message)
                 end
 
-                coroutine.yield()
+            else
+                modHandler.mountMod(utils.joinpath(directory, filename), force)
             end
+
+            coroutine.yield()
         end
     end
 end
