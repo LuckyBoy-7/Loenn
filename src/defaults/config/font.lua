@@ -10,7 +10,7 @@ return {
     addShadowToFont = true,
     highlightSelectedTriggerText = true,
     highlightColor = "ffff00",
-    selectTriggerByClickingText = true,
+    selectTriggerByClickingText = false,
 
     showCompleteTriggerText = true,
     extrudeOverlappingTriggerText = true,

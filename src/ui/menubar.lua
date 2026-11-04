@@ -310,24 +310,29 @@ end
 
 local function wrapInSubmenuClosers(menu)
     if utils.typeof(menu) == "table" then
-        local callback = menu[2]
-        local elementType = menu[3]
-        local shouldCloseMenu = true
-        local callbackType = type(callback)
+        -- Only real entries (title + data) have to be wrapped. Submenu lists are
+        -- tables of entries and would otherwise get a function injected into
+        -- their second slot when they hold fewer than two entries.
+        if type(menu[1]) == "string" then
+            local callback = menu[2]
+            local elementType = menu[3]
+            local shouldCloseMenu = true
+            local callbackType = type(callback)
 
-        if elementType == "checkbox" then
-            shouldCloseMenu = false
-        end
+            if elementType == "checkbox" then
+                shouldCloseMenu = false
+            end
 
-        if callbackType == "function" or callbackType == "nil" then
-            menu[2] = function(self)
-                if callback then
-                    callback()
-                end
+            if callbackType == "function" or callbackType == "nil" then
+                menu[2] = function(self)
+                    if callback then
+                        callback()
+                    end
 
-                if shouldCloseMenu ~= false then
-                    if self.parent:is("menuItemSubmenu") then
-                        self.parent:removeSelf()
+                    if shouldCloseMenu ~= false then
+                        if self.parent:is("menuItemSubmenu") then
+                            self.parent:removeSelf()
+                        end
                     end
                 end
             end
@@ -378,6 +383,75 @@ local function removeFalseEntries(menu)
     for i = #menu, 1, -1 do
         if not menu[i] then
             table.remove(menu, i)
+        end
+    end
+end
+
+-- Mods like to add their own entries to the View menu, which gets crowded fast.
+-- Their entries are named like "My Tool [ModName]", so move everything with such
+-- a suffix into its own "Mod" menu, grouped by mod.
+local modSuffixPattern = "%s*%[([^%]]+)%]%s*$"
+
+local function collectModMenus(menu, language)
+    local viewEntry = findMenuEntry(menu, "view")
+
+    if not viewEntry or utils.typeof(viewEntry[2]) ~= "table" then
+        return
+    end
+
+    local viewSubmenu = viewEntry[2]
+    local grouped = {}
+    local modOrder = {}
+    local kept = {}
+
+    for _, entry in ipairs(viewSubmenu) do
+        local title = utils.typeof(entry) == "table" and entry[1]
+        local modName = type(title) == "string" and title:match(modSuffixPattern)
+
+        if modName then
+            local cleanedTitle = utils.trim((title:gsub(modSuffixPattern, "")))
+
+            if cleanedTitle ~= "" then
+                entry[1] = cleanedTitle
+            end
+
+            local group = grouped[modName]
+
+            if not group then
+                group = {}
+                grouped[modName] = group
+
+                table.insert(modOrder, modName)
+            end
+
+            table.insert(group, entry)
+
+        else
+            table.insert(kept, entry)
+        end
+    end
+
+    if #modOrder == 0 then
+        return
+    end
+
+    viewEntry[2] = kept
+
+    table.sort(modOrder)
+
+    local modSubmenu = {}
+
+    for _, modName in ipairs(modOrder) do
+        table.insert(modSubmenu, {modName, grouped[modName]})
+    end
+
+    local modEntry = {tostring(language.ui.menubar.mod), modSubmenu}
+
+    for index, entry in ipairs(menu) do
+        if entry == viewEntry then
+            table.insert(menu, index + 1, modEntry)
+
+            break
         end
     end
 end
@@ -433,6 +507,7 @@ function menubar.getMenubar()
 
     removeFalseEntries(preparedMenubar)
     addLanguageStrings(preparedMenubar, language)
+    collectModMenus(preparedMenubar, language)
     addRecentFiles(preparedMenubar)
     wrapInSubmenuClosers(preparedMenubar)
     handleElementTypes(preparedMenubar)
