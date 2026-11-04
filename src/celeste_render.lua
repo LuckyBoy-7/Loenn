@@ -914,6 +914,11 @@ local function canvasResolutionScale()
     return math.max(1, math.floor(1 / pixelFactor + 0.5))
 end
 
+-- Resolution the room canvases are rendered at, 1 unless the hi-res font is used
+function celesteRender.getCanvasResolutionScale()
+    return canvasResolutionScale()
+end
+
 -- Return the canvas if it is ready, otherwise make a task for it
 local function getRoomCanvas(room, state, selected)
     local viewport = state.viewport
