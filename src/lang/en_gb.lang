@@ -71,6 +71,9 @@ tools.room.modes.description.placement=Create a room.
 tools.room.modes.name.selection=Select Room
 tools.room.modes.description.selection=Selects rooms and fillers.
 
+tools.name.debug=Debug
+tools.description.debug=Lists the entities and triggers used in the map and highlights where the selected one is used.
+
 
 # -- Decals --
 # decals.attribute

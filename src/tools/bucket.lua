@@ -19,6 +19,7 @@ local tool = {}
 tool._type = "tool"
 tool.name = "bucket"
 tool.group = "brush"
+tool.order = 4
 tool.image = nil
 
 tool.layer = "tilesFg"

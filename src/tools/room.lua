@@ -17,6 +17,7 @@ local tool = {}
 tool._type = "tool"
 tool.name = "room"
 tool.group = "room"
+tool.order = 9
 tool.image = nil
 tool.manualRoomLogic = true
 

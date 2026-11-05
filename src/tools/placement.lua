@@ -20,6 +20,7 @@ local tool = {}
 tool._type = "tool"
 tool.name = "placement"
 tool.group = "placement"
+tool.order = 8
 tool.image = nil
 
 tool.layer = "entities"

@@ -19,6 +19,7 @@ local tool = {}
 tool._type = "tool"
 tool.name = "ellipse"
 tool.group = "brush"
+tool.order = 1
 tool.image = nil
 
 tool.mode = "fill"

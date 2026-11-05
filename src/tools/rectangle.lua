@@ -16,6 +16,7 @@ local tool = {}
 tool._type = "tool"
 tool.name = "rectangle"
 tool.group = "brush"
+tool.order = 5
 tool.image = nil
 
 tool.mode = "fill"

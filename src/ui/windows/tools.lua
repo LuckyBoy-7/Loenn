@@ -1010,6 +1010,13 @@ local function getEntityPreview(placement)
 end
 
 local function updateHoverPreview(list)
+    -- The debug list has no placements to preview
+    if toolHandler.currentToolName == "debug" then
+        hoverPreview.hide()
+
+        return
+    end
+
     local hovered = ui.hovering
 
     while hovered and hovered ~= list and not hovered.itemData do
@@ -1092,6 +1099,22 @@ getMaterialItems = function(layer)
                 return string.match(name, "^decals/(.*)$") or name
             end,
             resolveOwner = true
+        })
+    end
+
+    -- The debug tool lists the entities / triggers used in the map, grouped by mod
+    if currentTool and currentTool.name == "debug" then
+        return getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, {
+            flat = true,
+            leafText = function(entry)
+                return entry.displayName or entry.name
+            end,
+            searchText = function(entry)
+                return entry.displayName or entry.name
+            end,
+            favoritesText = function(entry)
+                return entry.displayName or entry.name
+            end
         })
     end
 
@@ -1685,6 +1708,43 @@ local function updateToolModeList(name)
     end
 end
 
+-- Tools without an explicit order (external ones from mods) sort after the built in ones
+local defaultToolOrder = 1000
+
+-- Blank rows separating the groups of tools in the tool list. They are not interactive at all:
+-- no hover, no click, no selection and no keyboard navigation.
+local toolSeparatorsBefore = {
+    selection = true,
+    debug = true
+}
+
+local function getToolSpacer()
+    return uiElements.listItem({
+        text = "",
+        data = false
+    })
+end
+
+-- The list rebuilds its rows from the items that are handed to it, so the separator rows can only
+-- be made non interactive after the list was created. They must not react to the mouse and must
+-- not be selectable (click or keyboard).
+local function styleToolSeparators(list)
+    for _, item in ipairs(list.children or {}) do
+        if item.data == false then
+            item.interactive = -1
+            item._enabled = false
+            item.isSeparator = true
+
+            item.style.padding = 0
+            item.style.normalBG = {}
+            item.style.disabledBG = {}
+            item.style.hoveredBG = {}
+            item.style.pressedBG = {}
+            item.style.selectedBG = {}
+        end
+    end
+end
+
 local function getToolItems(sortItems)
     local language = languageRegistry.getLanguage()
     local tools = toolHandler.tools
@@ -1702,6 +1762,9 @@ local function getToolItems(sortItems)
             data = name
         })
 
+        item.toolName = name
+        item.toolOrder = tool.order or defaultToolOrder
+
         table.insert(toolItems, item)
 
         if tooltipText then
@@ -1711,17 +1774,33 @@ local function getToolItems(sortItems)
 
     if sortItems ~= false then
         table.sort(toolItems, function(lhs, rhs)
+            if lhs.toolOrder ~= rhs.toolOrder then
+                return lhs.toolOrder < rhs.toolOrder
+            end
+
             local lhsGroup = tools[lhs.data].group or ""
             local rhsGroup = tools[rhs.data].group or ""
 
             return lhsGroup == rhsGroup and lhs.text < rhs.text or lhsGroup < rhsGroup
         end)
+
+        -- Separators are inserted after sorting, so they never take part in it
+        for index = #toolItems, 1, -1 do
+            if toolSeparatorsBefore[toolItems[index].toolName] then
+                table.insert(toolItems, index, getToolSpacer())
+            end
+        end
     end
 
     return toolItems
 end
 
 local function toolCallback(list, toolName)
+    -- Blank separator rows have no tool behind them
+    if not toolName then
+        return
+    end
+
     local sameTool = toolName == toolWindow.eventStates.tool
 
     if not sameTool then
@@ -1814,6 +1893,8 @@ function toolWindow.getWindow()
 
     local toolItems = getToolItems()
     local scrolledToolList, toolList = lists.getList(toolCallback, toolItems, toolListOptions)
+
+    styleToolSeparators(toolList)
 
     local modeItems = getModeItems()
     local scrolledModeList, modeList = lists.getList(modeCallback, modeItems, modeListOptions)

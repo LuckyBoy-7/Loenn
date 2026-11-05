@@ -19,6 +19,7 @@ local tool = {}
 tool._type = "tool"
 tool.name = "line"
 tool.group = "brush"
+tool.order = 3
 tool.image = nil
 
 tool.layer = "tilesFg"

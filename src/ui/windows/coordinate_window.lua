@@ -16,9 +16,6 @@ local drawing = require("utils.drawing")
 
 local widgetUtils = require("ui.widgets.utils")
 
-local windowPersister = require("ui.window_position_persister")
-local windowPersisterName = "coordinate_window"
-
 local coordinateWindow = {}
 
 -- Registered as a window so the UI knows about this module (the window itself is
@@ -28,6 +25,30 @@ local coordinateWindowGroup = uiElements.group({})
 local currentWindow
 local currentTitle
 local currentLabels
+
+-- Distance of the fixed panel from the workspace edges
+local workspaceMargin = 8
+
+-- Left edge of the workspace: the right edge of the panels pinned to the left (the room list)
+local function getWorkspaceLeft()
+    local group = require("ui.ui_root").getWindowGroup()
+
+    if not group or not group.children then
+        return 0
+    end
+
+    local left = 0
+
+    for _, child in ipairs(group.children) do
+        local screenX, width = child.screenX, child.width
+
+        if child._pinnedEdge == "left" and screenX and width and screenX <= 0 then
+            left = math.max(left, screenX + width)
+        end
+    end
+
+    return left
+end
 
 -- Rows, in display order. The room name row is filled separately, the rest are coordinate pairs.
 local rowKeys = {
@@ -114,6 +135,21 @@ local function updateLabels(labels)
     end
 end
 
+-- Crosshair size and thickness are screen space constants: scaling them with the zoom made the
+-- two lines merge into a blob at some zoom levels
+local crosshairLength = 6
+local crosshairLineWidth = 1
+
+local function drawCrosshairShape(screenX, screenY, color)
+    drawing.callKeepOriginalColor(function()
+        love.graphics.setLineWidth(crosshairLineWidth)
+        love.graphics.setColor(color)
+
+        love.graphics.line(screenX - crosshairLength, screenY, screenX + crosshairLength, screenY)
+        love.graphics.line(screenX, screenY - crosshairLength, screenX, screenY + crosshairLength)
+    end)
+end
+
 -- Tile snapped crosshair, drawn over the map but below the UI
 local function drawCrosshair()
     if not coordinateWindow.isOpen() then
@@ -134,32 +170,15 @@ local function drawCrosshair()
     end
 
     local info = getCursorInfo()
-    local length = 6 / viewport.scale
 
-    drawing.callKeepOriginalColor(function()
-        local lineWidth = love.graphics.getLineWidth()
+    local snappedX, snappedY = viewportHandler.getWindowCoordinates(info.worldTileX * 8, info.worldTileY * 8)
+    local pixelX, pixelY = viewportHandler.getWindowCoordinates(info.worldX, info.worldY)
 
-        love.graphics.setLineWidth(math.max(1, lineWidth / viewport.scale))
+    -- Red: snapped to the tile grid
+    drawCrosshairShape(snappedX, snappedY, {1, 0, 0, 1})
 
-        love.graphics.push()
-        love.graphics.translate(math.floor(-viewport.x), math.floor(-viewport.y))
-        love.graphics.scale(viewport.scale)
-
-        -- Red: snapped to the tile grid
-        love.graphics.setColor(1, 0, 0, 1)
-        love.graphics.line(info.worldTileX * 8 - length, info.worldTileY * 8,
-            info.worldTileX * 8 + length, info.worldTileY * 8)
-        love.graphics.line(info.worldTileX * 8, info.worldTileY * 8 - length,
-            info.worldTileX * 8, info.worldTileY * 8 + length)
-
-        -- Yellow: exact world pixel
-        love.graphics.setColor(1, 1, 0, 1)
-        love.graphics.line(info.worldX - length, info.worldY, info.worldX + length, info.worldY)
-        love.graphics.line(info.worldX, info.worldY - length, info.worldX, info.worldY + length)
-
-        love.graphics.pop()
-        love.graphics.setLineWidth(lineWidth)
-    end)
+    -- Yellow: exact world pixel
+    drawCrosshairShape(pixelX, pixelY, {1, 1, 0, 1})
 end
 
 local overlayHooked = false
@@ -185,9 +204,17 @@ function coordinateWindow.isOpen()
     return parent ~= nil and parent ~= false
 end
 
+-- Opens the panel if it is not open yet
+function coordinateWindow.open()
+    if not coordinateWindow.isOpen() then
+        return coordinateWindow.toggle()
+    end
+
+    return currentWindow
+end
+
 function coordinateWindow.close()
     if currentWindow then
-        windowPersister.removeActiveWindow(windowPersisterName, currentWindow)
         currentWindow:removeSelf()
         currentWindow = nil
         currentTitle = nil
@@ -270,7 +297,16 @@ function coordinateWindow.toggle()
 
     window.minWidth = math.max(minimumWindowWidth, math.ceil(requiredWidth))
 
-    windowPersister.trackWindow(windowPersisterName, window)
+    -- The panel has a fixed position: no position tracking and no titlebar drag
+    if window.titlebar then
+        window.titlebar.interactive = 0
+
+        window.titlebar:hook({
+            onPress = function() end,
+            onRelease = function() end,
+            onDrag = function() end
+        })
+    end
 
     windowGroup:addChild(window)
 
@@ -282,8 +318,19 @@ function coordinateWindow.toggle()
         ui.root:recollect()
     end
 
-    widgetUtils.preventOutOfBoundsMovement(window)
     widgetUtils.consumeKeyboardEvents(window)
+
+    -- Fixed position: top left corner of the workspace, next to the pinned room list. Set once
+    -- here and once after the layout pass, where the final window size is known
+    local fixedX, fixedY = getWorkspaceLeft() + workspaceMargin, workspaceMargin
+
+    window.x, window.y = fixedX, fixedY
+
+    ui.runLate(function()
+        if window.parent and window.width then
+            widgetUtils.moveWindow(window, getWorkspaceLeft() + workspaceMargin, workspaceMargin, 0)
+        end
+    end)
 
     currentWindow = window
     currentLabels = labels
