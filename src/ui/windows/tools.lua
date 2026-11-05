@@ -667,7 +667,12 @@ local function installBoldLabelHook(listItem)
 end
 
 -- Defined further down, used by the row and preview code above it
+-- Forward declarations: the tile list is built further down, but the row code above uses these
 local getTilesetThumbnail
+local thumbnailCanvasSize = 40
+local thumbnailSize = 22
+local thumbnailInset = thumbnailSize + 2
+local thumbnailPadding = 2
 
 local function materialDataToElement(list, data, element)
     if not element then
@@ -675,10 +680,13 @@ local function materialDataToElement(list, data, element)
     end
 
     if data then
+        local tileList = tiles.tileLayers[toolHandler.getLayer() or ""] ~= nil
         local indent = data.indent or 0
         local text = data.text or ""
 
-        if indent > 0 then
+        -- Tile lists are flat: the thumbnail already sits where the indent would be, so the
+        -- text starts right after it
+        if indent > 0 and not tileList then
             text = string.rep(decalPathIndent, indent) .. text
         end
 
@@ -726,51 +734,87 @@ local function materialDataToElement(list, data, element)
         local thumbnail = data.thumbnail
 
         -- Rows may be rebuilt from plain data, so fall back to looking the tileset up again
-        if not thumbnail and tiles.tileLayers[data.currentLayer or ""] and data.data then
+        if not thumbnail and not data.isHeader and tiles.tileLayers[data.currentLayer or ""] and data.data then
             thumbnail = getTilesetThumbnail(data.currentLayer, data.data)
         end
 
-        -- Must come first: it rebuilds the row children for the favorite/icon state
-        updateListItemFavoriteVisuals(element)
-
-        -- Then the thumbnail gets added, so the icon reset can not wipe it
-        if element._thumbnailElement then
-            element._thumbnailElement:removeSelf()
+        -- Only rows of the tile lists get the thumbnail treatment. Everything else (decals,
+        -- entities, triggers, tools) keeps the stock row style and height.
+        if element._thumbnailBasePadding == nil then
+            element._thumbnailBasePadding = element.style.padding or 4
         end
 
-        element._thumbnailElement = nil
-        element._thumbnailCanvas = thumbnail and thumbnail.canvas or nil
+        if tileList then
+            element._thumbnailCanvas = thumbnail and thumbnail.canvas or nil
+            element.style.padding = thumbnailPadding
+            element.style.spacing = 6
 
-        if thumbnail then
-            local success, thumbnailElement = pcall(uiElements.image, thumbnail.canvas)
+            -- Fixed height: the magic list scrolls by a fixed element size, so every row of the
+            -- tile list has to have the exact same height
+            element.minHeight = thumbnailSize + thumbnailPadding * 2
 
-            if success and thumbnailElement then
-                element:addChild(thumbnailElement, 1)
-                element:reflow()
-
-                element._thumbnailElement = thumbnailElement
-            end
+        else
+            element._thumbnailCanvas = nil
+            element.style.padding = element._thumbnailBasePadding
+            element.style.spacing = 4
+            element.minHeight = -1
         end
 
-        -- The image child only reserves the space: the row's own element draw does not seem to
-        -- reach it, so the canvas is drawn here, where the row is painted
+        -- Favorited materials show up in the favorites section of the list, so the rows
+        -- themselves do not draw a star any more. The icon is still cleared: rows are recycled
+        -- and may have carried one before.
+        listItemUtils.clearIcon(element)
+
+        -- A fixed size spacer reserves the thumbnail space in the row flow. Every row of a tile
+        -- list gets one, so rows keep the same height while they are recycled
+        if element._thumbnailSpacer then
+            element._thumbnailSpacer:removeSelf()
+            element._thumbnailSpacer = nil
+        end
+
+        if tileList and thumbnail then
+            local spacer = uiElements.new({width = thumbnailInset + 4, height = thumbnailSize})
+
+            spacer.interactive = 0
+            element:addChild(spacer, 1)
+            element._thumbnailSpacer = spacer
+        end
+
         if not element._thumbnailHooked then
             element._thumbnailHooked = true
 
             element:hook({
+                -- The label is a row child and would sit at the top of the taller row: center it
+                layoutLate = function(orig, self, ...)
+                    orig(self, ...)
+
+                    local label = self.label
+
+                    if label and label.height and self.height then
+                        label.realY = math.floor((self.height - label.height) * 0.5)
+                    end
+                end,
+
                 draw = function(orig, self, ...)
                     orig(self, ...)
 
                     local canvas = self._thumbnailCanvas
-                    local thumbnailElement = self._thumbnailElement
+                    local height = self.height or 0
 
-                    if canvas and thumbnailElement and thumbnailElement.screenX then
-                        local size = math.min(thumbnailElement.width or 16, thumbnailElement.height or 16)
-                        local offsetX = thumbnailElement.screenX + math.floor((thumbnailElement.width - size) * 0.5)
-                        local offsetY = thumbnailElement.screenY + math.floor((thumbnailElement.height - size) * 0.5)
+                    -- Rows that are not laid out yet must not be drawn: a negative or zero scale
+                    -- paints garbage over the list while it scrolls
+                    if canvas and height > thumbnailSize then
+                        local size = thumbnailSize
+                        local x = self.screenX + (self._thumbnailBasePadding or 4)
+                        local y = self.screenY + math.floor((height - size) * 0.5)
+
+                        -- Restore the color: leaving it white leaks into whatever the list draws
+                        -- next (scroll bar, labels), which showed up as white rows
+                        local r, g, b, a = love.graphics.getColor()
 
                         love.graphics.setColor(1, 1, 1, 1)
-                        love.graphics.draw(canvas, offsetX, offsetY, 0, size / 24, size / 24)
+                        love.graphics.draw(canvas, x, y, 0, size / thumbnailCanvasSize, size / thumbnailCanvasSize)
+                        love.graphics.setColor(r, g, b, a)
                     end
                 end
             })
@@ -1105,8 +1149,10 @@ local function updateHoverPreview(list)
         content = {
             key = "tileset:" .. tostring(material),
             image = thumbnail.canvas,
-            width = 24,
-            height = 24
+            width = thumbnailCanvasSize,
+            height = thumbnailCanvasSize,
+            -- A 5x5 block stays small on purpose: it is only meant as a hint next to the list
+            area = thumbnailCanvasSize * thumbnailCanvasSize * 22
         }
 
     elseif utils.startsWith(material, "decals/") then
@@ -1152,8 +1198,13 @@ local function updateHoverPreview(list)
     hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, content)
 end
 
--- 3x3 tile thumbnail of a tileset, cached per layer/id
+-- 5x5 tile thumbnail of a tileset, cached per layer/id
 local tilesetThumbnails = {}
+
+-- Sprites and rules changed on disk, so the cached thumbnails are stale
+local function resetTilesetThumbnails()
+    tilesetThumbnails = {}
+end
 
 getTilesetThumbnail = function(layer, id)
     local key = layer .. ":" .. tostring(id)
@@ -1169,6 +1220,24 @@ getTilesetThumbnail = function(layer, id)
     local sprite = path and atlases.getResource(path, "Gameplay")
 
     if not sprite or not sprite.image then
+        -- Air (and any tileset without an image) still gets an empty thumbnail, so its row is
+        -- the same height as the others
+        if id == "0" or not path then
+            local emptyCanvas = love.graphics.newCanvas(thumbnailCanvasSize, thumbnailCanvasSize)
+
+            -- Canvas contents are undefined until first rendered, which showed up as a white
+            -- block while scrolling
+            emptyCanvas:renderTo(function()
+                love.graphics.clear(0, 0, 0, 0)
+            end)
+
+            local emptyThumbnail = {canvas = emptyCanvas}
+
+            tilesetThumbnails[key] = emptyThumbnail
+
+            return emptyThumbnail
+        end
+
         tilesetThumbnails[key] = false
 
         return nil
@@ -1176,11 +1245,11 @@ getTilesetThumbnail = function(layer, id)
 
     local image = sprite.image
 
-    -- Fake tile matrix: a 3x3 block surrounded by air, so the autotiler picks the corner, edge
-    -- and filled center quads for it instead of one repeated tile
+    -- Fake tile matrix: a 5x5 block surrounded by air, so the autotiler picks the corner, edge and
+    -- filled center quads for it instead of one repeated tile
     local blockMatrix = {
         get = function(_, x, y)
-            if x >= 0 and x <= 2 and y >= 0 and y <= 2 then
+            if x >= 0 and x <= 4 and y >= 0 and y <= 4 then
                 return id
             end
 
@@ -1189,14 +1258,14 @@ getTilesetThumbnail = function(layer, id)
     }
 
     local fg = layer ~= "tilesBg"
-    local canvas = love.graphics.newCanvas(24, 24)
+    local canvas = love.graphics.newCanvas(thumbnailCanvasSize, thumbnailCanvasSize)
 
     canvas:renderTo(function()
         love.graphics.clear(0, 0, 0, 0)
         love.graphics.setColor(1, 1, 1, 1)
 
-        for y = 0, 2 do
-            for x = 0, 2 do
+        for y = 0, 4 do
+            for x = 0, 4 do
                 local quads = autotiler.getQuads(x, y, blockMatrix, tileset, "0", " ", "*", {{0, 0}}, nil, autotiler.checkTile)
 
                 if quads and quads[1] then
@@ -1222,20 +1291,117 @@ end
 
 -- Tile materials are tilesets: group them by source like the placement list and attach the
 -- thumbnail each row shows in front of its name
-local function getTilesetItems(materials, currentTool, currentLayer, favoritesLookup, language)
+-- Marker material of the "Add Defaults" entry in the tile list
+local addDefaultsMaterial = "__loenn_add_defaults"
+local onlyKeepUsedMaterial = "__loenn_only_keep_used"
+
+-- Source groups of the tilesets that Add Defaults wrote: the rule file keeps them as comments,
+-- which is the only place that information still exists (no displayName is written)
+local function getRulesSourceGroups(currentLayer)
+    local meta = loadedState.side and loadedState.side.meta
+
+    if not meta then
+        return {}
+    end
+
+    local key = currentLayer == "tilesBg" and "BackgroundTiles" or "ForegroundTiles"
+    local configured = meta[key]
+
+    if type(configured) ~= "string" then
+        return {}
+    end
+
+    configured = string.gsub(configured, "%z", "")
+
+    if configured == "" then
+        return {}
+    end
+
+    local filename = modHandler.commonModContent .. "/" .. utils.convertToUnixPath(configured)
+    local text = utils.readAll(filename, "rb", true)
+
+    if not text then
+        return {}
+    end
+
+    local groups = {}
+    local source
+
+    for line in string.gmatch(text, "[^\n]+") do
+        local comment = string.match(line, "<!%-%-%s*Loenn Add Defaults:%s*(.-)%s*%-%->")
+
+        if comment then
+            source = comment
+        end
+
+        local tilesetPath = string.match(line, '<Tileset[^>]-path%s*=%s*"([^"]*)"')
+
+        if tilesetPath and source then
+            local group = string.lower(string.match(source, "^([^%s%(]+)") or source)
+
+            group = string.gsub(group, "%.zip$", "")
+            group = string.gsub(group, "_zip$", "")
+            group = string.gsub(group, "_%x+$", "")
+            group = string.gsub(group, "_%x+$", "")
+
+            if string.match(group, "spoo+ky") then
+                group = "spoooky"
+
+            elseif string.find(group, "underdragon", 1, true) then
+                group = "underdragon"
+
+            elseif group == "" or string.find(group, "celeste", 1, true) then
+                group = "celeste"
+            end
+
+            groups[tilesetPath] = group
+        end
+    end
+
+    return groups
+end
+
+local function getTilesetItems(materials, currentTool, currentLayer, favoritesLookup, language, withActions)
     local entries = {}
     local thumbnails = {}
+    local sourceGroups = getRulesSourceGroups(currentLayer)
+    local tilerMeta = brushHelper.getTilerMeta(currentLayer) or {}
+
+    -- Distinguish the three kinds of tilesets: the vanilla ones, the ones this feature imported
+    -- and the ones the map author made
+    local vanillaMeta = currentLayer == "tilesBg" and celesteRender.tilesMetaBgVanilla or celesteRender.tilesMetaFgVanilla
+    -- The list formatter already wraps the source in brackets, so the labels themselves must not
+    -- contain any
+    local vanillaLabel = "Celeste/Vanilla"
+    local ownLabel = "This Mod"
+    local AIR_ID = "0"
 
     for _, material in ipairs(materials or {}) do
         local id = type(material) == "table" and material.name or material
         local displayName = type(material) == "table" and material.displayName or tostring(material)
 
         if id then
-            local modName = string.match(displayName, "^([^/]+)/")
+            local tileset = tilerMeta[id]
+            local tilesetPath = tileset and tileset.path
+
+            -- Tileset meta paths are prefixed with "tilesets/", the rule file paths are not
+            local rulePath = tilesetPath and string.gsub(tilesetPath, "^tilesets/", "")
+            local modName
+
+            if id == AIR_ID or (vanillaMeta and vanillaMeta[id]) then
+                modName = vanillaLabel
+
+            else
+                modName = rulePath and sourceGroups[rulePath]
+
+                if not modName then
+                    modName = string.match(displayName, "^([^/]+)/") or ownLabel
+                end
+            end
 
             table.insert(entries, {
                 name = id,
-                associatedMods = modName and {modName} or nil,
+                associatedMods = {modName},
                 displayNameNoMods = displayName,
                 tooltipText = displayName
             })
@@ -1247,6 +1413,37 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
             end
         end
     end
+
+    -- Vanilla first, this mod second, then the preferred material packs and everything else
+    local groupPriority = {
+        ["celeste/vanilla"] = 0,
+        ["this mod"] = 1,
+        spoooky = 2,
+        underdragon = 3
+    }
+
+    local function entryGroup(entry)
+        local group = entry.associatedMods and entry.associatedMods[1] or ""
+
+        return string.lower(group)
+    end
+
+    table.sort(entries, function(lhs, rhs)
+        local lhsGroup = entryGroup(lhs)
+        local rhsGroup = entryGroup(rhs)
+        local lhsPriority = groupPriority[lhsGroup] or 100
+        local rhsPriority = groupPriority[rhsGroup] or 100
+
+        if lhsPriority ~= rhsPriority then
+            return lhsPriority < rhsPriority
+        end
+
+        if lhsGroup ~= rhsGroup then
+            return lhsGroup < rhsGroup
+        end
+
+        return tostring(lhs.displayNameNoMods) < tostring(rhs.displayNameNoMods)
+    end)
 
     local items = getPathTreeItems(entries, currentTool, currentLayer, favoritesLookup, language, {
         flat = true,
@@ -1264,6 +1461,38 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
     for _, item in ipairs(items) do
         item.thumbnail = thumbnails[item.data]
     end
+
+    if not withActions then
+        return items
+    end
+
+    -- Entry which copies every mod's tilesets (and the bundled ones) into this mod
+    local addDefaultsItem = {
+        text = tostring(language.ui.tools_window.add_defaults),
+        textNoMods = "",
+        data = addDefaultsMaterial,
+        indent = 0,
+        tooltip = tostring(language.ui.tools_window.add_defaults_description),
+        isAddDefaults = true,
+        sortIndex = 0,
+        ancestors = {}
+    }
+
+    table.insert(items, 1, addDefaultsItem)
+
+    -- Entry which removes every tileset the map does not use
+    local onlyKeepUsedItem = {
+        text = tostring(language.ui.tools_window.only_keep_used),
+        textNoMods = "",
+        data = onlyKeepUsedMaterial,
+        indent = 0,
+        tooltip = tostring(language.ui.tools_window.only_keep_used_description),
+        isOnlyKeepUsed = true,
+        sortIndex = 0.5,
+        ancestors = {}
+    }
+
+    table.insert(items, 2, onlyKeepUsedItem)
 
     return items
 end
@@ -1290,14 +1519,53 @@ getMaterialItems = function(layer)
         })
     end
 
-    -- Tile tools list their tilesets grouped by source, with a 3x3 tile thumbnail per entry
-    if tiles.tileLayers[currentLayer] then
-        return getTilesetItems(materials, currentTool, currentLayer, favoritesLookup, language)
-    end
-
-    -- The debug tool lists the entities / triggers used in the map, grouped by mod
+    -- The debug tool lists whatever is used in the map. This has to come before the tile branch:
+    -- the debug tile layers must not get thumbnails, Add Defaults or Only Keep Used entries
     if currentTool and currentTool.name == "debug" then
-        return getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, {
+        local isDecalLayer = currentLayer == "decalsFg" or currentLayer == "decalsBg"
+
+        -- Decals use exactly the same tree as the placement decal list: the source mod on top,
+        -- then the folder structure below "decals/". Only the leaf text carries the usage count.
+        if isDecalLayer then
+            return getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, {
+                pathOf = function(name)
+                    return string.match(name, "^decals/(.*)$") or name
+                end,
+                resolveOwner = true,
+                leafText = function(entry)
+                    return entry.displayName or entry.segments[#entry.segments]
+                end
+            })
+        end
+
+        local sourceGroups = getRulesSourceGroups(currentLayer)
+        local tilerMeta = brushHelper.getTilerMeta(currentLayer) or {}
+        local debugMaterials = {}
+
+        for _, material in ipairs(materials or {}) do
+            local name = type(material) == "table" and material.name or material
+            local displayName = type(material) == "table" and material.displayNameNoMods or tostring(material)
+            local modName = nil
+
+            if tiles.tileLayers[currentLayer] and name then
+                local tileset = tilerMeta[name]
+
+                if tileset and tileset.path then
+                    modName = sourceGroups[string.gsub(tileset.path, "^tilesets/", "")]
+                end
+
+            elseif name then
+                modName = string.match(name, "^([^/]+)/")
+            end
+
+            table.insert(debugMaterials, {
+                name = name,
+                associatedMods = modName and {modName} or nil,
+                displayNameNoMods = displayName
+            })
+        end
+
+        return getPathTreeItems(debugMaterials, currentTool, currentLayer, favoritesLookup, language, {
             flat = true,
             leafText = function(entry)
                 return entry.displayName or entry.name
@@ -1309,6 +1577,24 @@ getMaterialItems = function(layer)
                 return entry.displayName or entry.name
             end
         })
+    end
+
+    -- Tile tools list their tilesets grouped by source, with a thumbnail per entry. The special
+    -- entries (Add Defaults / Only Keep Used) only make sense for the tools that actually place
+    -- tiles, not for the selection tool which also works on tile layers.
+    if tiles.tileLayers[currentLayer] then
+        local toolName = currentTool and currentTool.name or ""
+        local tilePlacingTools = {
+            brush = true,
+            rectangle = true,
+            line = true,
+            ellipse = true,
+            circle = true,
+            bucket = true
+        }
+
+        return getTilesetItems(materials, currentTool, currentLayer, favoritesLookup, language,
+            tilePlacingTools[toolName] == true)
     end
 
     if currentLayer == "triggers" or currentLayer == "entities" then
@@ -1358,12 +1644,42 @@ getMaterialItems = function(layer)
         table.insert(materialItems, item)
     end
 
+    -- The magic list scrolls by a fixed element size. Tile lists have taller rows (thumbnail),
+    -- every other list keeps the stock row height.
+    if toolWindow.materialList then
+        toolWindow.materialList.style.elementSize = tiles.tileLayers[currentLayer]
+            and (thumbnailSize + thumbnailPadding * 2)
+            or false
+    end
+
     return materialItems
 end
 
 local function materialCallback(list, material)
     -- Header rows of the decal path tree have no material behind them
     if not material then
+        return
+    end
+
+    if material == addDefaultsMaterial then
+        local layer = toolHandler.getLayer()
+
+        require("tileset_defaults").addDefaults(layer, function()
+            resetTilesetThumbnails()
+            toolWindow.materialList:updateItems(getMaterialItems(layer))
+        end)
+
+        return
+    end
+
+    if material == onlyKeepUsedMaterial then
+        local layer = toolHandler.getLayer()
+
+        require("tileset_defaults").keepUsed(layer, function()
+            resetTilesetThumbnails()
+            toolWindow.materialList:updateItems(getMaterialItems(layer))
+        end)
+
         return
     end
 
@@ -2100,6 +2416,8 @@ function toolWindow.getWindow()
     local materialItems = getMaterialItems()
     local scrolledMaterialList, materialList, materialSearchField = lists.getMagicList(materialCallback, materialItems, materialListOptions)
 
+    -- The magic list scrolls by a fixed element size, which getMaterialItems keeps in sync with
+    -- the current layer
     hotkeyHandler.addHotkey("global", configs.ui.hotkeys.focusMaterialSearch, focusMaterialSearchHandler)
 
     -- Make sure lists are visually updated

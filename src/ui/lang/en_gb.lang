@@ -206,6 +206,20 @@ ui.tools_window.delete_sub_layer=Delete group
 ui.tools_window.rename_sub_layer=Rename group
 ui.tools_window.add_first_sub_layer=Objects moved from base group to '%s'.
 ui.tools_window.remove_last_sub_layer=Objects moved from '%s' to base group.
+ui.tools_window.add_defaults=Add Defaults
+ui.tools_window.add_defaults_description=Copies the tilesets of every mod (and the ones bundled with Loenn) into this mod.
+ui.tools_window.only_keep_used=Only Keep Used
+ui.tools_window.only_keep_used_description=Removes every tileset the map does not use from the tileset file.
+
+ui.notifications.tilesetDefaultsRemoved=Removed %d unused tilesets.
+ui.notifications.tilesetDefaultsNothingRemoved=All tilesets are used, nothing was removed.
+
+ui.notifications.tilesetDefaultsInvalidMod=This map is not inside a mod folder (Celeste/Mods/<Mod>/...). Nothing was added.
+ui.notifications.tilesetDefaultsInvalidXml=The tileset file '%s' can not be used (%s).
+ui.notifications.tilesetDefaultsNothingAdded=No new tilesets to add.
+ui.notifications.tilesetDefaultsWriteFailed=Could not write the tileset file.
+ui.notifications.tilesetDefaultsAdded=Added %d tilesets to this mod.
+ui.notifications.tilesetDefaultsAddedSkipped=Added %d tilesets to this mod (%d skipped: no free tileset id left).
 
 
 # Room Window
