@@ -28,6 +28,9 @@ local selectionUtils = require("selections")
 local celesteRender = require("celeste_render")
 local atlases = require("atlases")
 local entities = require("entities")
+local tiles = require("tiles")
+local brushHelper = require("brushes")
+local autotiler = require("autotiler")
 local selectionItemUtils = require("selection_item_utils")
 local placementUtils = require("placement_utils")
 local virtualFs = require("virtual_fs")
@@ -663,6 +666,9 @@ local function installBoldLabelHook(listItem)
     end
 end
 
+-- Defined further down, used by the row and preview code above it
+local getTilesetThumbnail
+
 local function materialDataToElement(list, data, element)
     if not element then
         element = uiElements.listItem()
@@ -716,7 +722,59 @@ local function materialDataToElement(list, data, element)
         -- callbacks are not reliable here, because a row element can be rebound to different
         -- data (scrolling, filtering) without the hover ever leaving it, which showed a stale
         -- preview for a different decal.
+
+        local thumbnail = data.thumbnail
+
+        -- Rows may be rebuilt from plain data, so fall back to looking the tileset up again
+        if not thumbnail and tiles.tileLayers[data.currentLayer or ""] and data.data then
+            thumbnail = getTilesetThumbnail(data.currentLayer, data.data)
+        end
+
+        -- Must come first: it rebuilds the row children for the favorite/icon state
         updateListItemFavoriteVisuals(element)
+
+        -- Then the thumbnail gets added, so the icon reset can not wipe it
+        if element._thumbnailElement then
+            element._thumbnailElement:removeSelf()
+        end
+
+        element._thumbnailElement = nil
+        element._thumbnailCanvas = thumbnail and thumbnail.canvas or nil
+
+        if thumbnail then
+            local success, thumbnailElement = pcall(uiElements.image, thumbnail.canvas)
+
+            if success and thumbnailElement then
+                element:addChild(thumbnailElement, 1)
+                element:reflow()
+
+                element._thumbnailElement = thumbnailElement
+            end
+        end
+
+        -- The image child only reserves the space: the row's own element draw does not seem to
+        -- reach it, so the canvas is drawn here, where the row is painted
+        if not element._thumbnailHooked then
+            element._thumbnailHooked = true
+
+            element:hook({
+                draw = function(orig, self, ...)
+                    orig(self, ...)
+
+                    local canvas = self._thumbnailCanvas
+                    local thumbnailElement = self._thumbnailElement
+
+                    if canvas and thumbnailElement and thumbnailElement.screenX then
+                        local size = math.min(thumbnailElement.width or 16, thumbnailElement.height or 16)
+                        local offsetX = thumbnailElement.screenX + math.floor((thumbnailElement.width - size) * 0.5)
+                        local offsetY = thumbnailElement.screenY + math.floor((thumbnailElement.height - size) * 0.5)
+
+                        love.graphics.setColor(1, 1, 1, 1)
+                        love.graphics.draw(canvas, offsetX, offsetY, 0, size / 24, size / 24)
+                    end
+                end
+            })
+        end
     end
 
     return element
@@ -1037,7 +1095,21 @@ local function updateHoverPreview(list)
         return
     end
 
-    if utils.startsWith(material, "decals/") then
+    local thumbnail = item.thumbnail
+
+    if not thumbnail and item.currentLayer and tiles.tileLayers[item.currentLayer] and material then
+        thumbnail = getTilesetThumbnail(item.currentLayer, material)
+    end
+
+    if thumbnail then
+        content = {
+            key = "tileset:" .. tostring(material),
+            image = thumbnail.canvas,
+            width = 24,
+            height = 24
+        }
+
+    elseif utils.startsWith(material, "decals/") then
         -- getResource returns the atlas sprite. Its quad is on the sprite itself (meta has no
         -- quad), so use the sprite fields: the image is the whole atlas page otherwise.
         local sprite = atlases.getResource(material, "Gameplay")
@@ -1080,6 +1152,122 @@ local function updateHoverPreview(list)
     hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, content)
 end
 
+-- 3x3 tile thumbnail of a tileset, cached per layer/id
+local tilesetThumbnails = {}
+
+getTilesetThumbnail = function(layer, id)
+    local key = layer .. ":" .. tostring(id)
+    local cached = tilesetThumbnails[key]
+
+    if cached ~= nil then
+        return cached or nil
+    end
+
+    local meta = brushHelper.getTilerMeta(layer)
+    local tileset = meta and meta[id]
+    local path = tileset and tileset.path
+    local sprite = path and atlases.getResource(path, "Gameplay")
+
+    if not sprite or not sprite.image then
+        tilesetThumbnails[key] = false
+
+        return nil
+    end
+
+    local image = sprite.image
+
+    -- Fake tile matrix: a 3x3 block surrounded by air, so the autotiler picks the corner, edge
+    -- and filled center quads for it instead of one repeated tile
+    local blockMatrix = {
+        get = function(_, x, y)
+            if x >= 0 and x <= 2 and y >= 0 and y <= 2 then
+                return id
+            end
+
+            return "0"
+        end
+    }
+
+    local fg = layer ~= "tilesBg"
+    local canvas = love.graphics.newCanvas(24, 24)
+
+    canvas:renderTo(function()
+        love.graphics.clear(0, 0, 0, 0)
+        love.graphics.setColor(1, 1, 1, 1)
+
+        for y = 0, 2 do
+            for x = 0, 2 do
+                local quads = autotiler.getQuads(x, y, blockMatrix, tileset, "0", " ", "*", {{0, 0}}, nil, autotiler.checkTile)
+
+                if quads and quads[1] then
+                    local quad = celesteRender.getOrCacheTileSpriteQuad(celesteRender.tilesSpriteMetaCache, id, tileset.path, quads[1], fg)
+
+                    if sprite.layer then
+                        love.graphics.drawLayer(image, sprite.layer, quad, x * 8, y * 8)
+
+                    else
+                        love.graphics.draw(image, quad, x * 8, y * 8)
+                    end
+                end
+            end
+        end
+    end)
+
+    local thumbnail = {canvas = canvas, image = canvas}
+
+    tilesetThumbnails[key] = thumbnail
+
+    return thumbnail
+end
+
+-- Tile materials are tilesets: group them by source like the placement list and attach the
+-- thumbnail each row shows in front of its name
+local function getTilesetItems(materials, currentTool, currentLayer, favoritesLookup, language)
+    local entries = {}
+    local thumbnails = {}
+
+    for _, material in ipairs(materials or {}) do
+        local id = type(material) == "table" and material.name or material
+        local displayName = type(material) == "table" and material.displayName or tostring(material)
+
+        if id then
+            local modName = string.match(displayName, "^([^/]+)/")
+
+            table.insert(entries, {
+                name = id,
+                associatedMods = modName and {modName} or nil,
+                displayNameNoMods = displayName,
+                tooltipText = displayName
+            })
+
+            local thumbnail = getTilesetThumbnail(currentLayer, id)
+
+            if thumbnail then
+                thumbnails[id] = thumbnail
+            end
+        end
+    end
+
+    local items = getPathTreeItems(entries, currentTool, currentLayer, favoritesLookup, language, {
+        flat = true,
+        leafText = function(entry)
+            return entry.displayName or entry.name
+        end,
+        searchText = function(entry)
+            return entry.displayName or entry.name
+        end,
+        favoritesText = function(entry)
+            return entry.displayName or entry.name
+        end
+    })
+
+    for _, item in ipairs(items) do
+        item.thumbnail = thumbnails[item.data]
+    end
+
+    return items
+end
+
 getMaterialItems = function(layer)
     -- A rebuilt list invalidates whatever row was hovered before
     hoverPreview.hide()
@@ -1100,6 +1288,11 @@ getMaterialItems = function(layer)
             end,
             resolveOwner = true
         })
+    end
+
+    -- Tile tools list their tilesets grouped by source, with a 3x3 tile thumbnail per entry
+    if tiles.tileLayers[currentLayer] then
+        return getTilesetItems(materials, currentTool, currentLayer, favoritesLookup, language)
     end
 
     -- The debug tool lists the entities / triggers used in the map, grouped by mod
