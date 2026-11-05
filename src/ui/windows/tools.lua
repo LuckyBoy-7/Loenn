@@ -1726,8 +1726,8 @@ local function getToolSpacer()
 end
 
 -- The list rebuilds its rows from the items that are handed to it, so the separator rows can only
--- be made non interactive after the list was created. They must not react to the mouse and must
--- not be selectable (click or keyboard).
+-- be made non interactive after the list was created. They look like a normal row but never react
+-- to the mouse and can not be selected (click or keyboard).
 local function styleToolSeparators(list)
     for _, item in ipairs(list.children or {}) do
         if item.data == false then
@@ -1735,12 +1735,14 @@ local function styleToolSeparators(list)
             item._enabled = false
             item.isSeparator = true
 
-            item.style.padding = 0
-            item.style.normalBG = {}
-            item.style.disabledBG = {}
-            item.style.hoveredBG = {}
-            item.style.pressedBG = {}
-            item.style.selectedBG = {}
+            -- Keep the regular row background. Disabled rows would be drawn darker, so the
+            -- state styles are all pointed at the normal one
+            local normalBG = item.style.normalBG
+
+            item.style.disabledBG = normalBG
+            item.style.hoveredBG = normalBG
+            item.style.pressedBG = normalBG
+            item.style.selectedBG = normalBG
         end
     end
 end
