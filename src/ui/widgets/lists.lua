@@ -151,8 +151,9 @@ function listWidgets.setSelection(list, target, preventCallback, callbackRequire
         end
     end
 
-    -- Non selectable rows (headers, separators) never become the selection
-    if newSelection and (newSelection.isHeader or (newSelection.interactive and newSelection.interactive < 0)) then
+    -- Non selectable rows (headers, separators, action buttons) never become the selection
+    if newSelection and (newSelection.isHeader or newSelection.isButton
+        or (newSelection.interactive and newSelection.interactive < 0)) then
         newSelection = nil
     end
 
@@ -815,7 +816,7 @@ local function handleListKeyboardNavigation(list, key, hookOptions)
         else
             -- Skip non selectable rows (grouping header rows of tree like lists, separators, ...)
             local function isSelectable(item)
-                if not item or item.isHeader then
+                if not item or item.isHeader or item.isButton then
                     return false
                 end
 

@@ -294,10 +294,15 @@ end
 
 function toolHandler.loadInternalTools(path)
     path = path or "tools"
-    local previousToolName = persistence.toolName
 
     pluginLoader.loadPlugins(path, nil, toolHandler.loadTool)
-    toolHandler.selectTool(previousToolName)
+
+    -- Always start with the selection tool instead of restoring the last used one: loading a
+    -- heavy tool first (one with many materials) slows the first map load down and its state
+    -- could be updated before the map is ready
+    if toolHandler.tools.selection then
+        toolHandler.selectTool("selection")
+    end
 
     -- Select the first tool (alphabetically) if none is selected
     if not toolHandler.currentTool then

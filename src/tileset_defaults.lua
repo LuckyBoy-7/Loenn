@@ -74,13 +74,15 @@ local function getIdCandidates()
         index = index + 3
     end
 
-    for position = 1, #asciiIdPool do
-        table.insert(idCandidates, string.sub(asciiIdPool, position, position))
-    end
-
-    -- Then every CJK unified ideograph, which is about 20k more ids
+    -- The whole CJK block before the ASCII pool: vanilla tilesets use single ASCII characters,
+    -- so an ASCII id would shadow a vanilla tileset and make it impossible to tell them apart
+    -- (the map only stores the id). CJK ids are only exhausted after about 20k tilesets.
     for codePoint = 0x4E00, 0x9FFF do
         table.insert(idCandidates, encodeUtf8(codePoint))
+    end
+
+    for position = 1, #asciiIdPool do
+        table.insert(idCandidates, string.sub(asciiIdPool, position, position))
     end
 
     return idCandidates
@@ -172,12 +174,53 @@ local function parseTilesets(text)
     return entries
 end
 
+-- Raw <Tileset> blocks of a file, used to carry the vanilla definitions over into a mods file
+local function extractTilesetBlocks(text)
+    local blocks = {}
+    local lines = {}
+
+    for line in string.gmatch((text or "") .. "\n", "([^\n]*)\n") do
+        table.insert(lines, line)
+    end
+
+    local index = 1
+
+    while index <= #lines do
+        if string.match(lines[index], "^%s*<[Tt]ileset") then
+            local block = {lines[index]}
+
+            if not string.match(lines[index], "/>%s*$") then
+                index = index + 1
+
+                while index <= #lines do
+                    table.insert(block, lines[index])
+
+                    if string.find(string.lower(lines[index]), "</tileset", 1, true) then
+                        break
+                    end
+
+                    index = index + 1
+                end
+            end
+
+            local id = string.match(block[1], 'id%s*=%s*"([^"]*)"')
+
+            if id then
+                table.insert(blocks, {id = id, text = table.concat(block, "\n")})
+            end
+        end
+
+        index = index + 1
+    end
+
+    return blocks
+end
+
 local function getTilesetIds(text)
     local ids = {}
 
     for id in string.gmatch(text or "", 'id%s*=%s*"([^"]*)"') do
-        ids[id] = true
-    end
+        ids[id] = true    end
 
     return ids
 end
@@ -233,10 +276,23 @@ function tilesetDefaults.getMapModFolder()
     return modFolder, modName
 end
 
+-- The same message must not be pushed twice in a row (e.g. two runs of the same action)
+local lastMessage
+local lastMessageTime = 0
+
 local function notifyMessage(key, ...)
     local text = languageRegistry.getLanguage().ui.notifications[key]
+    local message = string.format(tostring(text), ...)
+    local now = love.timer.getTime()
 
-    notifications.notify(string.format(tostring(text), ...))
+    if message == lastMessage and now - lastMessageTime < 2 then
+        return
+    end
+
+    lastMessage = message
+    lastMessageTime = now
+
+    notifications.notify(message)
 end
 
 -- ---------------------------------------------------------------------------
@@ -448,6 +504,29 @@ function tilesetDefaults.collectFromMods(backgroundOnly)
     return candidates
 end
 
+local function getModDisplayName(modFolderName)
+    if not modFolderName then
+        return nil
+    end
+
+    local info = modHandler.loadedMods and modHandler.loadedMods[modFolderName]
+    local metadata = info and info.metadata
+
+    if not metadata then
+        metadata = modHandler.modMetadata and modHandler.modMetadata[modFolderName]
+    end
+
+    if metadata then
+        local names = modHandler.getModNamesFromMetadata(metadata)
+
+        if names and names[1] then
+            return names[1]
+        end
+    end
+
+    return nil
+end
+
 function tilesetDefaults.collectFromPack(backgroundOnly)
     local candidates = {}
 
@@ -467,9 +546,13 @@ function tilesetDefaults.collectFromPack(backgroundOnly)
             local sourceGroup = "celeste"
 
             if entry.sources and entry.sources[1] then
-                source = string.format("%s (%s)", entry.sources[1].mod, entry.sources[1].xml)
-                sourceGroup = string.lower(string.gsub(entry.sources[1].mod or "", "_zip$", ""))
-                sourceGroup = string.gsub(sourceGroup, "%d+$", "")
+                local modFolderName = entry.sources[1].mod or ""
+                local displayName = getModDisplayName(modFolderName) or modFolderName
+
+                -- The readable mod name is recorded (and later used for grouping), not the
+                -- archive folder name
+                source = string.format("%s (%s)", displayName, entry.sources[1].xml)
+                sourceGroup = string.lower(displayName)
             end
 
             -- Entries are filtered by file name when they are written: an entry whose name is
@@ -482,6 +565,7 @@ function tilesetDefaults.collectFromPack(backgroundOnly)
                 image = tilesetDefaults.packRoot .. "/" .. entry.file,
                 body = body,
                 template = entry.template,
+                sound = entry.sound,
                 source = source,
                 sourceGroup = sourceGroup
             })
@@ -596,7 +680,9 @@ local function getRuleFile(modFolder, layer)
 
     -- The generated rule file lives next to the mod's own graphics, in a folder named after the
     -- mod itself (the mod folder name is the one under Celeste/Mods)
-    local modFolderName = filesystem.filename(modFolder, "/")
+    -- The folder name only: modFolder is a native path, so it has to be converted first or
+    -- filename() would treat the whole path as one name
+    local modFolderName = filesystem.filename(utils.convertToUnixPath(modFolder), "/")
     local ruleName = layer == "tilesBg" and "Backgrounds.xml" or "Foregrounds.xml"
     local defaultRelative = "Graphics/" .. modFolderName .. "/" .. ruleName
 
@@ -649,9 +735,40 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
     local xmlText = readTargetFile(rulePath)
 
     if not xmlText then
-        xmlText = "<Data>\n</Data>\n"
+        -- The map now points at its own file: start from the vanilla definitions, otherwise the
+        -- vanilla tilesets would be replaced by our file instead of being extended
+        local vanillaName = layer == "tilesBg" and "BackgroundTiles.xml" or "ForegroundTiles.xml"
+        local vanillaPath = utils.joinpath(fileLocations.getCelesteDir(), "Content", "Graphics", vanillaName)
+
+        xmlText = readTargetFile(vanillaPath) or "<Data>\n</Data>\n"
 
         created = true
+    end
+
+    -- Top up the vanilla definitions. An earlier version created rule files that only contained
+    -- the imported tilesets, which silently replaced the vanilla ones: add every vanilla tileset
+    -- the file does not define yet.
+    local vanillaNameForText = layer == "tilesBg" and "BackgroundTiles.xml" or "ForegroundTiles.xml"
+    local vanillaPathForText = utils.joinpath(fileLocations.getCelesteDir(), "Content", "Graphics", vanillaNameForText)
+    local vanillaText = readTargetFile(vanillaPathForText)
+
+    if vanillaText then
+        local existingIds = getTilesetIds(xmlText)
+        local missingBlocks = {}
+
+        for _, block in ipairs(extractTilesetBlocks(vanillaText)) do
+            if not existingIds[block.id] then
+                table.insert(missingBlocks, block.text)
+            end
+        end
+
+        if #missingBlocks > 0 then
+            local insertAt = string.find(xmlText, "</Data>", 1, true)
+
+            if insertAt then
+                xmlText = string.sub(xmlText, 1, insertAt - 1) .. table.concat(missingBlocks, "\n") .. "\n" .. string.sub(xmlText, insertAt)
+            end
+        end
     end
 
     -- Ids that are already taken by the file itself (and by the entries written in this run,
@@ -659,6 +776,7 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
     -- appended to.
     local usedIds = getTilesetIds(xmlText)
     local usedNames = {}
+    local vanillaMeta = layer == "tilesBg" and celesteRender.tilesMetaBgVanilla or celesteRender.tilesMetaFgVanilla
 
     -- Keep track of tilesets that are already part of the target file
     local existingPaths = {}
@@ -772,18 +890,24 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
                         body = body:gsub("^%s*\n", "")
                     end
 
+                    local soundAttribute = ""
+
+                    if candidate.sound then
+                        soundAttribute = string.format(" sound=\"%d\"", candidate.sound)
+                    end
+
                     if copyBases[bodyKey] then
                         table.insert(blocks, string.format(
-                            "  <!-- Loenn Add Defaults: %s -->\n  <Tileset id=\"%s\" copy=\"%s\" path=\"%s\"/>\n",
-                            candidate.source or "unknown", id, copyBases[bodyKey], relative
+                            "  <!-- Loenn Add Defaults: %s -->\n  <Tileset id=\"%s\" copy=\"%s\" path=\"%s\"%s/>\n",
+                            candidate.source or "unknown", id, copyBases[bodyKey], relative, soundAttribute
                         ))
 
                     else
                         copyBases[bodyKey] = id
 
                         table.insert(blocks, string.format(
-                            "  <!-- Loenn Add Defaults: %s -->\n  <Tileset id=\"%s\" path=\"%s\">\n%s\n  </Tileset>\n",
-                            candidate.source or "unknown", id, relative, body
+                            "  <!-- Loenn Add Defaults: %s -->\n  <Tileset id=\"%s\" path=\"%s\"%s>\n%s\n  </Tileset>\n",
+                            candidate.source or "unknown", id, relative, soundAttribute, body
                         ))
                     end
 
@@ -856,6 +980,9 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
     end
 
     logging.info(string.format("[tileset-defaults] tileset meta now holds %d tilesets", metaCount))
+
+    -- Animated tiles are collected as well: vanilla, the other mods and the maps own definitions
+    tilesetDefaults.mergeAnimatedTiles(modFolder)
 
     local toolHandler = require("tools")
     local currentTool = toolHandler.currentTool
@@ -980,7 +1107,10 @@ function tilesetDefaults.keepUsed(layer, onDone, targetFolder)
 
         if string.find(lowered, "<tileset", 1, true) then
             local block = {startLine = index, lines = {line}, id = getIdOf(line)}
-            local complete = string.find(line, "/>", 1, true) ~= nil
+            -- Self closing only when the opening tag itself ends with "/>". Checking the whole
+            -- line for "/>" would match tilesets that have <set .../> children and the block
+            -- would be cut short, which left the body behind when the tileset was removed
+            local complete = string.match(line, "/>%s*$") ~= nil
 
             while not complete and index < #lines do
                 index = index + 1
@@ -997,87 +1127,96 @@ function tilesetDefaults.keepUsed(layer, onDone, targetFolder)
         index = index + 1
     end
 
-    -- Our own blocks only survive when the map uses them. A block belongs to us when the comment
-    -- written by Add Defaults sits in front of it (look a few lines back: blank lines may have
-    -- been inserted in between by hand)
-    local isGenerated = {}
-
-    for _, block in ipairs(blocks) do
-        local generated = false
-
-        for offset = 1, 3 do
-            local previous = lines[block.startLine - offset]
-
-            if not previous then
-                break
-            end
-
-            if string.find(previous, "Loenn Add Defaults:", 1, true) then
-                generated = true
-
-                break
-            end
-
-            if not string.match(previous, "^%s*$") then
-                break
-            end
-        end
-
-        isGenerated[block.startLine] = generated
+    -- Simple rule: a tileset of our own image folder ("Loenn/...") stays only when its id is used
+    -- by a tile of the map. Everything else keeps working: the authors own entries and the vanilla
+    -- tilesets are not touched. Copy="..." targets of kept entries are kept too, otherwise the
+    -- kept entry would reference a missing tileset.
+    local isOwnImagePath = function(path)
+        return path ~= nil and string.sub(path, 1, 6) == "Loenn/"
     end
 
-    for _, block in ipairs(blocks) do
-        local id = getIdOf(block.lines[1])
+    local function blockInfo(block)
+        local line = block.lines[1]
+        local id, copy = getIdOf(line)
+        local path = string.match(line, 'path%s*=%s*"([^"]*)"')
 
-        if isGenerated[block.startLine] then
-            -- A generated tileset that shadows a vanilla id: whatever the map uses under that
-            -- id is the vanilla tileset, so our block has to go
-            if vanilla[id] then
-                keep[id] = nil
-            end
-
-        elseif vanilla[id] then
-            -- Blocks that are not ours are kept when they define a vanilla id
-            keep[id] = true
-        end
-    end
-
-    -- Follow copy="..." chains of the kept tilesets
-    local changed = true
-
-    while changed do
-        changed = false
-
-        for _, block in ipairs(blocks) do
-            local id, copy = getIdOf(block.lines[1])
-
-            if keep[id] and copy and not keep[copy] then
-                keep[copy] = true
-                changed = true
-            end
-        end
+        return id, copy, path
     end
 
     local removed = 0
     local keptText = {}
     local keepPaths = {}
+    local keepCopy = {}
     local blockIndex = 1
     local lineIndex = 1
+    local keptBlocks = {}
 
-    while lineIndex <= #lines do
-        local block = blocks[blockIndex]
-        local line = lines[lineIndex]
+    -- First pass: decide which blocks stay
+    for _, block in ipairs(blocks) do
+        local id, copy, path = blockInfo(block)
+        local keepBlock
 
-        if block and lineIndex == block.startLine then
-            local id = getIdOf(line)
+        if isOwnImagePath(path) then
+            -- Our own images: keep only when used. An id that is also a vanilla id is a leftover
+            -- from an older run that did not avoid the ASCII ids: the tiles under that id belong
+            -- to the vanilla tileset, so the generated block goes away.
+            keepBlock = keep[id] == true and not vanilla[id]
+        else
+            -- Not one of our images: keep it (author entry or a vanilla definition)
+            keepBlock = true
+        end
 
-            if keep[id] then
-                local path = string.match(line, 'path%s*=%s*"([^"]*)"')
+        block.keep = keepBlock
+
+        if keepBlock then
+            table.insert(keptBlocks, block)
+
+            if path then
+                keepPaths[path] = true
+            end
+        end
+    end
+
+    -- Copy targets of kept blocks must survive as well
+    local changed = true
+
+    while changed do
+        changed = false
+
+        for _, block in ipairs(keptBlocks) do
+            local id, copy = getIdOf(block.lines[1])
+
+            if copy and not keepCopy[copy] then
+                keepCopy[copy] = true
+                changed = true
+            end
+        end
+
+        for _, block in ipairs(blocks) do
+            local id = getIdOf(block.lines[1])
+
+            if not block.keep and keepCopy[id] then
+                block.keep = true
+
+                local _, _, path = blockInfo(block)
 
                 if path then
                     keepPaths[path] = true
                 end
 
+                table.insert(keptBlocks, block)
+                changed = true
+            end
+        end
+    end
+
+    -- Second pass: rebuild the text
+    while lineIndex <= #lines do
+        local block = blocks[blockIndex]
+        local line = lines[lineIndex]
+
+        if block and lineIndex == block.startLine then
+            if block.keep then
                 for _, blockLine in ipairs(block.lines) do
                     table.insert(keptText, blockLine)
                 end
@@ -1147,6 +1286,14 @@ function tilesetDefaults.keepUsed(layer, onDone, targetFolder)
         logging.info(string.format("[tileset-defaults] removed %d unused images", removedImages))
     end
 
+    -- Animated tiles are referenced by the "sprites" attribute of the tileset rules: drop the
+    -- ones no tileset of the map asks for any more
+    local trimmedAnimated = tilesetDefaults.pruneAnimatedTiles(modFolder)
+
+    if trimmedAnimated > 0 then
+        logging.info(string.format("[tileset-defaults] removed %d unreferenced animated tiles", trimmedAnimated))
+    end
+
     -- Refresh like Ctrl+F5 so the removed images/rules are not kept alive by the atlas cache
     local debugUtils = require("debug_utils")
 
@@ -1167,6 +1314,306 @@ function tilesetDefaults.keepUsed(layer, onDone, targetFolder)
     notifyMessage("tilesetDefaultsRemoved", removed)
 
     return true, removed
+end
+
+-- ---------------------------------------------------------------------------
+-- Animated tiles
+-- ---------------------------------------------------------------------------
+
+local SPRITE_PATTERN = "<sprite%s+([^>]-)/>"
+
+-- Reads <sprite .../> entries of an AnimatedTiles.xml style file into a name -> entry map
+local function parseAnimatedSprites(text, into)
+    into = into or {}
+
+    for attributes in string.gmatch(text or "", SPRITE_PATTERN) do
+        local name = string.match(attributes, 'name%s*=%s*"([^"]*)"')
+
+        if name then
+            into[name] = {attributes = attributes}
+        end
+    end
+
+    return into
+end
+
+-- Copy of every AnimatedTiles entry the project can see, prebuilt with the tileset pack
+local function formatSprite(entry)
+    return string.format("<sprite %s/>", entry.attributes)
+end
+
+local function collectAnimatedTilesSources(modFolder)
+    local sources = {}
+    local success, entries = utils.tryrequire("assets/tile_pack/animated_tiles")
+
+    if success and entries then
+        local groups = {}
+        local order = {}
+
+        for _, entry in ipairs(entries) do
+            -- The pack stores the archive file name, the editor mounts mods as "<name>_zip"
+            local modName = entry.mod and (string.gsub(entry.mod, "%.zip$", "_zip")) or nil
+            local key = modName or "__vanilla"
+
+            if not groups[key] then
+                groups[key] = {
+                    name = modName and (getModDisplayName(modName) or modName) or "Celeste",
+                    mod = modName,
+                    text = {}
+                }
+
+                table.insert(order, key)
+            end
+
+            table.insert(groups[key].text, formatSprite(entry))
+        end
+
+        for _, key in ipairs(order) do
+            local group = groups[key]
+
+            table.insert(sources, {
+                name = group.name,
+                mod = group.mod,
+                text = "<Data>" .. table.concat(group.text) .. "</Data>"
+            })
+        end
+    end
+
+    -- The maps own file, if it is already referenced by the metadata
+    local configured = loadedState.side and loadedState.side.meta and loadedState.side.meta.AnimatedTiles
+
+    if type(configured) == "string" then
+        configured = string.gsub(configured, "%z", "")
+    end
+
+    if configured and configured ~= "" then
+        local ownPath = utils.joinpath(modFolder, (utils.convertToUnixPath(configured)))
+        local ownText = readTargetFile(ownPath)
+
+        if ownText then
+            table.insert(sources, {name = "This Mod", text = ownText, mod = nil, ownPath = ownPath})
+        end
+    end
+
+    return sources
+end
+
+-- Removes the animated tiles no tileset refers to any more. Tilesets reference them through the
+-- "sprites" attribute of their <set> rules.
+function tilesetDefaults.pruneAnimatedTiles(modFolder)
+    local meta = loadedState.side and loadedState.side.meta
+
+    if not meta then
+        return 0
+    end
+
+    local animatedRelative = meta.AnimatedTiles
+
+    if type(animatedRelative) ~= "string" then
+        return 0
+    end
+
+    animatedRelative = string.gsub(animatedRelative, "%z", "")
+
+    if animatedRelative == "" then
+        return 0
+    end
+
+    local animatedFile = utils.joinpath(modFolder, (utils.convertToUnixPath(animatedRelative)))
+    local text = readTargetFile(animatedFile)
+
+    if not text then
+        return 0
+    end
+
+    -- Every sprite name the foreground and background tileset files still use
+    local referenced = {}
+
+    for _, key in ipairs({"ForegroundTiles", "BackgroundTiles"}) do
+        local ruleRelative = meta[key]
+
+        if type(ruleRelative) == "string" then
+            ruleRelative = string.gsub(ruleRelative, "%z", "")
+
+            if ruleRelative ~= "" then
+                local ruleText = readTargetFile(utils.joinpath(modFolder, (utils.convertToUnixPath(ruleRelative))))
+
+                for list in string.gmatch(ruleText or "", 'sprites%s*=%s*"([^"]*)"') do
+                    for spriteName in string.gmatch(list, "[^,%s]+") do
+                        referenced[spriteName] = true
+                    end
+                end
+            end
+        end
+    end
+
+    local kept = {}
+    local removed = 0
+
+    for attributes in string.gmatch(text, "<sprite%s+([^>]-)/>") do
+        local name = string.match(attributes, 'name%s*=%s*"([^"]*)"')
+
+        if name and referenced[name] then
+            table.insert(kept, string.format("  <sprite %s/>\n", attributes))
+
+        else
+            removed = removed + 1
+        end
+    end
+
+    if removed == 0 or tilesetDefaults.dryRun then
+        return removed
+    end
+
+    writeTargetFile(animatedFile, "<Data>\n" .. table.concat(kept) .. "</Data>\n")
+
+    return removed
+end
+
+-- Merges every AnimatedTiles.xml into the mods own file. The images the entries point to are
+-- copied along, otherwise the entries would reference sprites of other mods.
+function tilesetDefaults.mergeAnimatedTiles(modFolder, onDone)
+    local modFolderName = filesystem.filename(utils.convertToUnixPath(modFolder), "/")
+    local targetRelative = "Graphics/" .. modFolderName .. "/AnimatedTiles.xml"
+    local targetPath = utils.joinpath(modFolder, (utils.convertToUnixPath(targetRelative)))
+
+    local sources = collectAnimatedTilesSources(modFolder)
+    local entries = {}
+    local order = {}
+
+    for _, source in ipairs(sources) do
+        for name, entry in pairs(parseAnimatedSprites(source.text)) do
+            if not entries[name] then
+                entries[name] = {sources = {}}
+                table.insert(order, name)
+            end
+
+            -- Later sources win: the maps own definitions must stay untouched. All sources are
+            -- kept around so the frame images can be looked up in any of them.
+            table.insert(entries[name].sources, source)
+            entries[name].attributes = entry.attributes
+        end
+    end
+
+    if #order == 0 then
+        return 0
+    end
+
+    -- Copy the frame images of the entries into the mod. They live in the prebuilt pack (one
+    -- folder per source mod) so the mod does not depend on other mods being installed.
+    local copiedFrames = 0
+    local missingFrames = 0
+
+    local function sanitizeName(value)
+        return (string.gsub(value or "", "[^%w_%-%.]", "_"))
+    end
+
+    local function getModSlug(modFile)
+        local base = filesystem.filename(utils.convertToUnixPath(modFile or ""), "/")
+        base = string.gsub(base, "%.[^%.]+$", "")
+        -- Mounted archive folders carry a "_zip" suffix the pack folder name does not have
+        base = string.gsub(base, "[_%.]zip$", "")
+        base = string.gsub(base, "[_%.]folder$", "")
+        base = string.gsub(base, "'", "")
+        base = sanitizeName(base)
+
+        return base ~= "" and base or nil
+    end
+
+    for _, name in ipairs(order) do
+        local entry = entries[name]
+        local path = string.match(entry.attributes, 'path%s*=%s*"([^"]*)"')
+
+        if path then
+            local folder = string.match(path, "^(.*)/") or ""
+            local baseName = string.lower(string.match(path, "([^/]+)$") or path)
+
+            -- Prefer the pack copy: the source mod may be gone, but the pack keeps the artwork
+            local copied = false
+
+            -- The pack stores the frames without the "animatedTiles/" prefix
+            local packRelative = string.gsub(folder, "^[Aa][Nn][Ii][Mm][Aa][Tt][Ee][Dd][Tt][Ii][Ll][Ee][Ss]/", "")
+
+            local function copyFramesFromPack(packFolder)
+                if copied or not love.filesystem.getInfo(packFolder) then
+                    return
+                end
+
+                for _, frame in ipairs(love.filesystem.getDirectoryItems(packFolder)) do
+                    local lowers = string.lower(frame)
+
+                    if string.sub(lowers, 1, #baseName) == baseName and string.match(lowers, "%.png$") then
+                        local relative = "Graphics/Atlases/Gameplay/" .. folder .. "/" .. frame
+                        local target = utils.joinpath(modFolder, (utils.convertToUnixPath(relative)))
+                        local bytes = utils.readAll(packFolder .. "/" .. frame, "rb", true)
+
+                        if bytes and not fileExists(target) and writeTargetFile(target, bytes) then
+                            copiedFrames = copiedFrames + 1
+                        end
+
+                        copied = true
+                    end
+                end
+            end
+
+            -- First the mods the definition came from
+            for index = #entry.sources, 1, -1 do
+                local modFile = entry.sources[index].mod
+                local slug = modFile and getModSlug(modFile)
+
+                if slug then
+                    copyFramesFromPack(tilesetDefaults.packRoot .. "/images/animated_tiles/" .. slug .. "/" .. packRelative)
+                end
+            end
+
+            -- Asset packs ship the frames without defining the sprites themselves, so fall back to
+            -- looking through every mod folder of the pack
+            if not copied then
+                -- love.filesystem needs forward slashes: joinpath would produce backslashes here
+                local packRoot = tilesetDefaults.packRoot .. "/images/animated_tiles"
+
+                for _, slug in ipairs(love.filesystem.getDirectoryItems(packRoot)) do
+                    copyFramesFromPack(packRoot .. "/" .. slug .. "/" .. packRelative)
+
+                    if copied then
+                        break
+                    end
+                end
+            end
+
+            if not copied then
+                -- Vanilla only sprites are expected here: their frames ship with the game
+                missingFrames = missingFrames + 1
+            end
+        end
+    end
+
+    local blocks = {"<Data>\n"}
+
+    for _, name in ipairs(order) do
+        table.insert(blocks, string.format("  <sprite %s/>\n", entries[name].attributes))
+    end
+
+    table.insert(blocks, "</Data>\n")
+
+    if not writeTargetFile(targetPath, table.concat(blocks)) then
+        notifyMessage("tilesetDefaultsWriteFailed")
+
+        return false
+    end
+
+    if loadedState.side and loadedState.side.meta then
+        loadedState.side.meta.AnimatedTiles = utils.convertToUnixPath(targetRelative)
+    end
+
+    logging.info(string.format("[tileset-defaults] animated tiles: %d entries from %d sources, %d frames copied, %d without frames",
+        #order, #sources, copiedFrames, missingFrames))
+
+    if onDone then
+        onDone(#order)
+    end
+
+    return #order
 end
 
 return tilesetDefaults

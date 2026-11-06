@@ -199,6 +199,13 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
     end
 
     table.sort(entries, function(lhs, rhs)
+        local lhsPriority = options.sourcePriority and options.sourcePriority(lhs.sourceKey) or nil
+        local rhsPriority = options.sourcePriority and options.sourcePriority(rhs.sourceKey) or nil
+
+        if lhsPriority and rhsPriority and lhsPriority ~= rhsPriority then
+            return lhsPriority < rhsPriority
+        end
+
         if lhs.sourceKey ~= rhs.sourceKey then
             -- Vanilla materials first
             if lhs.sourceKey == "" then
@@ -680,6 +687,74 @@ local function materialDataToElement(list, data, element)
     end
 
     if data then
+        -- Button rows are actions, not materials: they only run their onPress and never take a
+        -- selection or a thumbnail. Rows are recycled, so everything a material row may have left
+        -- behind (thumbnail, spacer, extra height, favorite icon) is reset here.
+        if data.isButton then
+            if element._thumbnailBasePadding == nil then
+                element._thumbnailBasePadding = element.style.padding or 4
+            end
+
+            if element._thumbnailSpacer then
+                element._thumbnailSpacer:removeSelf()
+                element._thumbnailSpacer = nil
+            end
+
+            element._thumbnailCanvas = nil
+            element.isButton = true
+            element.itemFavorited = false
+            element.text = data.text or ""
+            element.data = data
+            element.tooltipText = data.tooltip
+            element.itemData = data
+            element.interactive = 1
+            element.minHeight = thumbnailSize + thumbnailPadding * 2
+            element.style.padding = thumbnailPadding
+            element.style.spacing = 6
+            element.style.normalBG = {0.13, 0.13, 0.13, 0.9}
+            element.style.disabledBG = {0.05, 0.05, 0.05, 0.7}
+
+            -- Rows are recycled: a header may have left the bold flag behind
+            if element.label then
+                element.label._bold = false
+            end
+
+            listItemUtils.clearIcon(element)
+
+            if not element._buttonHooked then
+                element._buttonHooked = true
+
+                element:hook({
+                    -- Vertical centering only: rows are laid out left aligned, so a horizontal
+                    -- centering would shift the text by half of its own width and the two buttons
+                    -- would end up with different left margins
+                    layoutLate = function(orig, self, ...)
+                        orig(self, ...)
+
+                        local label = self.label
+                        local isButton = self.itemData and self.itemData.isButton
+
+                        if isButton and label and label.height and (self.height or 0) > 0 then
+                            label.realY = math.floor((self.height - label.height) * 0.5)
+                        end
+                    end,
+
+                    onPress = function(orig, self, x, y, button, ...)
+                        if button == 1 and self.itemData and self.itemData.onPress then
+                            self.itemData.onPress()
+
+                            return true
+                        end
+
+                        return orig(self, x, y, button, ...)
+                    end
+                })
+            end
+
+            return element
+        end
+
+        element.isButton = nil
         local tileList = tiles.tileLayers[toolHandler.getLayer() or ""] ~= nil
         local indent = data.indent or 0
         local text = data.text or ""
@@ -1301,27 +1376,27 @@ local function getRulesSourceGroups(currentLayer)
     local meta = loadedState.side and loadedState.side.meta
 
     if not meta then
-        return {}
+        return {}, {}
     end
 
     local key = currentLayer == "tilesBg" and "BackgroundTiles" or "ForegroundTiles"
     local configured = meta[key]
 
     if type(configured) ~= "string" then
-        return {}
+        return {}, {}
     end
 
     configured = string.gsub(configured, "%z", "")
 
     if configured == "" then
-        return {}
+        return {}, {}
     end
 
     local filename = modHandler.commonModContent .. "/" .. utils.convertToUnixPath(configured)
     local text = utils.readAll(filename, "rb", true)
 
     if not text then
-        return {}
+        return {}, {}
     end
 
     local groups = {}
@@ -1334,27 +1409,25 @@ local function getRulesSourceGroups(currentLayer)
             source = comment
         end
 
+        -- The path has to be read before the source is reset below: the comment sits on the line
+        -- before its tileset, so the association is valid for this line
         local tilesetPath = string.match(line, '<Tileset[^>]-path%s*=%s*"([^"]*)"')
 
         if tilesetPath and source then
-            local group = string.lower(string.match(source, "^([^%s%(]+)") or source)
+            -- The comment stores the readable mod name: keep it as the group label
+            local group = string.match(source, "^(.-)%s*%(") or source
+            group = string.match(group, "^%s*(.-)%s*$") or group
 
-            group = string.gsub(group, "%.zip$", "")
-            group = string.gsub(group, "_zip$", "")
-            group = string.gsub(group, "_%x+$", "")
-            group = string.gsub(group, "_%x+$", "")
-
-            if string.match(group, "spoo+ky") then
-                group = "spoooky"
-
-            elseif string.find(group, "underdragon", 1, true) then
-                group = "underdragon"
-
-            elseif group == "" or string.find(group, "celeste", 1, true) then
-                group = "celeste"
+            if group == "" then
+                group = "Celeste/Vanilla"
             end
 
             groups[tilesetPath] = group
+        end
+
+        -- A tileset line without a preceding comment starts the authors own tilesets
+        if not comment and string.match(line, "^%s*<Tileset") then
+            source = nil
         end
     end
 
@@ -1374,7 +1447,16 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
     -- contain any
     local vanillaLabel = "Celeste/Vanilla"
     local ownLabel = "This Mod"
-    local AIR_ID = "0"
+
+    -- Grouping is done by the image path, not by the id: ids are just single characters and can be
+    -- reused, while the path tells where the tileset really comes from
+    local vanillaPaths = {}
+
+    for _, tileset in pairs(vanillaMeta or {}) do
+        if tileset.path then
+            vanillaPaths[string.gsub(tileset.path, "^tilesets/", "")] = true
+        end
+    end
 
     for _, material in ipairs(materials or {}) do
         local id = type(material) == "table" and material.name or material
@@ -1388,11 +1470,13 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
             local rulePath = tilesetPath and string.gsub(tilesetPath, "^tilesets/", "")
             local modName
 
-            if id == AIR_ID or (vanillaMeta and vanillaMeta[id]) then
+            -- Grouping by path: vanilla path = vanilla tileset, a path recorded by Add Defaults
+            -- belongs to that source, everything else was made by the map author
+            if not rulePath or vanillaPaths[rulePath] then
                 modName = vanillaLabel
 
             else
-                modName = rulePath and sourceGroups[rulePath]
+                modName = sourceGroups[rulePath]
 
                 if not modName then
                     modName = string.match(displayName, "^([^/]+)/") or ownLabel
@@ -1447,6 +1531,20 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
 
     local items = getPathTreeItems(entries, currentTool, currentLayer, favoritesLookup, language, {
         flat = true,
+        -- Vanilla first, then the tilesets of this mod, then every other source alphabetically
+        sourcePriority = function(sourceKey)
+            local lower = string.lower(sourceKey or "")
+
+            if lower == "" or lower == "celeste/vanilla" then
+                return 0
+            end
+
+            if lower == "this mod" then
+                return 1
+            end
+
+            return 100
+        end,
         leafText = function(entry)
             return entry.displayName or entry.name
         end,
@@ -1466,16 +1564,28 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
         return items
     end
 
-    -- Entry which copies every mod's tilesets (and the bundled ones) into this mod
+    -- Button rows: they run an action on click and are never selected
+    local function refreshAfterAction(layer)
+        resetTilesetThumbnails()
+        toolWindow.materialList:updateItems(getMaterialItems(layer))
+    end
+
     local addDefaultsItem = {
         text = tostring(language.ui.tools_window.add_defaults),
         textNoMods = "",
         data = addDefaultsMaterial,
         indent = 0,
         tooltip = tostring(language.ui.tools_window.add_defaults_description),
-        isAddDefaults = true,
+        isButton = true,
         sortIndex = 0,
-        ancestors = {}
+        ancestors = {},
+        onPress = function()
+            local layer = toolHandler.getLayer()
+
+            require("tileset_defaults").addDefaults(layer, function()
+                refreshAfterAction(layer)
+            end)
+        end
     }
 
     table.insert(items, 1, addDefaultsItem)
@@ -1487,9 +1597,16 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
         data = onlyKeepUsedMaterial,
         indent = 0,
         tooltip = tostring(language.ui.tools_window.only_keep_used_description),
-        isOnlyKeepUsed = true,
+        isButton = true,
         sortIndex = 0.5,
-        ancestors = {}
+        ancestors = {},
+        onPress = function()
+            local layer = toolHandler.getLayer()
+
+            require("tileset_defaults").keepUsed(layer, function()
+                refreshAfterAction(layer)
+            end)
+        end
     }
 
     table.insert(items, 2, onlyKeepUsedItem)
@@ -1638,7 +1755,10 @@ getMaterialItems = function(layer)
             currentTool = currentTool,
             currentToolName = currentTool.name,
             currentLayer = currentLayer,
-            associatedMods = material.associatedMods
+            associatedMods = material.associatedMods,
+            -- Button rows run an action on click and never become the selection
+            isButton = materialType == "table" and material.isButton or nil,
+            onPress = materialType == "table" and material.onPress or nil
         }
 
         table.insert(materialItems, item)
@@ -1658,28 +1778,6 @@ end
 local function materialCallback(list, material)
     -- Header rows of the decal path tree have no material behind them
     if not material then
-        return
-    end
-
-    if material == addDefaultsMaterial then
-        local layer = toolHandler.getLayer()
-
-        require("tileset_defaults").addDefaults(layer, function()
-            resetTilesetThumbnails()
-            toolWindow.materialList:updateItems(getMaterialItems(layer))
-        end)
-
-        return
-    end
-
-    if material == onlyKeepUsedMaterial then
-        local layer = toolHandler.getLayer()
-
-        require("tileset_defaults").keepUsed(layer, function()
-            resetTilesetThumbnails()
-            toolWindow.materialList:updateItems(getMaterialItems(layer))
-        end)
-
         return
     end
 

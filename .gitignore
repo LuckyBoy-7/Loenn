@@ -16,6 +16,7 @@
 /src/celesteResources/*
 /src/*.dll
 /src/*.so
+/src/assets/tile_pack/*
 /docs/*
 
 # local handoff / memory notes
