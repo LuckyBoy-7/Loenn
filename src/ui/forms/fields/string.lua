@@ -285,6 +285,24 @@ function stringField.getElement(name, value, options)
         label.tooltipText = options.tooltipText
     end
 
+    -- Long values are clipped to the field width: show them as a tooltip on hover so the full
+    -- content stays readable without needing a wider input
+    field:hook({
+        layoutLate = function(orig, self, ...)
+            orig(self, ...)
+
+            local text = self.text or ""
+            local font = self.label and self.label.style.font
+
+            if font and text ~= "" and font:getWidth(text) > (self.innerWidth or 0) then
+                self.tooltipText = text
+
+            else
+                self.tooltipText = nil
+            end
+        end
+    })
+
     label.centerVertically = true
 
     formField.label = label

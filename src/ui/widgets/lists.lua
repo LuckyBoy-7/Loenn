@@ -255,8 +255,9 @@ local function moveListItem(fromList, fromListItem, toList, toListItem, fromInde
         return false
     end
 
-    -- No change
-    if sameList and fromIndex == toIndex then
+    -- No index change. Custom drop handlers still have to run: dropping onto a group is a
+    -- structural move even when the insertion index equals the source index.
+    if sameList and fromIndex == toIndex and not fromList.listItemDragged then
         return false
     end
 
@@ -357,16 +358,19 @@ local function handleItemDrag(item, x, y)
 
         if hoveredList._dragHoveredIndex ~= hoveredIndex then
             if hoveredList.listItemCanInsert then
-                local allowed = hoveredList.listItemCanInsert(ourList, ourListItem, hoveredList, hoveredListItem, ourIndex, hoveredIndex)
+                local allowed, hideInsertLine = hoveredList.listItemCanInsert(ourList, ourListItem, hoveredList, hoveredListItem, ourIndex, hoveredIndex)
 
                 hoveredList._dragInsertionAllowed = allowed
+                hoveredList._dragHideInsertLine = hideInsertLine
 
             else
                 hoveredList._dragInsertionAllowed = true
+                hoveredList._dragHideInsertLine = nil
             end
         end
 
         hoveredList._dragHoveredIndex = hoveredIndex
+        hoveredList._dragHoveredItem = hoveredListItem
         item._previousHovered = hoveredList
 
         return true
@@ -380,11 +384,16 @@ local function handleItemDragFinish(item, x, y)
     if hoveredList then
         local ourIndex = findChildIndex(ourList, ourListItem)
         local hoveredIndex = hoveredList._dragHoveredIndex
+        -- The hovered item is part of the callbacks: without it, drop handlers cannot tell which
+        -- row was targeted (and everything looks like a plain reorder)
+        local hoveredListItem = hoveredList._dragHoveredItem
         local moved = moveListItem(ourList, ourListItem, hoveredList, hoveredListItem, ourIndex, hoveredIndex)
         local sameList = ourList == hoveredList
 
         hoveredList._previousHovered = nil
         hoveredList._dragHoveredIndex = nil
+        hoveredList._dragHoveredItem = nil
+        hoveredList._dragHideInsertLine = nil
 
         ourList:reflow()
         ourList:redraw()
@@ -403,7 +412,7 @@ local function prepareListDragHook()
         draw = function(orig, self)
             orig(self)
 
-            local renderInsertLine = self._dragInsertionAllowed
+            local renderInsertLine = self._dragInsertionAllowed and not self._dragHideInsertLine
 
             if not renderInsertLine then
                 return

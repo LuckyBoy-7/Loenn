@@ -34,14 +34,16 @@ local function columnWidthHook(grids, columnIndex)
     end
 end
 
-function gridElement.getGrid(elements, columnCount)
+function gridElement.getGrid(elements, columnCount, options)
     local columns = {}
     local columnElements = {}
     local gridStyle = uiElements.grid.__default.style or {}
 
-    local outerPadding = gridStyle.outerPadding or 8
-    local columnSpacing = gridStyle.columnSpacing or gridStyle.spacing or 8
-    local rowSpacing = gridStyle.rowSpacing or gridStyle.spacing or 8
+    options = options or {}
+
+    local outerPadding = options.outerPadding or gridStyle.outerPadding or 8
+    local columnSpacing = options.columnSpacing or gridStyle.columnSpacing or gridStyle.spacing or 8
+    local rowSpacing = options.rowSpacing or gridStyle.rowSpacing or gridStyle.spacing or 8
 
     local column = 1
     local rows = 1

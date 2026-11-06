@@ -154,6 +154,22 @@ local function defaultShowMenu(customButton)
     end
 end
 
+-- True when the point is inside the element or one of its children. The context menu opens on
+-- release, so releasing outside the item after dragging away must not open it.
+local function isPointInside(element, x, y)
+    local hovering = ui.root and ui.root:getChildAt(x, y)
+
+    while hovering do
+        if hovering == element then
+            return true
+        end
+
+        hovering = hovering.parent
+    end
+
+    return false
+end
+
 function contextMenuHandler.addContextMenu(target, widget, options)
     options = options or {}
 
@@ -161,7 +177,7 @@ function contextMenuHandler.addContextMenu(target, widget, options)
 
     target:hook({
         onRelease = function(orig, self, x, y, button, istouch)
-            if shouldShowMenu(self, x, y, button, istouch) then
+            if shouldShowMenu(self, x, y, button, istouch) and isPointInside(self, x, y) then
                 contextMenuHandler.showContextMenu(widget, options)
 
             else

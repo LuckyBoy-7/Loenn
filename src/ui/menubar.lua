@@ -232,7 +232,6 @@ menubar.menubar = {
         {"view_always_show_trigger_nodes", toggleAlwaysShowNodes, "checkbox", getAlwaysShowNodes},
     }},
     {"map", {
-        {"stylegrounds", stylegroundEditor.editStylegrounds},
         {"metadata", metadataEditor.editMetadata},
         {"dependencies", dependencyEditor.editDependencies},
         {"save_map_image", saveMapImage},

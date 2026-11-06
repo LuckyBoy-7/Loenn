@@ -129,8 +129,68 @@ function forms.getFormFieldsGrid(formFields, options)
     local column = 1
     local rows = 0
 
+    -- Paired layout: the label column width is the width of the longest label that actually lands
+    -- in that column, so short label columns do not inherit the width of some long label from a
+    -- different column. Inputs get a fixed width, which makes them end at the column's right edge.
+    local alignedInputWidth = 160 * (configs.ui.theme.uiScale or 1)
+    local fieldColumn = {}
+    local columnLabelWidth = {}
+
+    if options.pairFieldElements then
+        -- First pass: simulate the placement below to know which column every field starts in
+        local probeColumn = 1
+
+        for _, field in ipairs(formFields) do
+            local fieldWidth = field.width or 1
+
+            if field.breakRow then
+                probeColumn = 1
+            end
+
+            if not field._hidden then
+                if probeColumn + fieldWidth - 1 > columnCount then
+                    probeColumn = 1
+                end
+
+                fieldColumn[field] = probeColumn
+
+                local label = field.label
+                local font = label and label.style and label.style.font
+
+                if font then
+                    local width = math.ceil(font:getWidth(label.text or "")) + 4
+
+                    columnLabelWidth[probeColumn] = math.max(columnLabelWidth[probeColumn] or 0, width)
+                end
+
+                probeColumn = probeColumn + fieldWidth
+            end
+        end
+    end
+
     for _, field in ipairs(formFields) do
         local fieldWidth = field.width or 1
+        local fieldElements = field.elements
+
+        if options.pairFieldElements and not field._hidden then
+            local label = field.label
+
+            if label then
+                -- width is the manual size used by calcSize, forceWidth alone gets recomputed
+                local labelWidth = columnLabelWidth[fieldColumn[field]] or 0
+
+                label.width = labelWidth
+                label.minWidth = labelWidth
+            end
+
+            -- Everything after the label is an input, a dropdown or an enum list
+            for index = 2, #fieldElements do
+                local input = fieldElements[index]
+
+                input.width = alignedInputWidth
+                input.minWidth = alignedInputWidth
+            end
+        end
 
         if field.breakRow then
             for i = column, columnCount do
@@ -152,7 +212,7 @@ function forms.getFormFieldsGrid(formFields, options)
                 rows += 1
             end
 
-            for _, element in ipairs(field.elements) do
+            for _, element in ipairs(fieldElements) do
                 table.insert(elements, element)
 
                 column += 1
@@ -160,7 +220,11 @@ function forms.getFormFieldsGrid(formFields, options)
         end
     end
 
-    return gridElement.getGrid(elements, columnCount)
+    return gridElement.getGrid(elements, columnCount, {
+        columnSpacing = options.gridColumnSpacing,
+        rowSpacing = options.gridRowSpacing,
+        outerPadding = options.gridOuterPadding
+    })
 end
 
 function forms.getFormBodyGroups(data, options)

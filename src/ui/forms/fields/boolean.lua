@@ -37,14 +37,9 @@ end
 function booleanField.getElement(name, value, options)
     local formField = {}
 
-    local minWidth = formFieldUtils.getMinMaxWidth(options)
-
-    -- No maximum width: the label is part of the checkbox row, so capping the
-    -- row would let long labels run under the next option instead of widening
-    -- the column
-    local checkbox = uiElements.checkbox(options.displayName or name, value, fieldChanged(formField)):with({
-        minWidth = minWidth
-    })
+    -- No fixed minimum width: a checkbox sizes to its own label, so it does not widen the grid
+    -- column it happens to land in (which used to push labels away from their inputs)
+    local checkbox = uiElements.checkbox(options.displayName or name, value, fieldChanged(formField))
 
 
     if options.tooltipText then

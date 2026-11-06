@@ -70,7 +70,7 @@ function tabbedWindow.createWindow(title, tabs, options)
     local windowContent = uiElements.column({
         tabsElement,
     }):with({
-        minWidth = 600
+        minWidth = options.minWidth or 600
     }):with(uiUtils.fillHeight(respectSiblings))
 
     ui.runLate(function()

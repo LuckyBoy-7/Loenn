@@ -703,14 +703,36 @@ local function materialDataToElement(list, data, element)
             element._thumbnailCanvas = nil
             element.isButton = true
             element.itemFavorited = false
-            element.text = data.text or ""
+
+            -- Button rows still take part in the hierarchy: keep the indentation below a header
+            local indent = data.indent or 0
+            local text = data.text or ""
+
+            if indent > 0 and not text:find(decalPathIndent, 1, true) then
+                text = string.rep(decalPathIndent, indent) .. text
+            end
+
+            element.text = text
             element.data = data
             element.tooltipText = data.tooltip
             element.itemData = data
             element.interactive = 1
-            element.minHeight = thumbnailSize + thumbnailPadding * 2
-            element.style.padding = thumbnailPadding
-            element.style.spacing = 6
+
+            -- Tile rows are taller because of their thumbnail; every other list keeps the stock
+            -- row height, otherwise the mixed heights make scrolling twitch
+            local tileList = tiles.tileLayers[toolHandler.getLayer() or ""] ~= nil
+
+            if tileList then
+                element.minHeight = thumbnailSize + thumbnailPadding * 2
+                element.style.padding = thumbnailPadding
+                element.style.spacing = 6
+
+            else
+                element.minHeight = -1
+                element.style.padding = element._thumbnailBasePadding or 4
+                element.style.spacing = 4
+            end
+
             element.style.normalBG = {0.13, 0.13, 0.13, 0.9}
             element.style.disabledBG = {0.05, 0.05, 0.05, 0.7}
 
@@ -1614,6 +1636,11 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
     return items
 end
 
+-- Building the stylegrounds entries resolves display names and source mods, which is expensive:
+-- keep them around so list rebuilds stay cheap
+local stylegroundsMaterialsCache
+local stylegroundsWindowModule
+
 getMaterialItems = function(layer)
     -- A rebuilt list invalidates whatever row was hovered before
     hoverPreview.hide()
@@ -1626,6 +1653,119 @@ getMaterialItems = function(layer)
     local favorites = toolUtils.getPersistenceFavorites(currentTool, currentLayer) or {}
     local favoritesLookup = table.flip(favorites)
     local language = languageRegistry.getLanguage()
+
+    -- Stylegrounds: one entry per style kind (Parallax, Group and every registered effect), grouped
+    -- by the mod they come from exactly like the trigger list.
+    if currentTool and currentTool.name == "stylegrounds" then
+        local effects = require("effects")
+        local modHandler = require("mods")
+
+        if not stylegroundsWindowModule then
+            stylegroundsWindowModule = require("ui.windows.stylegrounds_window")
+        end
+
+        if not stylegroundsMaterialsCache then
+            local materials = {}
+
+            -- effects.associatedMods returns a list for some handlers but a plain mod name string
+            -- for others; getPathTreeItems expects a list
+            local function normalizeMods(mods)
+                if type(mods) == "string" then
+                    return {mods}
+                end
+
+                if type(mods) == "table" and #mods > 0 then
+                    return mods
+                end
+            end
+
+            table.insert(materials, {
+                name = "parallax",
+                displayNameNoMods = "Parallax"
+            })
+
+            local effectNames = {}
+
+            for effectName in pairs(effects.registeredEffects or {}) do
+                table.insert(effectNames, effectName)
+            end
+
+            table.sort(effectNames)
+
+            for _, effectName in ipairs(effectNames) do
+                local style = {_name = effectName}
+                local handler = effects.registeredEffects[effectName]
+                local mods = normalizeMods(effects.associatedMods(style))
+
+                -- Handlers whose metadata could not be resolved still know the file they were
+                -- loaded from: "$<mod folder>$/Loenn/effects/..."
+                if not mods and handler and handler._loadedFrom then
+                    local folderName = string.match(handler._loadedFrom, "^%$([^%$]+)%$")
+
+                    if folderName then
+                        local modInfo = modHandler.loadedMods and modHandler.loadedMods[folderName]
+
+                        mods = {modInfo and modInfo.name or folderName}
+                    end
+                end
+
+                local displayName = tostring(effects.displayName(language, style))
+                local modsString = modHandler.formatAssociatedMods(language, mods)
+
+                -- The source is shown by the header, so strip it from the entry text
+                if modsString and modsString ~= "" then
+                    local literal = string.gsub(modsString, "[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")
+
+                    displayName = string.gsub(displayName, "%s*" .. literal .. "%s*$", "")
+                end
+
+                table.insert(materials, {
+                    name = "effect:" .. effectName,
+                    effectName = effectName,
+                    displayNameNoMods = displayName,
+                    associatedMods = mods
+                })
+            end
+
+            stylegroundsMaterialsCache = materials
+        end
+
+        local items = getPathTreeItems(stylegroundsMaterialsCache, currentTool, currentLayer,
+            favoritesLookup, language, {
+                flat = true,
+                leafText = function(entry)
+                    return entry.displayName
+                end,
+                searchText = function(entry)
+                    return entry.displayName
+                end,
+                favoritesText = function(entry)
+                    return entry.displayName
+                end
+            })
+
+        -- Rows stay action buttons: clicking adds a style instead of selecting the row
+        for _, item in ipairs(items) do
+            if not item.isSource and not item.isFavoritesHeader and item.data then
+                local key = tostring(item.data)
+                local effectName = string.match(key, "^effect:(.+)$")
+                local kind = effectName and "effect" or key
+
+                item.isButton = true
+                item.onPress = function()
+                    stylegroundsWindowModule.addStyleOfType(kind, effectName)
+                end
+            end
+        end
+
+        -- No fixed row height here: this list mixes source headers and normal rows. A leftover
+        -- elementSize from the tile list makes the scroll position twitch.
+        if toolWindow.materialList then
+            toolWindow.materialList.style.elementSize = false
+        end
+
+        return items
+    end
 
     if layersWithDecalPaths[currentLayer] then
         return getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, {
@@ -1828,6 +1968,13 @@ end
 
 local function getLayerItems(toolName)
     local language = languageRegistry.getLanguage()
+    local tool = toolHandler.tools[toolName]
+
+    -- Tools which manage their own lists (room, stylegrounds) do not list layers below the entry
+    if tool and tool.hideLayers then
+        return {}
+    end
+
     local layers = toolHandler.getLayers(toolName) or {}
     local layerItems = {}
 
@@ -2322,6 +2469,7 @@ local defaultToolOrder = 1000
 -- no hover, no click, no selection and no keyboard navigation.
 local toolSeparatorsBefore = {
     selection = true,
+    stylegrounds = true,
     debug = true
 }
 

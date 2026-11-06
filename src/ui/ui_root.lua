@@ -15,6 +15,19 @@ local mainColumn
 local windowGroup
 
 function uiRoot.updateWindows(windows)
+    -- Pinned panels are part of the same draw list as the free windows. Keep the panels first so
+    -- they are drawn below every floating window, no matter which one was clicked last.
+    table.sort(windows, function(a, b)
+        local aPinned = a._pinnedEdge ~= nil
+        local bPinned = b._pinnedEdge ~= nil
+
+        if aPinned ~= bPinned then
+            return aPinned
+        end
+
+        return false
+    end)
+
     if not windowGroup then
         windowGroup = uiElements.group(
             windows
