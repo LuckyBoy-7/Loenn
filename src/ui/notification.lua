@@ -302,7 +302,55 @@ local function getDuration(duration)
     return notificationPopup.defaultDuration
 end
 
+-- Notifications that ask for a click are built from a widget function; plain text ones are
+-- strings. While such an interactive notification is visible, text notifications are suppressed
+-- entirely, so they cannot cover or distract from the one that needs an answer.
+local function isInteractiveNotification(target)
+    return target.popup ~= nil and type(target.popup.widget) == "function"
+end
+
+local function hasInteractiveNotification()
+    for _, target in ipairs(notificationWindows) do
+        if isInteractiveNotification(target) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function clearTextNotifications()
+    for i = #notificationWindows, 1, -1 do
+        local target = notificationWindows[i]
+
+        if not isInteractiveNotification(target) then
+            table.remove(notificationWindows, i)
+
+            if activeNotification == target then
+                activeNotification = false
+            end
+        end
+    end
+
+    notificationGroup:reflow()
+
+    if ui.root then
+        ui.root:recollect()
+    end
+end
+
 function notificationPopup.notify(widget, duration, settings)
+    local interactive = type(widget) == "function"
+
+    if interactive then
+        -- A notification that needs a click replaces the plain text ones in front of it
+        clearTextNotifications()
+
+    elseif hasInteractiveNotification() then
+        -- Text notifications are pointless while something waits for a click
+        return
+    end
+
     local popup = {
         widget = widget,
         durations = {
