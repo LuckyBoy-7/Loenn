@@ -1816,6 +1816,9 @@ function stylegroundWindow.addStyleOfType(kind, effectName, foreground)
 
     else
         style = parallaxStruct.decode({})
+        -- New parallax layers start with a valid texture, so the preview and the row name work
+        -- right away instead of showing "Parallax - nil"
+        style.texture = "bgs/00/bg0"
     end
 
     table.insert(styles, style)
