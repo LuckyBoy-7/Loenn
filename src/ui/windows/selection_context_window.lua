@@ -58,7 +58,7 @@ local function getWindowTitle(language, selections, bestSelection)
     return table.concat(titleParts, " - ")
 end
 
-function contextWindow.saveChangesCallback(room, selections, dummyData)
+function contextWindow.saveChangesCallback(room, selections, dummyData, bestSelection)
     return function(formFields)
         local newData = form.getFormData(formFields)
         local layers = selectionUtils.selectionTargetLayers(selections)
@@ -88,6 +88,32 @@ function contextWindow.saveChangesCallback(room, selections, dummyData)
         end, room, layers, "Property menu save")
 
         history.addSnapshot(snapshot)
+
+        -- Handlers can hide fields depending on the values that were just saved (ignoredFields).
+        -- The form has to be rebuilt to show the fields of the new state.
+        local handler = bestSelection and layerHandlers.getHandler(bestSelection.layer)
+
+        if handler and handler.ignoredFields then
+            ui.runLate(function()
+                local window = contextWindow.currentWindow
+
+                if not window or not window.parent then
+                    return
+                end
+
+                local x, y = window.x, window.y
+
+                widgetUtils.closeWindow(window)
+
+                local newWindow = contextWindow.createContextMenu(selections, bestSelection, room)
+
+                if newWindow then
+                    newWindow.x, newWindow.y = x, y
+
+                    widgetUtils.moveWindow(newWindow, x, y, 0, 0, 0)
+                end
+            end)
+        end
     end
 end
 
@@ -155,7 +181,7 @@ function contextWindow.createContextMenu(selections, bestSelection, room)
         {
             text = tostring(language.ui.selection_context_window.save_changes),
             formMustBeValid = true,
-            callback = contextWindow.saveChangesCallback(room, selections, dummyData)
+            callback = contextWindow.saveChangesCallback(room, selections, dummyData, bestSelection)
         }
     }
 
@@ -171,6 +197,8 @@ function contextWindow.createContextMenu(selections, bestSelection, room)
 
     local window = uiElements.window(windowTitle, selectionForm)
     local windowCloseCallback = windowPersister.getWindowCloseCallback(windowPersisterName)
+
+    contextWindow.currentWindow = window
 
     windowPersister.trackWindow(windowPersisterName, window)
     contextGroup.parent:addChild(window)

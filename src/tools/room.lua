@@ -822,4 +822,27 @@ function tool.load()
     hotkeyHandler.addHotkey(hotkeyScope, configs.hotkeys.itemsPaste, pasteRoomsHotkey)
 end
 
+-- The room list only makes sense while the rooms tool is active
+local ui = require("ui")
+
+local function setRoomListVisible(visible)
+    local window = ui.roomListWindow
+
+    if window and window.setRoomListVisible then
+        window.setRoomListVisible(visible)
+    end
+end
+
+function tool.selected()
+    setRoomListVisible(true)
+
+    return true
+end
+
+function tool.unselected()
+    setRoomListVisible(false)
+
+    return true
+end
+
 return tool

@@ -2264,7 +2264,26 @@ function stylegroundWindow.editStylegrounds(map)
         window:layout()
         window:layoutLate()
 
-        widgetUtils.centerWindow(window, parentGroup)
+        -- Center inside the area left of the right toolbar, clamped to the window
+        local parentWidth = parentGroup.width or love.graphics.getWidth()
+        local parentHeight = parentGroup.height or love.graphics.getHeight()
+        local toolbarWidth = 0
+        local success, windowsHandler = pcall(require, "ui.windows")
+
+        if success and windowsHandler.windows and windowsHandler.windows.tools then
+            local toolsWindow = windowsHandler.windows.tools
+
+            toolbarWidth = (toolsWindow.width or 0) + (toolsWindow.style and toolsWindow.style.padding or 0)
+        end
+
+        local availableWidth = math.max(window.width, parentWidth - toolbarWidth)
+        local x = math.floor((availableWidth - window.width) / 2)
+        local y = math.floor((parentHeight - window.height) / 2)
+
+        x = math.max(0, math.min(x, parentWidth - window.width))
+        y = math.max(0, math.min(y, parentHeight - window.height))
+
+        widgetUtils.moveWindow(window, x, y, 0, 0, 0)
     end
 
     widgetUtils.preventOutOfBoundsMovement(window)

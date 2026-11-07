@@ -261,6 +261,39 @@ function roomList.getWindow()
 
     widgetUtils.removeWindowTitlebar(window)
 
+    -- Hide by detaching the window instead of relying on the visible flag: the panel is part of a
+    -- cached parent canvas, and a visibility change alone did not remove it from the screen
+    function window.setRoomListVisible(visible)
+        if visible then
+            if not window.parent and window._roomListParent then
+                window._roomListParent:addChild(window)
+                window._roomListParent:reflow()
+            end
+
+        else
+            if window.parent then
+                window._roomListParent = window.parent
+                window.parent:removeChild(window)
+                window._roomListParent:reflow()
+            end
+        end
+    end
+
+    -- The rooms tool finds the window through the ui module, which is a stable singleton
+    local ui = require("ui")
+
+    ui.roomListWindow = window
+    window._roomList = true
+
+    local success, toolHandler = pcall(require, "tools")
+    local visible = success and toolHandler.currentToolName == "room"
+
+    if not visible then
+        ui.runLate(function()
+            window.setRoomListVisible(false)
+        end)
+    end
+
     return simpleDocks.pinWidgetToEdge("left", window)
 end
 

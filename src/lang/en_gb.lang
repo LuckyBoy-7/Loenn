@@ -45,6 +45,10 @@ tools.name.brush=Brush
 tools.name.line=Line
 
 tools.name.bucket=Bucket
+tools.bucket.modes.name.currentRoom=Current Room
+tools.bucket.modes.description.currentRoom=Fills the connected tiles of the selected room.
+tools.bucket.modes.name.allRooms=All Rooms
+tools.bucket.modes.description.allRooms=Fills every tile with the same id in all rooms.
 
 tools.name.rectangle=Rectangle
 
