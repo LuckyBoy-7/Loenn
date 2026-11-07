@@ -58,9 +58,12 @@ function apply.displayName(language, style, index)
         return style._name
     end
 
+    -- Unnamed groups all share the same label: numbering them by position made the list look
+    -- like the groups swapped contents whenever one was reordered
     local groupTemplate = tostring(language.style.apply.groupName)
+    local label = (string.gsub(groupTemplate, "%%[sd]?", ""))
 
-    return string.format(groupTemplate, index)
+    return utils.trim(label)
 end
 
 return apply

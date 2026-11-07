@@ -1467,19 +1467,111 @@ local function moveStyleIntoGroup(interactionData, fromData, group)
     return true
 end
 
+-- Moves a group to the position described by the drop target. Groups are only ever reordered as
+-- top level rows: there is no "into group" behavior for them, so the whole group (with its
+-- children) moves as one.
+local function moveGroupToDropPosition(interactionData, fromData, toList, toListItem, toIndex)
+    local map = interactionData.map
+    local styles = fromData.foreground and map.stylesFg or map.stylesBg
+    local group = fromData.style
+
+    if not group or not styles then
+        return false
+    end
+
+    local fromIndex
+
+    for i, s in ipairs(styles) do
+        if s == group then
+            fromIndex = i
+
+            break
+        end
+    end
+
+    if not fromIndex then
+        return false
+    end
+
+    -- Resolve the top level style the drop belongs next to: rows inside a group belong to that
+    -- group at the top level
+    local toData = toListItem and toListItem.data
+    local targetStyle = toData and (toData.parentStyle or toData.style)
+
+    local toPos
+
+    if targetStyle then
+        local rowIndex
+
+        for i, item in ipairs(toList and toList.children or {}) do
+            if item == toListItem then
+                rowIndex = i
+
+                break
+            end
+        end
+
+        -- The insertion index is already adjusted for "after the hovered row"
+        local after = rowIndex ~= nil and toIndex ~= nil and toIndex > rowIndex
+
+        for i, s in ipairs(styles) do
+            if s == targetStyle then
+                toPos = i + (after and 1 or 0)
+
+                break
+            end
+        end
+    end
+
+    toPos = toPos or (#styles + 1)
+
+    -- Translate the pre-removal position to the position after the group was removed
+    if toPos > fromIndex then
+        toPos = toPos - 1
+    end
+
+    toPos = math.max(1, math.min(toPos, #styles + 1))
+
+    if toPos == fromIndex then
+        return false
+    end
+
+    local commit = beginStyleEdit(map)
+
+    table.remove(styles, fromIndex)
+    table.insert(styles, toPos, group)
+
+    commit("Move styleground group")
+
+    interactionData.rebuildListItems()
+
+    -- Keep the moved group selected: after the rebuild the row index would point at a different
+    -- style, and the form would then edit the wrong entry
+    selectStyleDeferred(interactionData, group)
+
+    return true
+end
+
 local function listItemDraggedHandler(interactionData)
     return function(fromList, fromListItem, toList, toListItem, fromIndex, toIndex)
         local fromData = fromListItem and fromListItem.data
+        local fromIsGroup = fromData ~= nil and utils.typeof(fromData.style) == "apply"
         local groupData = getGroupDropData(toList, toListItem, toIndex, fromListItem)
 
-        if groupData and fromData then
-            -- Dropping onto a group row puts the style into that group (both halves of the row)
+        if fromIsGroup and fromData then
+            -- Groups never enter another group: they are reordered between the top level rows
+            moveGroupToDropPosition(interactionData, fromData, toList, toListItem, toIndex)
+
+        elseif groupData and fromData then
+            -- Dropping a style onto a group row puts it into that group (both halves of the row)
             moveStyleIntoGroup(interactionData, fromData, groupData.style)
 
         elseif isCrossParentDrag(fromListItem, toListItem) then
             moveStyleBetweenParents(interactionData, fromListItem.data, toListItem.data)
 
         else
+            -- Groups are always reordered as top level rows; treating a drop next to another group
+            -- as "move into group" would swallow that reorder
             local allowed, offset, fakeInteraction = listItemDragAllowed(interactionData, fromList, fromListItem, toList, toListItem, fromIndex, toIndex)
 
             if allowed then
@@ -1500,12 +1592,17 @@ local function listItemCanInsertHandler(interactionData)
     return function(fromList, fromListItem, toList, toListItem, fromIndex, toIndex)
         local from = fromListItem and fromListItem.data
         local groupData = getGroupDropData(toList, toListItem, toIndex, fromListItem)
+        local fromIsGroup = from ~= nil and utils.typeof(from.style) == "apply"
+
+        -- Groups are reordered as top level rows, so a group drop is always a plain reorder
+        if fromIsGroup then
+            return true
+        end
 
         -- Dropping onto a group row moves the style into that group, which is not a plain
         -- reorder and has to be accepted here as well. The insert line would be misleading, so it
         -- is hidden for this case.
-        if from and groupData and from.style ~= groupData.style
-            and utils.typeof(from.style) ~= "apply" then
+        if from and groupData and from.style ~= groupData.style then
             return true, true
         end
 
