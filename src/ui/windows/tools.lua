@@ -81,6 +81,9 @@ local vanillaDecalSource = "[Celeste/Vanilla]"
 -- Cached entity previews (name -> preview content or false), rebuilt with the material list
 local entityPreviewCache = {}
 
+-- Cached file lists of the Preview tool, keyed by asset folder
+local previewToolFileCache = {}
+
 local function splitDecalPath(path)
     local segments = {}
 
@@ -1208,6 +1211,109 @@ local function getEntityPreview(placement)
     return preview
 end
 
+-- Images of the Preview tool, loaded directly from the asset file and cached per path
+local previewToolImages = {}
+
+-- Draws a checkerboard behind the image, so transparent or empty files still show a preview
+-- frame instead of nothing
+local function createPreviewCanvas(image)
+    local width, height
+
+    if image then
+        width, height = image:getDimensions()
+    else
+        width, height = 48, 48
+    end
+
+    local maxSize = 512
+    local scale = math.min(1, maxSize / math.max(width, height))
+
+    width = math.max(1, math.floor(width * scale))
+    height = math.max(1, math.floor(height * scale))
+
+    local canvas = love.graphics.newCanvas(width, height)
+
+    canvas:renderTo(function()
+        local cell = 8
+
+        love.graphics.clear(0.15, 0.15, 0.15, 1)
+        love.graphics.setColor(0.22, 0.22, 0.22, 1)
+
+        for y = 0, height - 1, cell do
+            for x = 0, width - 1, cell do
+                if (math.floor(x / cell) + math.floor(y / cell)) % 2 == 0 then
+                    love.graphics.rectangle("fill", x, y, math.min(cell, width - x), math.min(cell, height - y))
+                end
+            end
+        end
+
+        if image then
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(image, 0, 0, 0, scale, scale)
+        end
+    end)
+
+    return canvas
+end
+
+local function getPreviewToolImage(filename)
+    local cached = previewToolImages[filename]
+
+    if cached ~= nil then
+        return cached or nil
+    end
+
+    local image
+    local success, result = pcall(love.graphics.newImage, filename)
+
+    if success then
+        image = result
+    end
+
+    if not image then
+        -- Fallback: read the bytes and build the image from them. This can fail on paths the
+        -- filesystem can not chdir into, so it must not take the whole editor down.
+        local readSuccess, bytes = pcall(function()
+            if filename:sub(1, 1) == "$" then
+                local resolved = virtualFs.resolve(filename) or filename
+
+                return utils.readAll(resolved, "rb", true)
+            end
+
+            -- Absolute path inside the Celeste content folder: read it with plain io, the editor
+            -- filesystem changes the working directory for external files and chokes on some of
+            -- these paths
+            local file = io.open(filename, "rb")
+
+            if file then
+                local contents = file:read("*a")
+
+                file:close()
+
+                return contents
+            end
+
+            return utils.readAll(filename, "rb", false)
+        end)
+
+        if readSuccess and bytes then
+            local ok, fallback = pcall(function()
+                return love.graphics.newImage(love.filesystem.newFileData(bytes, "preview_tool.png"))
+            end)
+
+            if ok then
+                image = fallback
+            end
+        end
+    end
+
+    local preview = createPreviewCanvas(image)
+
+    previewToolImages[filename] = preview or false
+
+    return preview
+end
+
 local function updateHoverPreview(list)
     -- The debug list has no placements to preview
     if toolHandler.currentToolName == "debug" then
@@ -1215,7 +1321,6 @@ local function updateHoverPreview(list)
 
         return
     end
-
     local hovered = ui.hovering
 
     while hovered and hovered ~= list and not hovered.itemData do
@@ -1230,6 +1335,42 @@ local function updateHoverPreview(list)
     local item = hovered.itemData
     local material = item.data
     local content
+
+    -- Preview tool: prefer the sprite Lönn already loaded into the gameplay atlas (works for
+    -- packed vanilla resources and zip mods), fall back to loading the file from disk
+    if toolHandler.currentToolName == "preview" then
+        local entry = item.previewEntry
+        local sprite = (entry and entry.sprite) or (item.data and atlases.getResource(item.data, "Gameplay"))
+
+        if sprite then
+            hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, {
+                key = "preview:" .. tostring(item.data),
+                image = sprite.image,
+                quad = sprite.quad,
+                layer = sprite.layer,
+                width = sprite.width,
+                height = sprite.height
+            })
+
+            return
+        end
+
+        local image = entry and entry.file and getPreviewToolImage(entry.file)
+
+        if image then
+            hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, {
+                key = "preview:" .. tostring(item.data),
+                image = image,
+                width = image:getWidth(),
+                height = image:getHeight()
+            })
+
+        else
+            hoverPreview.hide()
+        end
+
+        return
+    end
 
     if type(material) ~= "string" then
         hoverPreview.hide()
@@ -1760,6 +1901,309 @@ getMaterialItems = function(layer)
 
         -- No fixed row height here: this list mixes source headers and normal rows. A leftover
         -- elementSize from the tile list makes the scroll position twitch.
+        if toolWindow.materialList then
+            toolWindow.materialList.style.elementSize = false
+        end
+
+        return items
+    end
+
+    -- Preview tool: every image of the selected asset folder, grouped by sub folder. Rows are
+    -- action buttons that copy the path relative to the folder (without the file extension).
+    if currentTool and currentTool.name == "preview" then
+        -- path: folder that is scanned, prefix: what the copied path starts with (the folder is
+        -- relative to Graphics/Atlases/Gameplay)
+        local folders = {
+            bg = {path = "Graphics/Atlases/Gameplay/bgs", prefix = "bgs"},
+            collectables = {path = "Graphics/Atlases/Gameplay/collectables", prefix = "collectables"},
+            danger = {path = "Graphics/Atlases/Gameplay/danger", prefix = "danger"},
+            objects = {path = "Graphics/Atlases/Gameplay/objects", prefix = "objects"}
+        }
+
+        local folderInfo = folders[currentLayer] or folders.bg
+        local copyPrefix = folderInfo.prefix
+
+        -- Resources the game itself provides. A mod that ships the same path must not make
+        -- vanilla assets look like they come from that mod.
+        local vanillaResources = (atlases.gameplay and atlases.gameplay.__vanillaResources) or {}
+
+        -- Walk every loaded mod on its own: that way the source of a file is known from the
+        -- folder being scanned instead of being guessed from a shared mount point
+        local files = previewToolFileCache[copyPrefix]
+
+        if not files then
+            files = {}
+
+            local seenFiles = {}
+            local prefix = folderInfo.path .. "/"
+
+            local function addFile(filename, relative, source, folderName)
+                local key = source .. "|" .. relative
+                local resource = copyPrefix .. "/" .. string.gsub(relative, "%.png$", "")
+
+                -- Provided by the game itself: handled by the vanilla pass below
+                if vanillaResources[resource] then
+                    return
+                end
+
+                if relative ~= "" and not seenFiles[key] then
+                    seenFiles[key] = true
+
+                    table.insert(files, {
+                        relative = relative,
+                        file = filename,
+                        source = source,
+                        folder = folderName
+                    })
+                end
+            end
+
+            local modFolderNames = {}
+
+            for modFolderName in pairs(modHandler.loadedMods or {}) do
+                table.insert(modFolderNames, modFolderName)
+            end
+
+            table.sort(modFolderNames)
+
+            for _, modFolderName in ipairs(modFolderNames) do
+                local modFilenames = modHandler.findModFiletype(folderInfo.path, "png", {modFolderName})
+
+                if #modFilenames > 0 then
+                    -- Zip mods are mounted under their file name (Foo_zip): the real name comes
+                    -- from the mod metadata of one of its files
+                    local source
+                    local metadata = modHandler.getModMetadataFromPath(modFilenames[1])
+                    local modNames = metadata and modHandler.getModNamesFromMetadata(metadata)
+
+                    if modNames and modNames[1] then
+                        source = modNames[1]
+                    end
+
+                    local modInfo = modHandler.loadedMods[modFolderName]
+                    source = source or (modInfo and modInfo.name) or modFolderName
+
+                    for _, filename in ipairs(modFilenames) do
+                        local startIndex = string.find(filename, prefix, 1, true)
+
+                        if startIndex then
+                            addFile(filename, filename:sub(startIndex + #prefix), source, modFolderName)
+                        end
+                    end
+                end
+            end
+
+            -- Vanilla images are part of the game content instead of a mod, so they are scanned
+            -- from the Celeste directory as well
+            local success, fileLocations = pcall(require, "file_locations")
+            local hasLfs, lfs = pcall(require, "lib.lfs_ffi")
+
+            if success and hasLfs then
+                local vanillaFolder = utils.convertToUnixPath(utils.joinpath(fileLocations.getCelesteDir(), "Content", folderInfo.path))
+
+                if lfs.attributes(vanillaFolder, "mode") == "directory" then
+                    local vanillaPrefix = vanillaFolder .. "/"
+
+                    local function scanVanilla(directory)
+                        for entry in lfs.dir(directory) do
+                            if entry ~= "." and entry ~= ".." then
+                                local target = directory .. "/" .. entry
+                                local mode = lfs.attributes(target, "mode")
+
+                                if mode == "directory" then
+                                    scanVanilla(target)
+
+                                elseif mode == "file" and utils.fileExtension(entry) == "png" then
+                                    addFile(target, target:sub(#vanillaPrefix + 1), "Celeste")
+                                end
+                            end
+                        end
+                    end
+
+                    scanVanilla(vanillaFolder)
+                end
+            end
+
+            -- Vanilla resources come from the atlas snapshot: they are always listed as Celeste,
+            -- even when a mod ships a file with the same path
+            local covered = {}
+            local resourcePrefix = copyPrefix .. "/"
+
+            for _, entry in ipairs(files) do
+                covered[string.gsub(entry.relative, "%.png$", "")] = true
+            end
+
+            for resource, sprite in pairs(vanillaResources) do
+                if utils.startsWith(resource, resourcePrefix) then
+                    local relative = resource:sub(#resourcePrefix + 1)
+
+                    if relative ~= "" and not covered[relative] then
+                        covered[relative] = true
+
+                        table.insert(files, {
+                            relative = relative .. ".png",
+                            sprite = sprite,
+                            source = "Celeste"
+                        })
+                    end
+                end
+            end
+
+            -- Everything else in the atlas that no file provided (e.g. resources only reachable
+            -- through a zip mount)
+            for resource, sprite in pairs(atlases.gameplay) do
+                if type(sprite) == "table" and sprite.image and utils.startsWith(resource, resourcePrefix) then
+                    local relative = resource:sub(#resourcePrefix + 1)
+
+                    if relative ~= "" and not covered[relative] then
+                        covered[relative] = true
+
+                        local owner = getDecalOwnerModName(resource)
+
+                        table.insert(files, {
+                            relative = relative .. ".png",
+                            sprite = sprite,
+                            source = (owner and owner ~= "") and owner or "Celeste"
+                        })
+                    end
+                end
+            end
+
+            table.sort(files, function(lhs, rhs)
+                if lhs.source ~= rhs.source then
+                    return lhs.source < rhs.source
+                end
+
+                return lhs.relative < rhs.relative
+            end)
+
+            previewToolFileCache[copyPrefix] = files
+        end
+
+        -- Animation frames (test00.png, test01.png, ...) are only listed by their first frame
+        local keptFrames = {}
+        local frameKeys = {}
+
+        for _, entry in ipairs(files) do
+            local stem = string.gsub(entry.relative, "%.png$", "")
+            local prefix, number = string.match(stem, "^(.-)(%d%d+)$")
+            local baseName = string.match(stem, "([^/]*)$")
+
+            if baseName and baseName:match("^%d+$") then
+                -- File names that are only numbers are animation frame exports (00.png, 00000011.png,
+                -- ...). They are not useful on their own, so they are not listed.
+
+            elseif prefix and number and baseName ~= "" then
+                -- test00 / test01 ... only the first frame is listed, per source
+                local key = entry.source .. "|" .. prefix .. "#" .. #number
+                local frame = tonumber(number)
+                local existing = frameKeys[key]
+
+                if not existing or frame < existing.frame then
+                    frameKeys[key] = {
+                        frame = frame,
+                        entry = entry
+                    }
+                end
+
+            else
+                table.insert(keptFrames, entry)
+            end
+        end
+
+        for _, frameEntry in pairs(frameKeys) do
+            table.insert(keptFrames, frameEntry.entry)
+        end
+
+        table.sort(keptFrames, function(lhs, rhs)
+            return lhs.relative < rhs.relative
+        end)
+
+        -- Exactly like the decal list: build materials and let getPathTreeItems group them by
+        -- source mod and folder hierarchy
+        local previewMaterials = {}
+        local previewFiles = {}
+
+        for _, entry in ipairs(keptFrames) do
+            local copyPath = copyPrefix .. "/" .. string.gsub(entry.relative, "%.png$", "")
+            local displayName = string.match(entry.relative, "[^/]+$") or entry.relative
+
+            displayName = string.gsub(displayName, "%.png$", "")
+
+            -- Vanilla files have no mod, leave associatedMods empty so they show up as Celeste
+            local associatedMods = entry.source ~= "Celeste" and {entry.source} or nil
+
+            table.insert(previewMaterials, {
+                name = copyPath,
+                displayNameNoMods = displayName,
+                associatedMods = associatedMods
+            })
+
+            if previewFiles[copyPath] == nil or entry.source == "Celeste" then
+                previewFiles[copyPath] = entry
+            end
+        end
+
+        -- The mod that owns the current map is listed right after vanilla
+        local currentModName
+
+        if loadedState.filename then
+            local metadata = modHandler.getModMetadataFromPath(loadedState.filename)
+            local names = metadata and modHandler.getModNamesFromMetadata(metadata)
+
+            currentModName = names and names[1]
+
+            if not currentModName then
+                local folder = string.match(loadedState.filename, "^%$([^%$]+)%$")
+                local info = folder and modHandler.loadedMods and modHandler.loadedMods[folder]
+
+                currentModName = (info and info.name) or folder
+            end
+        end
+
+        local currentModKey = currentModName and string.lower(currentModName)
+
+        local previewItems = getPathTreeItems(previewMaterials, currentTool, currentLayer, favoritesLookup, language, {
+            pathOf = function(name)
+                return name:sub(#copyPrefix + 2)
+            end,
+            leafText = function(entry)
+                return entry.displayName
+            end,
+            -- Vanilla first, then the mod that owns the current map, then everything else
+            sourcePriority = function(sourceKey)
+                if sourceKey == "" then
+                    return 1
+                end
+
+                if currentModKey and string.lower(sourceKey) == currentModKey then
+                    return 2
+                end
+
+                return 3
+            end
+        })
+
+        local items = previewItems
+
+        -- Rows stay action buttons: clicking copies the path instead of selecting a material
+        for _, item in ipairs(items) do
+            if not item.isSource and not item.isHeader and not item.isFavoritesHeader and item.data then
+                local entry = previewFiles[item.data]
+
+                item.isButton = true
+                item.tooltip = item.data
+                item.previewEntry = entry
+
+                local copyPath = item.data
+
+                item.onPress = function()
+                    love.system.setClipboardText(copyPath)
+                    notifications.notify(string.format(tostring(language.ui.notifications.previewPathCopied), copyPath))
+                end
+            end
+        end
+
         if toolWindow.materialList then
             toolWindow.materialList.style.elementSize = false
         end

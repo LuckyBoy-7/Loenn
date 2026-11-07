@@ -27,6 +27,12 @@ layers.name.decalsFg=Foreground Decals
 layers.name.decalsBg=Background Decals
 layers.name.entities=Entities
 layers.name.triggers=Triggers
+layers.name.gameplay=Gameplay
+layers.name.colorGrading=ColorGrading
+layers.name.bg=BG
+layers.name.collectables=Collectables
+layers.name.danger=Danger
+layers.name.objects=Objects
 
 
 # -- Tools --
@@ -73,6 +79,9 @@ tools.room.modes.description.selection=Selects rooms and fillers.
 
 tools.name.stylegrounds=Stylegrounds
 tools.description.stylegrounds=Adds backgrounds to the foreground or background list of the map.
+
+tools.name.preview=Preview
+tools.description.preview=Lists images of the asset folders and copies their paths.
 
 tools.name.debug=Debug
 tools.description.debug=Lists the entities and triggers used in the map and highlights where the selected one is used.

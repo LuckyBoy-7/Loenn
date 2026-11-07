@@ -48,7 +48,18 @@ function atlases.loadCelesteAtlas(name, meta, path)
 
     spriteLoader.addAtlasToRuntimeAtlas(atlas, fakeFilename)
 
+    -- Remember what the game itself provides. Mod atlases are loaded into this same table
+    -- afterwards and would otherwise make vanilla resources look like they come from a mod.
+    local vanillaResources = {}
+
+    for resource, sprite in pairs(atlas) do
+        if type(sprite) == "table" and sprite.image then
+            vanillaResources[resource] = sprite
+        end
+    end
+
     atlases[name] = atlas
+    atlas.__vanillaResources = vanillaResources
 
     addAtlasMetatable(name)
 end

@@ -79,8 +79,8 @@ function tool.selected()
 end
 
 function tool.unselected()
-    stylegroundWindow.closeForTool()
-
+    -- The window stays open when another tool is selected: it is a standalone panel and closing
+    -- it here made it disappear whenever the user briefly switched tools
     return true
 end
 

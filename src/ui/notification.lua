@@ -349,6 +349,10 @@ function notificationPopup.notify(widget, duration, settings)
     elseif hasInteractiveNotification() then
         -- Text notifications are pointless while something waits for a click
         return
+
+    else
+        -- A new text notification replaces the one currently shown instead of stacking up
+        clearTextNotifications()
     end
 
     local popup = {
