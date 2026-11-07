@@ -11,6 +11,129 @@ local toolHandler = require("tools")
 
 local selectionUtils = {}
 
+--- Map item selection helpers. Shared by the room tool and the scripts tool: the selection can
+--- hold copies of the clicked items, so rooms are compared by name and fillers by bounds.
+
+local function itemsEqual(a, b)
+    if a == b then
+        return true
+    end
+
+    if not a or not b then
+        return false
+    end
+
+    local typeA, typeB = utils.typeof(a), utils.typeof(b)
+
+    if typeA ~= typeB then
+        return false
+    end
+
+    if typeA == "room" then
+        return a.name == b.name
+    end
+
+    if typeA == "filler" then
+        return a.x == b.x and a.y == b.y and a.width == b.width and a.height == b.height
+    end
+
+    return false
+end
+
+selectionUtils.itemsEqual = itemsEqual
+
+function selectionUtils.getSelectedItems()
+    -- Lazy require: loaded_state (transitively) loads the tools, which load this module
+    local state = require("loaded_state")
+    local item, itemType = state.getSelectedItem()
+    local items = {}
+
+    if itemType == "table" then
+        for entry, entryType in pairs(item) do
+            table.insert(items, {item = entry, itemType = entryType})
+        end
+
+    elseif item then
+        table.insert(items, {item = item, itemType = itemType})
+    end
+
+    return items
+end
+
+function selectionUtils.getSelectedRooms()
+    local rooms = {}
+
+    for _, entry in ipairs(selectionUtils.getSelectedItems()) do
+        if entry.itemType == "room" then
+            table.insert(rooms, entry.item)
+        end
+    end
+
+    return rooms
+end
+
+function selectionUtils.isItemSelected(item)
+    local state = require("loaded_state")
+    local selectedItem, selectedItemType = state.getSelectedItem()
+
+    if selectedItemType == "table" then
+        for entry in pairs(selectedItem) do
+            if itemsEqual(entry, item) then
+                return true
+            end
+        end
+
+        return false
+    end
+
+    return itemsEqual(selectedItem, item)
+end
+
+-- Adds the item to the selection when it is not selected, removes it otherwise
+function selectionUtils.toggleItemSelection(item)
+    local state = require("loaded_state")
+    local selectedItem, selectedItemType = state.getSelectedItem()
+    local entryType = utils.typeof(item)
+
+    if selectedItemType ~= "table" then
+        if itemsEqual(selectedItem, item) then
+            state.selectItem(nil)
+
+        else
+            state.selectItem(selectedItem or item)
+
+            if selectedItem then
+                state.selectItem(item, true)
+            end
+        end
+
+        return
+    end
+
+    local remaining = {}
+
+    for entry, itemType in pairs(selectedItem) do
+        if not itemsEqual(entry, item) then
+            table.insert(remaining, {item = entry, itemType = itemType})
+        end
+    end
+
+    if not selectionUtils.isItemSelected(item) then
+        table.insert(remaining, {item = item, itemType = entryType})
+    end
+
+    state.selectItem(nil)
+
+    for index, entry in ipairs(remaining) do
+        if index == 1 then
+            state.selectItem(entry.item)
+
+        else
+            state.selectItem(entry.item, true)
+        end
+    end
+end
+
 -- Higher is better
 local layerSortingPriority = {
     entities = 4,

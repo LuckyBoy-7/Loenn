@@ -11,6 +11,7 @@ local sceneHandler = require("scene_handler")
 local hotkeyHandler = require("hotkey_handler")
 local celesteRender = require("celeste_render")
 local roomStruct = require("structs.room")
+local selectionUtils = require("selections")
 
 local tool = {}
 
@@ -178,56 +179,12 @@ end
 -- --------------------------------------------------------------------------
 
 local function isRoomSelected(room)
-    local selectedItem, selectedItemType = state.getSelectedItem()
-
-    if selectedItemType == "table" then
-        return selectedItem[room] ~= nil
-    end
-
-    return selectedItem == room
+    return selectionUtils.isItemSelected(room)
 end
 
--- Ctrl + click: add the room to the selection, or remove it when it already is
+-- Shift/Ctrl + click: add the room to the selection, or remove it when it already is
 local function toggleRoomSelection(room)
-    local selectedItem, selectedItemType = state.getSelectedItem()
-
-    if selectedItemType ~= "table" then
-        if selectedItem == room then
-            state.selectItem(nil)
-
-        else
-            state.selectItem(selectedItem or room)
-
-            if selectedItem then
-                state.selectItem(room, true)
-            end
-        end
-
-        return
-    end
-
-    local remaining = {}
-
-    for item, itemType in pairs(selectedItem) do
-        if item ~= room then
-            table.insert(remaining, {item = item, itemType = itemType})
-        end
-    end
-
-    if not selectedItem[room] then
-        table.insert(remaining, {item = room, itemType = "room"})
-    end
-
-    state.selectItem(nil)
-
-    for index, entry in ipairs(remaining) do
-        if index == 1 then
-            state.selectItem(entry.item)
-
-        else
-            state.selectItem(entry.item, true)
-        end
-    end
+    selectionUtils.toggleItemSelection(room)
 end
 
 -- --------------------------------------------------------------------------

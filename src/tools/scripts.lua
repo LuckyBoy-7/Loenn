@@ -11,6 +11,8 @@ local celesteRender = require("celeste_render")
 local notifications = require("ui.notification")
 local logging = require("logging")
 local viewportHandler = require("viewport_handler")
+local keyboardHelper = require("utils.keyboard")
+local selectionUtils = require("selections")
 local drawing = require("utils.drawing")
 local colors = require("consts.colors")
 local registry = require("scripts.registry")
@@ -30,6 +32,10 @@ tool.layer = "currentRoom"
 tool.subLayer = -1
 
 tool.material = nil
+
+-- The tool implements the room/filler selection itself so shift clicking can also deselect a
+-- room that is already part of a multi selection
+tool.manualRoomLogic = true
 
 function tool.getMaterials()
     local materials = {}
@@ -66,6 +72,13 @@ end
 local function getTargetRooms()
     if tool.layer == "allRooms" then
         return state.map and state.map.rooms or {}
+    end
+
+    -- Current Room: every selected room, so a multi selection is affected as a whole
+    local selectedRooms = selectionUtils.getSelectedRooms()
+
+    if #selectedRooms > 0 then
+        return selectedRooms
     end
 
     local selectedRoom = state.getSelectedRoom()
@@ -178,33 +191,6 @@ local function getItemAt(mapX, mapY)
     return utils.getFillerAtCoords(mapX, mapY, map) or utils.getRoomAtCoords(mapX, mapY, map) or nil
 end
 
--- The editor may keep a copy of the clicked item as the selection, so compare by value
-local function sameItem(a, b)
-    if a == b then
-        return true
-    end
-
-    if not a or not b then
-        return false
-    end
-
-    local typeA, typeB = utils.typeof(a), utils.typeof(b)
-
-    if typeA ~= typeB then
-        return false
-    end
-
-    if typeA == "room" then
-        return a.name == b.name
-    end
-
-    if typeA == "filler" then
-        return a.x == b.x and a.y == b.y and a.width == b.width and a.height == b.height
-    end
-
-    return false
-end
-
 function tool.mouseclicked(x, y, button, istouch, pressed)
     if button ~= configs.editor.toolActionButton then
         return false
@@ -218,15 +204,22 @@ function tool.mouseclicked(x, y, button, istouch, pressed)
 
     local mouseMapX, mouseMapY = viewportHandler.getMapCoordinates(x, y or 0)
     local clickedItem = getItemAt(mouseMapX, mouseMapY)
+    local addModifier = configs.editor.selectionAddModifier
 
-    -- Current Room only runs on the focused item: clicking another room or filler focuses it
-    -- first. All Rooms runs wherever the click happened.
+    -- Current Room only runs on the focused/selected items. Clicking another room focuses it,
+    -- shift/ctrl clicking a selected room removes it from the multi selection.
     if tool.layer ~= "allRooms" then
         if not clickedItem then
             return false
         end
 
-        if not sameItem(clickedItem, state.getSelectedItem()) then
+        if keyboardHelper.modifierHeld(addModifier) then
+            selectionUtils.toggleItemSelection(clickedItem)
+
+            return true
+        end
+
+        if not selectionUtils.isItemSelected(clickedItem) then
             state.selectItem(clickedItem)
 
             return true
