@@ -566,6 +566,7 @@ function tilesetDefaults.collectFromPack(backgroundOnly)
                 body = body,
                 template = entry.template,
                 sound = entry.sound,
+                ignores = entry.ignores,
                 source = source,
                 sourceGroup = sourceGroup
             })
@@ -890,16 +891,20 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
                         body = body:gsub("^%s*\n", "")
                     end
 
-                    local soundAttribute = ""
+                    local attributes = ""
 
                     if candidate.sound then
-                        soundAttribute = string.format(" sound=\"%d\"", candidate.sound)
+                        attributes = attributes .. string.format(" sound=\"%d\"", candidate.sound)
+                    end
+
+                    if candidate.ignores then
+                        attributes = attributes .. string.format(" ignores=\"%s\"", candidate.ignores)
                     end
 
                     if copyBases[bodyKey] then
                         table.insert(blocks, string.format(
                             "  <!-- Loenn Add Defaults: %s -->\n  <Tileset id=\"%s\" copy=\"%s\" path=\"%s\"%s/>\n",
-                            candidate.source or "unknown", id, copyBases[bodyKey], relative, soundAttribute
+                            candidate.source or "unknown", id, copyBases[bodyKey], relative, attributes
                         ))
 
                     else
@@ -907,7 +912,7 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
 
                         table.insert(blocks, string.format(
                             "  <!-- Loenn Add Defaults: %s -->\n  <Tileset id=\"%s\" path=\"%s\"%s>\n%s\n  </Tileset>\n",
-                            candidate.source or "unknown", id, relative, soundAttribute, body
+                            candidate.source or "unknown", id, relative, attributes, body
                         ))
                     end
 
