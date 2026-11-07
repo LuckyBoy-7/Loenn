@@ -34,6 +34,8 @@ local autotiler = require("autotiler")
 local selectionItemUtils = require("selection_item_utils")
 local placementUtils = require("placement_utils")
 local virtualFs = require("virtual_fs")
+local threadHandler = require("utils.threads")
+local tasks = require("utils.tasks")
 local utf8 = require("utf8")
 
 local toolWindow = {}
@@ -83,6 +85,12 @@ local entityPreviewCache = {}
 
 -- Cached file lists of the Preview tool, keyed by asset folder
 local previewToolFileCache = {}
+
+-- Background loaders for the preview images of a folder, keyed by prefix
+local previewToolLoadTasks = {}
+
+-- Checkerboard shown while an entry image is loading (or when it has none)
+local previewToolPlaceholder
 
 local function splitDecalPath(path)
     local segments = {}
@@ -1222,7 +1230,8 @@ local function createPreviewCanvas(image)
     if image then
         width, height = image:getDimensions()
     else
-        width, height = 48, 48
+        -- Big enough for the "loading..." label, otherwise the centred text is clipped
+        width, height = 200, 64
     end
 
     local maxSize = 512
@@ -1271,47 +1280,199 @@ local function getPreviewToolImage(filename)
     end
 
     if not image then
-        -- Fallback: read the bytes and build the image from them. This can fail on paths the
-        -- filesystem can not chdir into, so it must not take the whole editor down.
-        local readSuccess, bytes = pcall(function()
-            if filename:sub(1, 1) == "$" then
-                local resolved = virtualFs.resolve(filename) or filename
+        -- A "$Mod$/" path of an archive that is not mounted yet can not be loaded directly.
+        -- Mount the owning mod on demand (same helper virtual_fs uses) and retry.
+        local modFolder = string.match(filename, "^%$([^%$]+)%$")
 
-                return utils.readAll(resolved, "rb", true)
+        if modFolder and modHandler.ensureModMounted(modFolder) then
+            local success, result = pcall(love.graphics.newImage, filename)
+
+            if success then
+                image = result
             end
+        end
 
-            -- Absolute path inside the Celeste content folder: read it with plain io, the editor
-            -- filesystem changes the working directory for external files and chokes on some of
-            -- these paths
-            local file = io.open(filename, "rb")
+        if not image then
+            -- Fallback: read the bytes and build the image from them. This can fail on paths the
+            -- filesystem can not chdir into, so it must not take the whole editor down.
+            local readSuccess, bytes = pcall(function()
+                if filename:sub(1, 1) == "$" then
+                    return utils.readAll(filename, "rb", true)
+                end
 
-            if file then
-                local contents = file:read("*a")
+                -- Absolute path inside the Celeste content folder: read it with plain io, the editor
+                -- filesystem changes the working directory for external files and chokes on some of
+                -- these paths
+                local file = io.open(filename, "rb")
 
-                file:close()
+                if file then
+                    local contents = file:read("*a")
 
-                return contents
-            end
+                    file:close()
 
-            return utils.readAll(filename, "rb", false)
-        end)
+                    return contents
+                end
 
-        if readSuccess and bytes then
-            local ok, fallback = pcall(function()
-                return love.graphics.newImage(love.filesystem.newFileData(bytes, "preview_tool.png"))
+                return utils.readAll(filename, "rb", false)
             end)
 
-            if ok then
-                image = fallback
+            if readSuccess and bytes then
+                local ok, fallback = pcall(function()
+                    return love.graphics.newImage(love.filesystem.newFileData(bytes, "preview_tool.png"))
+                end)
+
+                if ok then
+                    image = fallback
+                end
             end
         end
     end
 
-    local preview = createPreviewCanvas(image)
+    previewToolImages[filename] = image or false
 
-    previewToolImages[filename] = preview or false
+    return image
+end
 
-    return preview
+local function getPreviewToolPlaceholder()
+    if not previewToolPlaceholder then
+        -- Plain checkerboard: an empty or unloadable image still shows a preview frame
+        previewToolPlaceholder = createPreviewCanvas(nil)
+    end
+
+    return previewToolPlaceholder
+end
+
+-- File based previews are decoded in a worker thread: decoding one big PNG on the main thread
+-- caused a visible hitch. The texture upload stays on the main thread (LÖVE can not create
+-- textures in threads) but is throttled to a couple of images per frame.
+local previewLoaderCode = [=[
+    local args = {...}
+    local outName, inName = unpack(args)
+    local output = love.thread.getChannel(outName)
+    local input = love.thread.getChannel(inName)
+
+    while true do
+        local path = input:demand()
+
+        if path == nil or path == false then
+            break
+        end
+
+        local file = io.open(path, "rb")
+        local data
+
+        if file then
+            data = file:read("*a")
+            file:close()
+        end
+
+        local imageData
+
+        if data then
+            local success, result = pcall(function()
+                return love.image.newImageData(love.filesystem.newFileData(data, "preview.png"))
+            end)
+
+            if success then
+                imageData = result
+            end
+        end
+
+        output:push({path = path, imageData = imageData, data = imageData and nil or data})
+    end
+]=]
+
+-- Decoded images waiting for their (throttled) upload
+local previewUploadQueue = {}
+
+-- File path to the entries that use it
+local previewPathEntries = {}
+
+local function processPreviewUploads()
+    local processed = 0
+
+    while processed < 2 and #previewUploadQueue > 0 do
+        local event = table.remove(previewUploadQueue, 1)
+        local imageData = event.imageData
+
+        -- The worker decodes when love.image is available there; otherwise fall back to decoding
+        -- here (still throttled)
+        if not imageData and event.data then
+            local success, result = pcall(function()
+                return love.image.newImageData(love.filesystem.newFileData(event.data, "preview.png"))
+            end)
+
+            if success then
+                imageData = result
+            end
+        end
+
+        local image
+
+        if imageData then
+            local success, result = pcall(love.graphics.newImage, imageData)
+
+            if success then
+                image = result
+            end
+        end
+
+        previewToolImages[event.path] = image or false
+
+        for _, entry in ipairs(previewPathEntries[event.path] or {}) do
+            entry.image = image
+            entry.previewState = image and "ready" or "failed"
+        end
+
+        previewPathEntries[event.path] = nil
+        processed = processed + 1
+    end
+end
+
+-- Resolve the previews of a folder in the background: the list itself opens immediately and the
+-- images appear as they are loaded
+-- One shared worker thread for preview images, started on demand
+local previewLoaderInput
+
+local function ensurePreviewLoader()
+    if previewLoaderInput then
+        return
+    end
+
+    local inName = "preview_loader_" .. tostring(love.timer.getTime())
+
+    previewLoaderInput = love.thread.getChannel(inName)
+
+    threadHandler.createStartWithCallback(previewLoaderCode, function(event)
+        table.insert(previewUploadQueue, event)
+    end, inName)
+end
+
+-- Queue one entry for the worker. Images are only decoded when they are actually looked at, so
+-- opening the tool or starting the editor does not decode thousands of textures.
+local function queuePreviewLoad(entry)
+    if entry.previewState ~= "pending" or not entry.file then
+        return
+    end
+
+    ensurePreviewLoader()
+
+    entry.previewState = "loading"
+
+    local entries = previewPathEntries[entry.file]
+
+    if not entries then
+        entries = {}
+        previewPathEntries[entry.file] = entries
+
+        previewLoaderInput:push(entry.file)
+    end
+
+    table.insert(entries, entry)
+end
+
+local function schedulePreviewToolLoading(copyPrefix, files)
+    -- Images are loaded on hover (see updateHoverPreview), nothing has to be prepared up front
 end
 
 local function updateHoverPreview(list)
@@ -1336,15 +1497,28 @@ local function updateHoverPreview(list)
     local material = item.data
     local content
 
-    -- Preview tool: prefer the sprite Lönn already loaded into the gameplay atlas (works for
-    -- packed vanilla resources and zip mods), fall back to loading the file from disk
+    -- Preview tool: load the image of the hovered row directly, showing a checkerboard placeholder
+    -- when it is empty or can not be loaded
     if toolHandler.currentToolName == "preview" then
         local entry = item.previewEntry
-        local sprite = (entry and entry.sprite) or (item.data and atlases.getResource(item.data, "Gameplay"))
+
+        -- Rows that are not Preview entries (tool/layer rows, headers) have no preview at all
+        if not entry then
+            hoverPreview.hide()
+
+            return
+        end
+
+        local key = "preview:" .. tostring(item.data)
+        local sprite = entry and entry.sprite
+
+        if not sprite and item.data then
+            sprite = atlases.getResource(item.data, "Gameplay")
+        end
 
         if sprite then
             hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, {
-                key = "preview:" .. tostring(item.data),
+                key = key,
                 image = sprite.image,
                 quad = sprite.quad,
                 layer = sprite.layer,
@@ -1352,21 +1526,19 @@ local function updateHoverPreview(list)
                 height = sprite.height
             })
 
-            return
-        end
+        else
+            local image = entry and entry.file and getPreviewToolImage(entry.file)
 
-        local image = entry and entry.file and getPreviewToolImage(entry.file)
+            if not image then
+                image = getPreviewToolPlaceholder()
+            end
 
-        if image then
             hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, {
-                key = "preview:" .. tostring(item.data),
+                key = key,
                 image = image,
                 width = image:getWidth(),
                 height = image:getHeight()
             })
-
-        else
-            hoverPreview.hide()
         end
 
         return
@@ -1782,6 +1954,225 @@ end
 local stylegroundsMaterialsCache
 local stylegroundsWindowModule
 
+-- Files of every Preview tool folder, keyed by the copied path prefix. Building one of these lists
+-- is expensive (each installed mod is walked), so it is cached and warmed up in the background.
+local previewFolders = {
+    bg = {path = "Graphics/Atlases/Gameplay/bgs", prefix = "bgs"},
+    collectables = {path = "Graphics/Atlases/Gameplay/collectables", prefix = "collectables"},
+    danger = {path = "Graphics/Atlases/Gameplay/danger", prefix = "danger"},
+    objects = {path = "Graphics/Atlases/Gameplay/objects", prefix = "objects"},
+    -- Color grading files are copied by their path below Graphics/ColorGrading
+    colorGrading = {path = "Graphics/ColorGrading", prefix = ""}
+}
+
+local function yieldIfPossible(counter)
+    if coroutine.isyieldable() and counter % 2000 == 0 then
+        coroutine.yield()
+    end
+end
+
+local function ensurePreviewFiles(copyPrefix, folderPath, deferLoading)
+    local files = previewToolFileCache[copyPrefix]
+
+    if files then
+        return files
+    end
+
+    files = {}
+
+    local vanillaResources = (atlases.gameplay and atlases.gameplay.__vanillaResources) or {}
+    local seenFiles = {}
+    local prefix = folderPath .. "/"
+
+    local function addFile(filename, relative, source, folderName)
+        local key = source .. "|" .. relative
+        local resource = copyPrefix ~= "" and (copyPrefix .. "/" .. string.gsub(relative, "%.png$", "")) or nil
+
+        -- Provided by the game itself: handled by the vanilla pass below
+        if resource and vanillaResources[resource] then
+            return
+        end
+
+        if relative ~= "" and not seenFiles[key] then
+            seenFiles[key] = true
+
+            table.insert(files, {
+                relative = relative,
+                file = filename,
+                source = source,
+                folder = folderName,
+                copyPath = (copyPrefix ~= "" and (copyPrefix .. "/") or "")
+                    .. string.gsub(relative, "%.png$", "")
+            })
+        end
+    end
+
+    local modFolderNames = {}
+
+    for modFolderName in pairs(modHandler.loadedMods or {}) do
+        table.insert(modFolderNames, modFolderName)
+    end
+
+    table.sort(modFolderNames)
+
+    for index, modFolderName in ipairs(modFolderNames) do
+        local modFilenames = modHandler.findModFiletype(folderPath, "png", {modFolderName})
+
+        if #modFilenames > 0 then
+            -- Zip mods are mounted under their file name (Foo_zip): the real name comes from the
+            -- mod metadata of one of its files
+            local source
+            local metadata = modHandler.getModMetadataFromPath(modFilenames[1])
+            local modNames = metadata and modHandler.getModNamesFromMetadata(metadata)
+
+            if modNames and modNames[1] then
+                source = modNames[1]
+            end
+
+            local modInfo = modHandler.loadedMods[modFolderName]
+            source = source or (modInfo and modInfo.name) or modFolderName
+
+            for _, filename in ipairs(modFilenames) do
+                local startIndex = string.find(filename, prefix, 1, true)
+
+                if startIndex then
+                    addFile(filename, filename:sub(startIndex + #prefix), source, modFolderName)
+                end
+            end
+        end
+
+        yieldIfPossible(index)
+    end
+
+    -- Vanilla images are part of the game content instead of a mod, so they are scanned from the
+    -- Celeste directory as well
+    local success, fileLocations = pcall(require, "file_locations")
+    local hasLfs, lfs = pcall(require, "lib.lfs_ffi")
+
+    if success and hasLfs then
+        local vanillaFolder = utils.convertToUnixPath(utils.joinpath(fileLocations.getCelesteDir(), "Content", folderPath))
+
+        if lfs.attributes(vanillaFolder, "mode") == "directory" then
+            local vanillaPrefix = vanillaFolder .. "/"
+
+            local function scanVanilla(directory)
+                for entry in lfs.dir(directory) do
+                    if entry ~= "." and entry ~= ".." then
+                        local target = directory .. "/" .. entry
+                        local mode = lfs.attributes(target, "mode")
+
+                        if mode == "directory" then
+                            scanVanilla(target)
+
+                        elseif mode == "file" and utils.fileExtension(entry) == "png" then
+                            addFile(target, target:sub(#vanillaPrefix + 1), "Celeste")
+                        end
+                    end
+                end
+            end
+
+            scanVanilla(vanillaFolder)
+        end
+    end
+
+    -- Vanilla resources come from the atlas snapshot: they are always listed as Celeste, even
+    -- when a mod ships a file with the same path
+    local covered = {}
+    local resourcePrefix = copyPrefix ~= "" and (copyPrefix .. "/") or nil
+
+    for _, entry in ipairs(files) do
+        covered[string.gsub(entry.relative, "%.png$", "")] = true
+    end
+
+    if resourcePrefix then
+        local counter = 0
+
+        for resource, sprite in pairs(vanillaResources) do
+            if utils.startsWith(resource, resourcePrefix) then
+                local relative = resource:sub(#resourcePrefix + 1)
+
+                if relative ~= "" and not covered[relative] then
+                    covered[relative] = true
+
+                    table.insert(files, {
+                        relative = relative .. ".png",
+                        sprite = sprite,
+                        source = "Celeste",
+                        copyPath = copyPrefix .. "/" .. relative
+                    })
+                end
+            end
+
+            counter = counter + 1
+            yieldIfPossible(counter)
+        end
+
+        -- Everything else in the atlas that no file provided (e.g. resources only reachable
+        -- through a zip mount)
+        for resource, sprite in pairs(atlases.gameplay) do
+            if type(sprite) == "table" and sprite.image and utils.startsWith(resource, resourcePrefix) then
+                local relative = resource:sub(#resourcePrefix + 1)
+
+                if relative ~= "" and not covered[relative] then
+                    covered[relative] = true
+
+                    local owner = getDecalOwnerModName(resource)
+
+                    table.insert(files, {
+                        relative = relative .. ".png",
+                        sprite = sprite,
+                        source = (owner and owner ~= "") and owner or "Celeste",
+                        copyPath = copyPrefix .. "/" .. relative
+                    })
+                end
+            end
+
+            counter = counter + 1
+            yieldIfPossible(counter)
+        end
+    end
+
+    table.sort(files, function(lhs, rhs)
+        if lhs.source ~= rhs.source then
+            return lhs.source < rhs.source
+        end
+
+        return lhs.relative < rhs.relative
+    end)
+
+    -- Resolving the atlas sprites is cheap compared to walking the mods, but during the startup
+    -- warmup it is still deferred to the first time the tool is opened
+    if not deferLoading then
+        schedulePreviewToolLoading(copyPrefix, files)
+    end
+
+    previewToolFileCache[copyPrefix] = files
+
+    return files
+end
+
+-- Warm the file lists while the editor idles, so opening the Preview tool does not have to walk
+-- every installed mod
+local previewWarmupStarted = false
+
+local function warmupPreviewToolCaches()
+    if previewWarmupStarted then
+        return
+    end
+
+    previewWarmupStarted = true
+
+    tasks.newTask(function()
+        for _, key in ipairs({"bg", "collectables", "danger", "objects", "colorGrading"}) do
+            local info = previewFolders[key]
+
+            ensurePreviewFiles(info.prefix, info.path, true)
+
+            tasks.yield()
+        end
+    end)
+end
+
 getMaterialItems = function(layer)
     -- A rebuilt list invalidates whatever row was hovered before
     hoverPreview.hide()
@@ -1917,7 +2308,9 @@ getMaterialItems = function(layer)
             bg = {path = "Graphics/Atlases/Gameplay/bgs", prefix = "bgs"},
             collectables = {path = "Graphics/Atlases/Gameplay/collectables", prefix = "collectables"},
             danger = {path = "Graphics/Atlases/Gameplay/danger", prefix = "danger"},
-            objects = {path = "Graphics/Atlases/Gameplay/objects", prefix = "objects"}
+            objects = {path = "Graphics/Atlases/Gameplay/objects", prefix = "objects"},
+            -- Color grading files are copied by their path below Graphics/ColorGrading
+            colorGrading = {path = "Graphics/ColorGrading", prefix = ""}
         }
 
         local folderInfo = folders[currentLayer] or folders.bg
@@ -1939,10 +2332,10 @@ getMaterialItems = function(layer)
 
             local function addFile(filename, relative, source, folderName)
                 local key = source .. "|" .. relative
-                local resource = copyPrefix .. "/" .. string.gsub(relative, "%.png$", "")
+                local resource = copyPrefix ~= "" and (copyPrefix .. "/" .. string.gsub(relative, "%.png$", "")) or nil
 
                 -- Provided by the game itself: handled by the vanilla pass below
-                if vanillaResources[resource] then
+                if resource and vanillaResources[resource] then
                     return
                 end
 
@@ -1953,7 +2346,9 @@ getMaterialItems = function(layer)
                         relative = relative,
                         file = filename,
                         source = source,
-                        folder = folderName
+                        folder = folderName,
+                        copyPath = (copyPrefix ~= "" and (copyPrefix .. "/") or "")
+                            .. string.gsub(relative, "%.png$", "")
                     })
                 end
             end
@@ -2027,44 +2422,48 @@ getMaterialItems = function(layer)
             -- Vanilla resources come from the atlas snapshot: they are always listed as Celeste,
             -- even when a mod ships a file with the same path
             local covered = {}
-            local resourcePrefix = copyPrefix .. "/"
+            local resourcePrefix = copyPrefix ~= "" and (copyPrefix .. "/") or nil
 
             for _, entry in ipairs(files) do
                 covered[string.gsub(entry.relative, "%.png$", "")] = true
             end
 
-            for resource, sprite in pairs(vanillaResources) do
-                if utils.startsWith(resource, resourcePrefix) then
-                    local relative = resource:sub(#resourcePrefix + 1)
+            if resourcePrefix then
+                for resource, sprite in pairs(vanillaResources) do
+                    if utils.startsWith(resource, resourcePrefix) then
+                        local relative = resource:sub(#resourcePrefix + 1)
 
-                    if relative ~= "" and not covered[relative] then
-                        covered[relative] = true
+                        if relative ~= "" and not covered[relative] then
+                            covered[relative] = true
 
-                        table.insert(files, {
-                            relative = relative .. ".png",
-                            sprite = sprite,
-                            source = "Celeste"
-                        })
+                            table.insert(files, {
+                                relative = relative .. ".png",
+                                sprite = sprite,
+                                source = "Celeste",
+                                copyPath = copyPrefix .. "/" .. relative
+                            })
+                        end
                     end
                 end
-            end
 
-            -- Everything else in the atlas that no file provided (e.g. resources only reachable
-            -- through a zip mount)
-            for resource, sprite in pairs(atlases.gameplay) do
-                if type(sprite) == "table" and sprite.image and utils.startsWith(resource, resourcePrefix) then
-                    local relative = resource:sub(#resourcePrefix + 1)
+                -- Everything else in the atlas that no file provided (e.g. resources only
+                -- reachable through a zip mount)
+                for resource, sprite in pairs(atlases.gameplay) do
+                    if type(sprite) == "table" and sprite.image and utils.startsWith(resource, resourcePrefix) then
+                        local relative = resource:sub(#resourcePrefix + 1)
 
-                    if relative ~= "" and not covered[relative] then
-                        covered[relative] = true
+                        if relative ~= "" and not covered[relative] then
+                            covered[relative] = true
 
-                        local owner = getDecalOwnerModName(resource)
+                            local owner = getDecalOwnerModName(resource)
 
-                        table.insert(files, {
-                            relative = relative .. ".png",
-                            sprite = sprite,
-                            source = (owner and owner ~= "") and owner or "Celeste"
-                        })
+                            table.insert(files, {
+                                relative = relative .. ".png",
+                                sprite = sprite,
+                                source = (owner and owner ~= "") and owner or "Celeste",
+                                copyPath = copyPrefix .. "/" .. relative
+                            })
+                        end
                     end
                 end
             end
@@ -2077,8 +2476,13 @@ getMaterialItems = function(layer)
                 return lhs.relative < rhs.relative
             end)
 
+            -- The list opens right away: the images are resolved by a background task afterwards
+            schedulePreviewToolLoading(copyPrefix, files)
+
             previewToolFileCache[copyPrefix] = files
         end
+
+        schedulePreviewToolLoading(copyPrefix, files)
 
         -- Animation frames (test00.png, test01.png, ...) are only listed by their first frame
         local keptFrames = {}
@@ -2125,7 +2529,8 @@ getMaterialItems = function(layer)
         local previewFiles = {}
 
         for _, entry in ipairs(keptFrames) do
-            local copyPath = copyPrefix .. "/" .. string.gsub(entry.relative, "%.png$", "")
+            local copyPath = entry.copyPath
+                or ((copyPrefix ~= "" and (copyPrefix .. "/") or "") .. string.gsub(entry.relative, "%.png$", ""))
             local displayName = string.match(entry.relative, "[^/]+$") or entry.relative
 
             displayName = string.gsub(displayName, "%.png$", "")
@@ -2165,6 +2570,10 @@ getMaterialItems = function(layer)
 
         local previewItems = getPathTreeItems(previewMaterials, currentTool, currentLayer, favoritesLookup, language, {
             pathOf = function(name)
+                if copyPrefix == "" then
+                    return name
+                end
+
                 return name:sub(#copyPrefix + 2)
             end,
             leafText = function(entry)

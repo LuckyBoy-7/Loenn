@@ -11,7 +11,7 @@ tool.group = "preview"
 tool.order = 9.6
 
 -- Secondary entries: asset folders whose images are listed on the right
-tool.validLayers = {"bg", "collectables", "danger", "objects"}
+tool.validLayers = {"bg", "collectables", "danger", "objects", "colorGrading"}
 
 tool.layer = "bg"
 tool.subLayer = -1

@@ -129,7 +129,9 @@ function loadingScene:firstEnter()
             phaseDone("celesteAtlases")
 
             startupProgress.beginPhase("mountMods", "Loading mods")
+
             mods.mountMods()
+
             startupProgress.finishPhase()
             phaseDone("mountMods")
 
