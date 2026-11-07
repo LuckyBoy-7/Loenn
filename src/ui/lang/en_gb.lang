@@ -215,7 +215,18 @@ ui.tools_window.only_keep_used_description=Removes every tileset the map does no
 ui.notifications.tilesetDefaultsRemoved=Removed %d unused tilesets.
 ui.notifications.tilesetDefaultsNothingRemoved=All tilesets are used, nothing was removed.
 ui.notifications.previewPathCopied=Copied path: %s
+ui.notifications.previewCopyInvalidMod=The current Mod structure is not valid, so the path was copied directly: %s
+ui.notifications.previewCopyDone=Copied %d files to '%s'.
 ui.script_window.run_script=Run Scripts
+
+ui.preview_copy_window.title=Copy Object
+ui.preview_copy_window.relative_path=Relative Path
+ui.preview_copy_window.relative_path_tooltip=Folder inside the map's mod, for example Lucky_boy/TestMap.
+ui.preview_copy_window.copy_path_and_file=Copy Path And File
+ui.preview_copy_window.only_copy_path=Only Copy Path
+ui.preview_copy_window.copied_path=Copied path: %s
+ui.preview_copy_window.copied_files=Copied %d files. Path: %s
+ui.preview_copy_window.copy_failed=Could not copy the files, path copied instead: %s
 
 ui.notifications.tilesetDefaultsInvalidMod=This map is not inside a mod folder (Celeste/Mods/<Mod>/...). Nothing was added.
 ui.notifications.tilesetDefaultsInvalidXml=The tileset file '%s' can not be used (%s).

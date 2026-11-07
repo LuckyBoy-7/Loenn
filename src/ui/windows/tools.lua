@@ -2473,8 +2473,32 @@ getMaterialItems = function(layer)
                 local copyPath = item.data
 
                 item.onPress = function()
-                    love.system.setClipboardText(copyPath)
-                    notifications.notify(string.format(tostring(language.ui.notifications.previewPathCopied), copyPath))
+                    -- Vanilla resources are always reachable: only the path matters there
+                    local isModFile = entry and entry.file and entry.file:sub(1, 1) == "$"
+
+                    if not isModFile then
+                        love.system.setClipboardText(copyPath)
+                        notifications.notify(string.format(tostring(language.ui.notifications.previewPathCopied), copyPath))
+
+                        return
+                    end
+
+                    -- Copying files needs the map to live in an unpacked mod folder
+                    local tilesetDefaults = require("tileset_defaults")
+
+                    if not tilesetDefaults.getMapModFolder() then
+                        love.system.setClipboardText(copyPath)
+                        notifications.notify(string.format(
+                            tostring(language.ui.notifications.previewCopyInvalidMod), copyPath))
+
+                        return
+                    end
+
+                    require("ui.windows.preview_copy_window").open({
+                        copyPath = copyPath,
+                        layer = currentLayer,
+                        sourceFile = entry.file
+                    })
                 end
             end
         end
