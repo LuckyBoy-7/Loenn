@@ -3,7 +3,8 @@
 local registry = {}
 
 registry.scripts = {
-    require("scripts/change_filler_to_room")
+    require("scripts/change_filler_to_room"),
+    require("scripts/change_attributes")
 }
 
 function registry.getScripts()

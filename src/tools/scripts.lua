@@ -11,6 +11,8 @@ local celesteRender = require("celeste_render")
 local notifications = require("ui.notification")
 local logging = require("logging")
 local viewportHandler = require("viewport_handler")
+local drawing = require("utils.drawing")
+local colors = require("consts.colors")
 local registry = require("scripts.registry")
 local scriptsPanel = require("ui.windows.scripts_panel")
 
@@ -73,6 +75,7 @@ end
 
 local function execScript(script, args, context)
     local snapshots = {}
+    local keepPanelOpen = false
 
     context = context or {}
     context.mouseX = context.mouseX or 0
@@ -88,7 +91,8 @@ local function execScript(script, args, context)
     end
 
     if script.prerun then
-        local prerunSnapshot = script.prerun(args, tool.layer, context)
+        local prerunSnapshot, prerunKeepPanelOpen = script.prerun(args, tool.layer, context)
+        keepPanelOpen = prerunKeepPanelOpen == true
 
         if prerunSnapshot then
             table.insert(snapshots, prerunSnapshot)
@@ -115,18 +119,36 @@ local function execScript(script, args, context)
     if #snapshots > 0 then
         history.addSnapshot(snapshotUtils.multiSnapshot("script_" .. tostring(script.name), snapshots))
     end
+
+    -- The panel decides whether it closes: a script can ask to stay open so invalid input can
+    -- be corrected without filling the form again
+    return not keepPanelOpen
 end
 
 local function safeExecScript(script, args, context)
-    local success, message = pcall(execScript, script, args, context)
+    local success, result = pcall(execScript, script, args, context)
 
     if not success then
         logging.warning("Failed to run script!")
-        logging.warning(debug.traceback(message))
+        logging.warning(debug.traceback(result))
         notifications.notify("Failed to run script!")
-    else
+
+        -- Keep the panel open on errors: the user can fix the input and try again
+        return false
+    end
+
+    if not script.silent then
+        -- Scripts that only opened a panel do not report success on their first stage
         notifications.notify("Successfully ran script.")
     end
+
+    return result ~= false
+end
+
+-- Entry point for scripts that run another script from their own UI (e.g. after a generated
+-- parameter panel was confirmed): snapshots, scope and notifications are handled here
+function tool.executeScript(script, args, context)
+    safeExecScript(script, args, context)
 end
 
 local function useScript(script, context)
@@ -136,7 +158,7 @@ local function useScript(script, context)
 
     if script.fieldOrder and #script.fieldOrder > 0 then
         scriptsPanel.open(script, context, function(args)
-            safeExecScript(script, args, context)
+            return safeExecScript(script, args, context)
         end)
 
     else
@@ -228,6 +250,25 @@ end
 
 function tool.unselected()
     return true
+end
+
+-- Cursor hint: a small square at the mouse position, like the scripts plugin. It shows where the
+-- selected script will run.
+function tool.draw()
+    if not tool.material then
+        return
+    end
+
+    local mouseX, mouseY = viewportHandler.getMousePosition()
+    local mapX, mapY = viewportHandler.getMapCoordinates(mouseX, mouseY)
+
+    drawing.callKeepOriginalColor(function()
+        viewportHandler.drawRelativeTo(0, 0, function()
+            love.graphics.setColor(colors.brushColor)
+            love.graphics.rectangle("line", mapX - 4, mapY - 4, 8, 8)
+            love.graphics.rectangle("line", mapX - 1, mapY - 1, 2, 2)
+        end)
+    end)
 end
 
 return tool
