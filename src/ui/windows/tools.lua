@@ -1337,6 +1337,15 @@ local function getPreviewToolPlaceholder()
     return previewToolPlaceholder
 end
 
+-- Applies the hovered color grading texture to the left sample window (ColorGrading layer only)
+local function updateColorGradingHover(entry)
+    if toolHandler.currentToolName ~= "preview" or toolHandler.getLayer() ~= "colorGrading" then
+        return
+    end
+
+    require("ui.windows.colorgrading_preview").setGrade(entry and entry.file or nil)
+end
+
 local function updateHoverPreview(list)
     -- The debug list has no placements to preview
     if toolHandler.currentToolName == "debug" then
@@ -1352,6 +1361,8 @@ local function updateHoverPreview(list)
 
     if not hovered or hovered == list or not hovered.itemData then
         hoverPreview.hide()
+        updateColorGradingHover(nil)
+
         return
     end
 
@@ -1363,6 +1374,8 @@ local function updateHoverPreview(list)
     -- when it is empty or can not be loaded
     if toolHandler.currentToolName == "preview" then
         local entry = item.previewEntry
+
+        updateColorGradingHover(entry)
 
         -- Rows that are not Preview entries (tool/layer rows, headers) have no preview at all
         if not entry then
