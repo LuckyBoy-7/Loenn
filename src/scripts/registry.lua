@@ -5,7 +5,8 @@ local registry = {}
 registry.scripts = {
     require("scripts/change_filler_to_room"),
     require("scripts/change_attributes"),
-    require("scripts/flip_room")
+    require("scripts/flip_room"),
+    require("scripts/tile_credits")
 }
 
 function registry.getScripts()
