@@ -31,6 +31,34 @@ local toolProxyMt = {
 
 local device = setmetatable({_enabled = true, _type = "device"}, toolProxyMt)
 
+-- The selection can hold a copy of the clicked item, so compare by value: a reference check made
+-- every click on an already selected filler look like a new selection and swallowed the click
+local function sameItem(a, b)
+    if a == b then
+        return true
+    end
+
+    if not a or not b then
+        return false
+    end
+
+    local typeA, typeB = utils.typeof(a), utils.typeof(b)
+
+    if typeA ~= typeB then
+        return false
+    end
+
+    if typeA == "room" then
+        return a.name == b.name
+    end
+
+    if typeA == "filler" then
+        return a.x == b.x and a.y == b.y and a.width == b.width and a.height == b.height
+    end
+
+    return false
+end
+
 local function tryRoomSwap(x, y, button, istouch, presses)
     if state.map ~= nil then
         local currentTool = toolHandler.currentTool
@@ -47,7 +75,7 @@ local function tryRoomSwap(x, y, button, istouch, presses)
             local addModifierHeld = keyboardHelper.modifierHeld(addModifier)
             local currentItem = state.getSelectedItem()
 
-            if itemClicked and itemClicked ~= currentItem then
+            if itemClicked and not sameItem(itemClicked, currentItem) then
                 state.selectItem(itemClicked, addModifierHeld)
 
                 return true

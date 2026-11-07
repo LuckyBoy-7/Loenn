@@ -34,8 +34,6 @@ local autotiler = require("autotiler")
 local selectionItemUtils = require("selection_item_utils")
 local placementUtils = require("placement_utils")
 local virtualFs = require("virtual_fs")
-local threadHandler = require("utils.threads")
-local tasks = require("utils.tasks")
 local utf8 = require("utf8")
 
 local toolWindow = {}
@@ -86,10 +84,7 @@ local entityPreviewCache = {}
 -- Cached file lists of the Preview tool, keyed by asset folder
 local previewToolFileCache = {}
 
--- Background loaders for the preview images of a folder, keyed by prefix
-local previewToolLoadTasks = {}
-
--- Checkerboard shown while an entry image is loading (or when it has none)
+-- Checkerboard shown when an entry has no usable image
 local previewToolPlaceholder
 
 local function splitDecalPath(path)
@@ -1342,139 +1337,6 @@ local function getPreviewToolPlaceholder()
     return previewToolPlaceholder
 end
 
--- File based previews are decoded in a worker thread: decoding one big PNG on the main thread
--- caused a visible hitch. The texture upload stays on the main thread (LÖVE can not create
--- textures in threads) but is throttled to a couple of images per frame.
-local previewLoaderCode = [=[
-    local args = {...}
-    local outName, inName = unpack(args)
-    local output = love.thread.getChannel(outName)
-    local input = love.thread.getChannel(inName)
-
-    while true do
-        local path = input:demand()
-
-        if path == nil or path == false then
-            break
-        end
-
-        local file = io.open(path, "rb")
-        local data
-
-        if file then
-            data = file:read("*a")
-            file:close()
-        end
-
-        local imageData
-
-        if data then
-            local success, result = pcall(function()
-                return love.image.newImageData(love.filesystem.newFileData(data, "preview.png"))
-            end)
-
-            if success then
-                imageData = result
-            end
-        end
-
-        output:push({path = path, imageData = imageData, data = imageData and nil or data})
-    end
-]=]
-
--- Decoded images waiting for their (throttled) upload
-local previewUploadQueue = {}
-
--- File path to the entries that use it
-local previewPathEntries = {}
-
-local function processPreviewUploads()
-    local processed = 0
-
-    while processed < 2 and #previewUploadQueue > 0 do
-        local event = table.remove(previewUploadQueue, 1)
-        local imageData = event.imageData
-
-        -- The worker decodes when love.image is available there; otherwise fall back to decoding
-        -- here (still throttled)
-        if not imageData and event.data then
-            local success, result = pcall(function()
-                return love.image.newImageData(love.filesystem.newFileData(event.data, "preview.png"))
-            end)
-
-            if success then
-                imageData = result
-            end
-        end
-
-        local image
-
-        if imageData then
-            local success, result = pcall(love.graphics.newImage, imageData)
-
-            if success then
-                image = result
-            end
-        end
-
-        previewToolImages[event.path] = image or false
-
-        for _, entry in ipairs(previewPathEntries[event.path] or {}) do
-            entry.image = image
-            entry.previewState = image and "ready" or "failed"
-        end
-
-        previewPathEntries[event.path] = nil
-        processed = processed + 1
-    end
-end
-
--- Resolve the previews of a folder in the background: the list itself opens immediately and the
--- images appear as they are loaded
--- One shared worker thread for preview images, started on demand
-local previewLoaderInput
-
-local function ensurePreviewLoader()
-    if previewLoaderInput then
-        return
-    end
-
-    local inName = "preview_loader_" .. tostring(love.timer.getTime())
-
-    previewLoaderInput = love.thread.getChannel(inName)
-
-    threadHandler.createStartWithCallback(previewLoaderCode, function(event)
-        table.insert(previewUploadQueue, event)
-    end, inName)
-end
-
--- Queue one entry for the worker. Images are only decoded when they are actually looked at, so
--- opening the tool or starting the editor does not decode thousands of textures.
-local function queuePreviewLoad(entry)
-    if entry.previewState ~= "pending" or not entry.file then
-        return
-    end
-
-    ensurePreviewLoader()
-
-    entry.previewState = "loading"
-
-    local entries = previewPathEntries[entry.file]
-
-    if not entries then
-        entries = {}
-        previewPathEntries[entry.file] = entries
-
-        previewLoaderInput:push(entry.file)
-    end
-
-    table.insert(entries, entry)
-end
-
-local function schedulePreviewToolLoading(copyPrefix, files)
-    -- Images are loaded on hover (see updateHoverPreview), nothing has to be prepared up front
-end
-
 local function updateHoverPreview(list)
     -- The debug list has no placements to preview
     if toolHandler.currentToolName == "debug" then
@@ -2140,37 +2002,9 @@ local function ensurePreviewFiles(copyPrefix, folderPath, deferLoading)
         return lhs.relative < rhs.relative
     end)
 
-    -- Resolving the atlas sprites is cheap compared to walking the mods, but during the startup
-    -- warmup it is still deferred to the first time the tool is opened
-    if not deferLoading then
-        schedulePreviewToolLoading(copyPrefix, files)
-    end
-
     previewToolFileCache[copyPrefix] = files
 
     return files
-end
-
--- Warm the file lists while the editor idles, so opening the Preview tool does not have to walk
--- every installed mod
-local previewWarmupStarted = false
-
-local function warmupPreviewToolCaches()
-    if previewWarmupStarted then
-        return
-    end
-
-    previewWarmupStarted = true
-
-    tasks.newTask(function()
-        for _, key in ipairs({"bg", "collectables", "danger", "objects", "colorGrading"}) do
-            local info = previewFolders[key]
-
-            ensurePreviewFiles(info.prefix, info.path, true)
-
-            tasks.yield()
-        end
-    end)
 end
 
 getMaterialItems = function(layer)
@@ -2292,6 +2126,28 @@ getMaterialItems = function(layer)
 
         -- No fixed row height here: this list mixes source headers and normal rows. A leftover
         -- elementSize from the tile list makes the scroll position twitch.
+        if toolWindow.materialList then
+            toolWindow.materialList.style.elementSize = false
+        end
+
+        return items
+    end
+
+    -- Scripts tool: one row per registered script. Scripts run on the selected scope, or open a
+    -- configuration panel first when they define fields
+    if currentTool and currentTool.name == "scripts" then
+        local registry = require("scripts.registry")
+        local items = {}
+
+        for _, script in ipairs(registry.getScripts()) do
+            table.insert(items, {
+                text = script.title,
+                textNoMods = script.title,
+                data = script.name,
+                tooltip = script.description
+            })
+        end
+
         if toolWindow.materialList then
             toolWindow.materialList.style.elementSize = false
         end
@@ -2476,13 +2332,10 @@ getMaterialItems = function(layer)
                 return lhs.relative < rhs.relative
             end)
 
-            -- The list opens right away: the images are resolved by a background task afterwards
-            schedulePreviewToolLoading(copyPrefix, files)
-
             previewToolFileCache[copyPrefix] = files
         end
 
-        schedulePreviewToolLoading(copyPrefix, files)
+        -- Images are loaded on hover (see updateHoverPreview), nothing has to be prepared here
 
         -- Animation frames (test00.png, test01.png, ...) are only listed by their first frame
         local keptFrames = {}

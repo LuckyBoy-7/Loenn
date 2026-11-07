@@ -1,0 +1,233 @@
+-- Scripts tool, modelled after the Loenn Scripts plugin: pick a script on the right, then click
+-- in the workspace to run it. Scripts may provide prerun (whole map, returns a snapshot) and run
+-- (per target room); scripts with fields open a parameter panel first.
+
+local state = require("loaded_state")
+local configs = require("configs")
+local utils = require("utils")
+local history = require("history")
+local snapshotUtils = require("snapshot_utils")
+local celesteRender = require("celeste_render")
+local notifications = require("ui.notification")
+local logging = require("logging")
+local viewportHandler = require("viewport_handler")
+local registry = require("scripts.registry")
+local scriptsPanel = require("ui.windows.scripts_panel")
+
+local tool = {}
+
+tool._type = "tool"
+tool.name = "scripts"
+tool.group = "scripts"
+-- Right below the Preview tool
+tool.order = 9.7
+
+-- Scope of the scripts, shown as the secondary entries below the tool
+tool.validLayers = {"currentRoom", "allRooms"}
+tool.layer = "currentRoom"
+tool.subLayer = -1
+
+tool.material = nil
+
+function tool.getMaterials()
+    local materials = {}
+
+    for _, script in ipairs(registry.getScripts()) do
+        table.insert(materials, {
+            name = script.name,
+            displayName = script.title,
+            displayNameNoMods = script.title,
+            description = script.description
+        })
+    end
+
+    return materials
+end
+
+function tool.setMaterial(name)
+    tool.material = name
+
+    return true
+end
+
+function tool.getMaterial()
+    return tool.material
+end
+
+function tool.setLayer(layer, subLayer)
+    tool.layer = layer or "currentRoom"
+    tool.subLayer = subLayer or -1
+
+    return true
+end
+
+local function getTargetRooms()
+    if tool.layer == "allRooms" then
+        return state.map and state.map.rooms or {}
+    end
+
+    local selectedRoom = state.getSelectedRoom()
+
+    return selectedRoom and {selectedRoom} or {}
+end
+
+local function execScript(script, args, context)
+    local snapshots = {}
+
+    context = context or {}
+    context.mouseX = context.mouseX or 0
+    context.mouseY = context.mouseY or 0
+    context.mouseMapX = context.mouseMapX or 0
+    context.mouseMapY = context.mouseMapY or 0
+    context.layer = tool.layer
+
+    local room = state.getSelectedRoom()
+
+    if room then
+        context.mouseRoomX, context.mouseRoomY = context.mouseMapX - room.x, context.mouseMapY - room.y
+    end
+
+    if script.prerun then
+        local prerunSnapshot = script.prerun(args, tool.layer, context)
+
+        if prerunSnapshot then
+            table.insert(snapshots, prerunSnapshot)
+        end
+    end
+
+    if script.run then
+        for _, targetRoom in ipairs(getTargetRooms()) do
+            context.mouseRoomX, context.mouseRoomY = context.mouseMapX - targetRoom.x, context.mouseMapY - targetRoom.y
+
+            local before = utils.deepcopy(targetRoom)
+
+            script.run(targetRoom, args, context)
+
+            local after = utils.deepcopy(targetRoom)
+
+            table.insert(snapshots, snapshotUtils.roomSnapshot(targetRoom,
+                "script_" .. tostring(script.name), before, after))
+
+            celesteRender.invalidateRoomCache(targetRoom)
+        end
+    end
+
+    if #snapshots > 0 then
+        history.addSnapshot(snapshotUtils.multiSnapshot("script_" .. tostring(script.name), snapshots))
+    end
+end
+
+local function safeExecScript(script, args, context)
+    local success, message = pcall(execScript, script, args, context)
+
+    if not success then
+        logging.warning("Failed to run script!")
+        logging.warning(debug.traceback(message))
+        notifications.notify("Failed to run script!")
+    else
+        notifications.notify("Successfully ran script.")
+    end
+end
+
+local function useScript(script, context)
+    if not script then
+        return
+    end
+
+    if script.fieldOrder and #script.fieldOrder > 0 then
+        scriptsPanel.open(script, context, function(args)
+            safeExecScript(script, args, context)
+        end)
+
+    else
+        safeExecScript(script, {}, context)
+    end
+end
+
+-- Rooms and fillers can both be clicked. Reuse the editor hit testing helpers: filler
+-- coordinates are stored in tiles, rooms in pixels, and the helpers handle that.
+local function getItemAt(mapX, mapY)
+    local map = state.map
+
+    if not map then
+        return nil
+    end
+
+    return utils.getFillerAtCoords(mapX, mapY, map) or utils.getRoomAtCoords(mapX, mapY, map) or nil
+end
+
+-- The editor may keep a copy of the clicked item as the selection, so compare by value
+local function sameItem(a, b)
+    if a == b then
+        return true
+    end
+
+    if not a or not b then
+        return false
+    end
+
+    local typeA, typeB = utils.typeof(a), utils.typeof(b)
+
+    if typeA ~= typeB then
+        return false
+    end
+
+    if typeA == "room" then
+        return a.name == b.name
+    end
+
+    if typeA == "filler" then
+        return a.x == b.x and a.y == b.y and a.width == b.width and a.height == b.height
+    end
+
+    return false
+end
+
+function tool.mouseclicked(x, y, button, istouch, pressed)
+    if button ~= configs.editor.toolActionButton then
+        return false
+    end
+
+    local script = tool.material and registry.getByName(tool.material)
+
+    if not script then
+        return false
+    end
+
+    local mouseMapX, mouseMapY = viewportHandler.getMapCoordinates(x, y or 0)
+    local clickedItem = getItemAt(mouseMapX, mouseMapY)
+
+    -- Current Room only runs on the focused item: clicking another room or filler focuses it
+    -- first. All Rooms runs wherever the click happened.
+    if tool.layer ~= "allRooms" then
+        if not clickedItem then
+            return false
+        end
+
+        if not sameItem(clickedItem, state.getSelectedItem()) then
+            state.selectItem(clickedItem)
+
+            return true
+        end
+    end
+
+    useScript(script, {
+        mouseX = x,
+        mouseY = y or 0,
+        mouseMapX = mouseMapX,
+        mouseMapY = mouseMapY,
+        focusedItem = clickedItem or state.getSelectedItem()
+    })
+
+    return true
+end
+
+function tool.selected()
+    return true
+end
+
+function tool.unselected()
+    return true
+end
+
+return tool

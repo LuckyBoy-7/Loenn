@@ -215,6 +215,7 @@ ui.tools_window.only_keep_used_description=Removes every tileset the map does no
 ui.notifications.tilesetDefaultsRemoved=Removed %d unused tilesets.
 ui.notifications.tilesetDefaultsNothingRemoved=All tilesets are used, nothing was removed.
 ui.notifications.previewPathCopied=Copied path: %s
+ui.script_window.run_script=Run Scripts
 
 ui.notifications.tilesetDefaultsInvalidMod=This map is not inside a mod folder (Celeste/Mods/<Mod>/...). Nothing was added.
 ui.notifications.tilesetDefaultsInvalidXml=The tileset file '%s' can not be used (%s).

@@ -1,0 +1,21 @@
+-- Registry of the available scripts. Adding a script is one entry here.
+
+local registry = {}
+
+registry.scripts = {
+    require("scripts/change_filler_to_room")
+}
+
+function registry.getScripts()
+    return registry.scripts
+end
+
+function registry.getByName(name)
+    for _, script in ipairs(registry.scripts) do
+        if script.name == name then
+            return script
+        end
+    end
+end
+
+return registry
