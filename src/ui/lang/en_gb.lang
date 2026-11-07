@@ -377,3 +377,4 @@ ui.coordinate_window.worldSnap=World Snap
 ui.coordinate_window.room=Room Pixel
 ui.coordinate_window.roomTiles=Room Tile
 ui.coordinate_window.roomSnap=Room Snap
+ui.coordinate_window.zoom=Zoom

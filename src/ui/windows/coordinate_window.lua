@@ -59,7 +59,8 @@ local rowKeys = {
     "worldSnap",
     "room",
     "roomTiles",
-    "roomSnap"
+    "roomSnap",
+    "zoom"
 }
 
 -- Fallback width for the panel when every entry is short
@@ -71,6 +72,19 @@ end
 
 local function tile(value)
     return math.floor(value / 8 + 0.4)
+end
+
+-- Current viewport scale: 1x, 2x, 0.5x, ...
+local function formatZoom(scale)
+    if not scale or scale == 0 then
+        return "-"
+    end
+
+    if math.abs(scale - math.floor(scale + 0.5)) < 0.001 then
+        return string.format("%dx", math.floor(scale + 0.5))
+    end
+
+    return string.format("%.2fx", scale)
 end
 
 -- Where the cursor is right now
@@ -88,7 +102,8 @@ local function getCursorInfo()
         worldTileX = worldTileX,
         worldTileY = worldTileY,
         worldX = mapX,
-        worldY = mapY
+        worldY = mapY,
+        zoom = formatZoom(viewportHandler.viewport and viewportHandler.viewport.scale)
     }
 
     local room = loadedState.getSelectedRoom()
@@ -115,6 +130,9 @@ local function updateLabels(labels)
     for _, key in ipairs(rowKeys) do
         if key == "roomName" then
             labels.roomName:setText(info.roomName or "-")
+
+        elseif key == "zoom" then
+            labels.zoom:setText(info.zoom or "-")
 
         else
             local pair = info[key]
