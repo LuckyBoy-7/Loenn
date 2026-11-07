@@ -150,6 +150,10 @@ function script.prerun(args)
     end
 
     local properties = getDefaultData(target)
+    local handler = getEntityHandler(target)
+    -- Reuse the destination handler's field information so enums keep their dropdown options,
+    -- minimums, editable flags, etc. (this is what the LoennScripts version does as well)
+    local handlerFieldInformation = utils.deepcopy(handler and handler.fieldInformation or {})
     local propertyNames = {}
 
     for propertyName in pairs(properties) do
@@ -166,17 +170,20 @@ function script.prerun(args)
         table.insert(fieldOrder, propertyName)
 
         defaultData[propertyName] = utils.deepcopy(properties[propertyName])
-        fieldInformation[propertyName] = {
-            displayName = utils.humanizeVariableName(propertyName)
-        }
+
+        -- Options/enums and other field settings come from the destination entity handler
+        local info = handlerFieldInformation[propertyName] or {}
+        fieldInformation[propertyName] = info
+
+        if not info.displayName then
+            info.displayName = utils.humanizeVariableName(propertyName)
+        end
 
         if args.allowPreserving then
             local replaceName = getChangePropName(propertyName)
 
             table.insert(fieldOrder, replaceName)
 
-            -- Off by default: only the checked attributes are overwritten, the rest keeps the
-            -- value the entity already had
             defaultData[replaceName] = false
             fieldInformation[replaceName] = {
                 displayName = string.format("Replace %s", utils.humanizeVariableName(propertyName))
