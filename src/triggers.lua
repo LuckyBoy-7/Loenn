@@ -41,25 +41,12 @@ function triggers.getTriggerFontSize(room)
         return size
     end
 
-    local selectedItem, selectedItemType = loadedState.getSelectedItem()
-    local selected
+    -- Zoomed in far enough that the labels are readable at their normal size
+    local viewportHandler = require("viewport_handler")
+    local zoom = viewportHandler.viewport and viewportHandler.viewport.scale or 1
 
-    if selectedItemType == "table" then
-        selected = selectedItem and selectedItem[room] ~= nil
-
-    else
-        selected = selectedItem == room
-    end
-
-    if selected then
-        -- When zoomed in the selected room already uses the larger font and stays readable;
-        -- at zoom 1 (and below) its labels are doubled like the unselected ones
-        local viewportHandler = require("viewport_handler")
-        local zoom = viewportHandler.viewport and viewportHandler.viewport.scale or 1
-
-        if zoom > 1 then
-            return size
-        end
+    if zoom >= 2 then
+        return size
     end
 
     return size * 2

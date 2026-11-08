@@ -92,33 +92,16 @@ local function applyAutomaticFont()
     end
 end
 
--- Trigger labels change size together with the zoom when the double size setting is on: the
--- selected rooms have to be re-batched, otherwise their cached labels keep the old size
-local function refreshSelectedRoomTriggerText()
+-- Trigger labels change size with the zoom when the double size setting is on: every cached room
+-- canvas has to be rebuilt, otherwise the labels keep the old size
+local function refreshTriggerTextOnZoomChange()
     local configs = require("configs")
 
     if not configs.font or not configs.font.doubleTriggerTextSize or not require("fonts").useHires then
         return
     end
 
-    local loadedState = require("loaded_state")
-    local celesteRender = require("celeste_render")
-    local item, itemType = loadedState.getSelectedItem()
-
-    local function refresh(room)
-        if room then
-            celesteRender.forceRedrawRoom(room, loadedState, true)
-        end
-    end
-
-    if itemType == "room" then
-        refresh(item)
-
-    elseif itemType == "table" and item then
-        for room in pairs(item) do
-            refresh(room)
-        end
-    end
+    require("loaded_state").clearRoomRenderCache()
 end
 
 function viewportHandler.zoomIn()
@@ -129,7 +112,7 @@ function viewportHandler.zoomIn()
     viewport.y = viewport.y * 2 + mouseY
 
     applyAutomaticFont()
-    refreshSelectedRoomTriggerText()
+    refreshTriggerTextOnZoomChange()
 
     viewportHandler.persistCamera()
 end
@@ -142,7 +125,7 @@ function viewportHandler.zoomOut()
     viewport.y = (viewport.y - mouseY) / 2
 
     applyAutomaticFont()
-    refreshSelectedRoomTriggerText()
+    refreshTriggerTextOnZoomChange()
 
     viewportHandler.persistCamera()
 end
@@ -156,7 +139,7 @@ function viewportHandler.moveToPosition(x, y, scale, centered)
 
     if scale and scale ~= previousScale then
         applyAutomaticFont()
-        refreshSelectedRoomTriggerText()
+        refreshTriggerTextOnZoomChange()
     end
 
     if centered then

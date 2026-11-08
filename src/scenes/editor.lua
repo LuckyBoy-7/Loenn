@@ -123,25 +123,6 @@ end
 function editorScene:editorMapTargetChanged(item, itemType, previousItem, previousItemType)
     -- Trigger labels are bigger outside of the selected room when the setting is enabled: the
     -- cached room batches have to be rebuilt for both the previously and the newly selected room
-    local fonts = require("fonts")
-    local refreshTriggerText = configs.font.doubleTriggerTextSize and fonts.useHires
-
-    if refreshTriggerText then
-        local function invalidateSelection(target, targetType)
-            if targetType == "room" then
-                self.celesteRender.invalidateRoomCache(target)
-
-            elseif targetType == "table" and target then
-                for room in pairs(target) do
-                    self.celesteRender.invalidateRoomCache(room)
-                end
-            end
-        end
-
-        invalidateSelection(item, itemType)
-        invalidateSelection(previousItem, previousItemType)
-    end
-
     if previousItemType == "room" then
         -- Create a new canvas for the previous selected room and rerender it instantly
         -- If we let it be lazily rerendered it will cause flashes after a few frames
@@ -160,16 +141,6 @@ function editorScene:editorMapTargetChanged(item, itemType, previousItem, previo
 
         if shouldForceRedraw then
             self.celesteRender.forceRedrawRoom(previousItem, self.viewerState, false)
-        end
-    end
-
-    -- The new selected room uses the normal label size: rebuild it right away as well
-    if refreshTriggerText and itemType == "room" then
-        self.celesteRender.forceRedrawRoom(item, self.viewerState, true)
-
-    elseif refreshTriggerText and itemType == "table" and item then
-        for room in pairs(item) do
-            self.celesteRender.forceRedrawRoom(room, self.viewerState, true)
         end
     end
 
