@@ -86,7 +86,7 @@ local function getTargetRooms()
     return selectedRoom and {selectedRoom} or {}
 end
 
-local function execScript(script, args, context)
+local function execScript(script, args, context, targetRooms)
     local snapshots = {}
     local keepPanelOpen = false
 
@@ -113,7 +113,7 @@ local function execScript(script, args, context)
     end
 
     if script.run then
-        for _, targetRoom in ipairs(getTargetRooms()) do
+        for _, targetRoom in ipairs(targetRooms or getTargetRooms()) do
             context.mouseRoomX, context.mouseRoomY = context.mouseMapX - targetRoom.x, context.mouseMapY - targetRoom.y
 
             local before = utils.deepcopy(targetRoom)
@@ -138,8 +138,8 @@ local function execScript(script, args, context)
     return not keepPanelOpen
 end
 
-local function safeExecScript(script, args, context)
-    local success, result = pcall(execScript, script, args, context)
+local function safeExecScript(script, args, context, targetRooms)
+    local success, result = pcall(execScript, script, args, context, targetRooms)
 
     if not success then
         logging.warning("Failed to run script!")
@@ -159,13 +159,21 @@ local function safeExecScript(script, args, context)
 end
 
 -- Entry point for scripts that run another script from their own UI (e.g. after a generated
--- parameter panel was confirmed): snapshots, scope and notifications are handled here
-function tool.executeScript(script, args, context)
-    safeExecScript(script, args, context)
+-- parameter panel was confirmed): snapshots, scope and notifications are handled here.
+-- targetRooms can override the tool scope for scripts that operate on specific rooms.
+function tool.executeScript(script, args, context, targetRooms)
+    safeExecScript(script, args, context, targetRooms)
 end
 
 local function useScript(script, context)
     if not script then
+        return
+    end
+
+    -- Scripts with their own validation/panel (e.g. Auto Add Background Tiles) open themselves
+    if script.open then
+        script.open(context)
+
         return
     end
 

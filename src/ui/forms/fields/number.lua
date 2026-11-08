@@ -39,7 +39,9 @@ function numberField.getElement(name, value, options)
         return valueValidator(raw, v, allowEmpty, minimumValue, maximumValue)
     end
 
-    return stringField.getElement(name, value, options)
+    local formField = stringField.getElement(name, value, options)
+
+    return require("ui.forms.fields.integer").attachSlider(formField, options, false)
 end
 
 return numberField

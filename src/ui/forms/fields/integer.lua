@@ -43,7 +43,57 @@ function integerField.getElement(name, value, options)
         return valueValidator(raw, v, allowEmpty, minimumValue, maximumValue)
     end
 
-    return stringField.getElement(name, value, options)
+    local formField = stringField.getElement(name, value, options)
+
+    return integerField.attachSlider(formField, options, true)
+end
+
+-- Adds a slider next to the input. Plugins can enable it explicitly with
+-- fieldInformation[field].useScrollBar = true and optionally minScrollBarNumber/maxScrollBarNumber.
+function integerField.attachSlider(formField, options, integer)
+    if options.useScrollBar == false or options.slider == false then
+        return formField
+    end
+
+    local minimum = options.minScrollBarNumber or options.minimumValue
+    local maximum = options.maxScrollBarNumber or options.maximumValue
+
+    if not minimum or not maximum or maximum <= minimum then
+        return formField
+    end
+
+    if options.useScrollBar ~= true and options.slider ~= true and maximum - minimum > 4096 then
+        return formField
+    end
+
+    local slider = require("ui.widgets.slider").new({
+        minimum = minimum,
+        maximum = maximum,
+        value = formField.currentValue,
+        integer = integer,
+        onChanged = function(newValue)
+            formField.field:setText(tostring(newValue))
+        end
+    })
+
+    formField.slider = slider
+    table.insert(formField.elements, slider)
+    formField.width = 3
+
+    -- Keep the slider in sync when the value is typed into the text field
+    local originalCallback = formField.field.cb
+
+    formField.field.cb = function(element, new, old)
+        originalCallback(element, new, old)
+
+        local number = tonumber(formField.field:getText())
+
+        if number then
+            slider:setValue(number, true)
+        end
+    end
+
+    return formField
 end
 
 return integerField

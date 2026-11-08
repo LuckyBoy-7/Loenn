@@ -12,12 +12,24 @@ local scriptsPanel = {}
 local panelGroup
 local currentWindow
 
-function scriptsPanel.open(script, context, runCallback)
+function scriptsPanel.open(script, context, runCallback, options)
+    options = options or {}
+
     if not script.fieldOrder or #script.fieldOrder == 0 then
         return
     end
 
     local language = languageRegistry.getLanguage()
+
+    local function closePanel()
+        if currentWindow then
+            widgetUtils.closeWindow(currentWindow)
+            currentWindow = nil
+            ui.root:recollect()
+        end
+    end
+
+    scriptsPanel.close = closePanel
 
     local buttons = {
         {
@@ -27,10 +39,10 @@ function scriptsPanel.open(script, context, runCallback)
                 local values = form.getFormData(formFields)
 
                 -- The script can keep the panel open (e.g. when its input was invalid)
-                local closeAfterRun = true
+                local closeAfterRun = not options.keepOpenOnRun
 
                 if runCallback then
-                    closeAfterRun = runCallback(values) ~= false
+                    closeAfterRun = runCallback(values) ~= false and closeAfterRun
                 end
 
                 if closeAfterRun and currentWindow then
@@ -40,6 +52,15 @@ function scriptsPanel.open(script, context, runCallback)
             end
         }
     }
+
+    for _, extraButton in ipairs(options.extraButtons or {}) do
+        table.insert(buttons, {
+            text = tostring(extraButton.text),
+            callback = function()
+                extraButton.callback()
+            end
+        })
+    end
 
     local fieldInformation = utils.deepcopy(script.fieldInformation or {})
 
@@ -62,8 +83,11 @@ function scriptsPanel.open(script, context, runCallback)
         formFieldChanged = function() end
     })
 
-    if currentWindow then
-        widgetUtils.closeWindow(currentWindow)
+    local previousWindow = currentWindow
+    local previousX = previousWindow and previousWindow.x
+    local previousY = previousWindow and previousWindow.y
+
+    if previousWindow then
         currentWindow = nil
     end
 
@@ -71,6 +95,14 @@ function scriptsPanel.open(script, context, runCallback)
     -- refresh (the window could not be dragged or clicked). Build it after the event instead.
     ui.runLate(function()
         local window = uiElements.window(script.title, body)
+
+        -- Add an optional header (e.g. a style dropdown) directly to the window content: wrapping
+        -- the form body in another container left it with a zero height
+        if script.header then
+            local header = type(script.header) == "function" and script.header() or script.header
+
+            table.insert(window.inner.children, 1, header)
+        end
 
         currentWindow = window
 
@@ -82,6 +114,10 @@ function scriptsPanel.open(script, context, runCallback)
             or ui.root
 
         parent:addChild(window)
+
+        if previousWindow then
+            previousWindow:removeSelf()
+        end
 
         widgetUtils.addWindowCloseButton(window, function(w)
             currentWindow = nil
@@ -97,7 +133,16 @@ function scriptsPanel.open(script, context, runCallback)
 
         window:layout()
         window:layoutLate()
-        widgetUtils.centerWindow(window)
+
+        -- When the panel is rebuilt (e.g. after switching the style), keep the old position
+        if previousX then
+            widgetUtils.moveWindow(window, previousX, previousY, 0, 0, 0)
+
+        else
+            widgetUtils.centerWindow(window)
+        end
+
+        window:layoutLate()
 
         if ui.root then
             ui.root:recollect()
@@ -109,6 +154,11 @@ function scriptsPanel.getWindow()
     panelGroup = uiElements.group({})
 
     return panelGroup
+end
+
+-- Currently open panel window, if any (used for debugging/tests)
+function scriptsPanel.getOpenWindow()
+    return currentWindow
 end
 
 return scriptsPanel
