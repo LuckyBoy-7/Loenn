@@ -8,6 +8,7 @@ return {
 
     -- Trigger text
     addShadowToFont = true,
+    doubleTriggerTextSize = true,
     highlightSelectedTriggerText = true,
     highlightColor = "ffff00",
     selectTriggerByClickingText = false,

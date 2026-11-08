@@ -28,7 +28,42 @@ local triggerRegisteryMT = {
     __index = function() return missingTriggerHandler end
 }
 
+-- Base size of trigger labels. Hi-res labels are additionally doubled for unselected rooms when
+-- the setting is enabled, so they stay readable when the room canvases are minified.
 triggers.triggerFontSize = 1
+
+-- Size trigger labels are drawn at for a room: the doubled size only applies to the hi-res font
+-- and only outside of the selected room(s), where labels are drawn at their normal size
+function triggers.getTriggerFontSize(room)
+    local size = triggers.triggerFontSize
+
+    if not configs.font.doubleTriggerTextSize or not fonts.useHires then
+        return size
+    end
+
+    local selectedItem, selectedItemType = loadedState.getSelectedItem()
+    local selected
+
+    if selectedItemType == "table" then
+        selected = selectedItem and selectedItem[room] ~= nil
+
+    else
+        selected = selectedItem == room
+    end
+
+    if selected then
+        -- When zoomed in the selected room already uses the larger font and stays readable;
+        -- at zoom 1 (and below) its labels are doubled like the unselected ones
+        local viewportHandler = require("viewport_handler")
+        local zoom = viewportHandler.viewport and viewportHandler.viewport.scale or 1
+
+        if zoom > 1 then
+            return size
+        end
+    end
+
+    return size * 2
+end
 triggers.registeredTriggers = nil
 
 -- Sets the registry to the given table (or empty one)
@@ -210,7 +245,8 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
 
     -- Size the label is drawn at. The drawable scales sizes designed for the
     -- vanilla font itself, so this value is used for the layout only
-    local fontSize = fonts.size(triggers.triggerFontSize)
+    local triggerFontSize = triggers.getTriggerFontSize(room)
+    local fontSize = fonts.size(triggerFontSize)
 
     local fillColor, borderColor, textColor = triggers.triggerColor(room, trigger)
     local borderedRectangle = drawableRectangle.fromRectangle("bordered", x, y, width, height, fillColor, borderColor)
@@ -236,7 +272,7 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
         textColor = utils.getColor(configs.font.highlightColor) or {1, 1, 0, 1}
     end
 
-    local textDrawable = drawableText.fromText(displayName, textX, textY, textWidth, textHeight, nil, triggers.triggerFontSize, textColor)
+    local textDrawable = drawableText.fromText(displayName, textX, textY, textWidth, textHeight, nil, triggerFontSize, textColor)
 
     local drawables = borderedRectangle:getDrawableSprite()
     table.insert(drawables, textDrawable)
@@ -247,7 +283,7 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
         -- Placement previews (no viewport) are drawn translucent, a shadow would
         -- only muddy them up
         local offset = fonts.size(1)
-        local shadowDrawable = drawableText.fromText(displayName, textX + offset, textY + offset, textWidth, textHeight, nil, triggers.triggerFontSize, {0, 0, 0, 1})
+        local shadowDrawable = drawableText.fromText(displayName, textX + offset, textY + offset, textWidth, textHeight, nil, triggerFontSize, {0, 0, 0, 1})
 
         shadowDrawable.depth = depths.triggers - 0.9
         table.insert(drawables, shadowDrawable)

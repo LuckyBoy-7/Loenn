@@ -120,6 +120,7 @@ local defaultTabForms = {
                 title = "ui.settings_window.group.font.trigger_text",
                 fieldOrder = {
                     "font.addShadowToFont",
+                    "font.doubleTriggerTextSize",
                     "font.highlightSelectedTriggerText",
                     "font.highlightColor",
                     "font.selectTriggerByClickingText",
@@ -660,7 +661,8 @@ local function applyNewSettings(newSettings, oldSettings)
 
     local fontChanged = false
 
-    for _, key in ipairs({"useHiresPixelFont", "addShadowToFont", "highlightSelectedTriggerText",
+    for _, key in ipairs({"useHiresPixelFont", "addShadowToFont", "doubleTriggerTextSize",
+        "highlightSelectedTriggerText",
         "selectTriggerByClickingText", "showCompleteTriggerText", "extrudeOverlappingTriggerText",
         "ignoreOutOfRoomTextExtruding"}) do
         fontChanged = fontChanged or settingChanged("font." .. key)

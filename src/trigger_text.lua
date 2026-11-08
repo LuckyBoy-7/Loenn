@@ -67,7 +67,10 @@ function triggerText.stretchRect(x, y, width, height, text, fontSize)
 
     fontSize = fontSize or 1
 
-    local maxWidth = wordWidthCache[text]
+    -- Widths depend on the label size: selecting a room switches between the normal and the
+    -- doubled size, so the cache can not be keyed by text alone
+    local cacheKey = text .. "|" .. tostring(fontSize)
+    local maxWidth = wordWidthCache[cacheKey]
 
     if not maxWidth then
         maxWidth = 0
@@ -91,7 +94,7 @@ function triggerText.stretchRect(x, y, width, height, text, fontSize)
         -- would otherwise split an exactly fitting word into two lines
         maxWidth = math.ceil(maxWidth) + 1
 
-        wordWidthCache[text] = maxWidth
+        wordWidthCache[cacheKey] = maxWidth
     end
 
     if maxWidth > width then
@@ -401,11 +404,12 @@ function triggerText.updateRoom(room, triggerList)
 
     -- Same size the label is drawn with, otherwise the boxes and the overlap
     -- solver work with the wrong text metrics
-    local fontSize = fonts.size(triggers.triggerFontSize)
+    local fontSize = fonts.size(triggers.getTriggerFontSize(room))
 
     -- Cheap numeric signature: this runs on every frame that the room batches
-    -- are requested, so it must not build strings or call into trigger text
-    local signature = #triggerList
+    -- are requested, so it must not build strings or call into trigger text.
+    -- The font size is part of it: selecting a room changes the label size
+    local signature = #triggerList * 37 + math.floor(fontSize * 1000)
 
     for index, trigger in ipairs(triggerList) do
         signature = signature * 31
