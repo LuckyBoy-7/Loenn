@@ -10,7 +10,8 @@ registry.scripts = {
     require("scripts/decal_credits"),
     require("scripts/auto_bg_tiles"),
     require("scripts/create_template_mod"),
-    require("scripts/export_to_zip")
+    require("scripts/export_to_zip"),
+    require("scripts/transfer_used_decals")
 }
 
 function registry.getScripts()
