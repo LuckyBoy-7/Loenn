@@ -49,14 +49,14 @@ function integerField.getElement(name, value, options)
 end
 
 -- Adds a slider next to the input. Plugins can enable it explicitly with
--- fieldInformation[field].useScrollBar = true and optionally minScrollBarNumber/maxScrollBarNumber.
+-- fieldInformation[field].useScrollBar = true.
 function integerField.attachSlider(formField, options, integer)
     if options.useScrollBar == false or options.slider == false then
         return formField
     end
 
-    local minimum = options.minScrollBarNumber or options.minimumValue
-    local maximum = options.maxScrollBarNumber or options.maximumValue
+    local minimum = options.minimumValue
+    local maximum = options.maximumValue
 
     if not minimum or not maximum or maximum <= minimum then
         return formField
