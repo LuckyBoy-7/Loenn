@@ -3024,6 +3024,19 @@ local function layerDataToElement(list, data, element)
     return element
 end
 
+-- Tools can share the selected material between their layers (e.g. scripts: Current Room and
+-- All Rooms are the same script list, switching the scope should not change the script)
+local function getLayerTargetMaterial(tool, layer)
+    local handler = type(tool) == "table" and tool
+        or toolHandler.tools[tool or toolHandler.currentToolName]
+
+    if handler and handler.sharedMaterialAcrossLayers then
+        return toolHandler.getMaterial(handler.name)
+    end
+
+    return toolUtils.getPersistenceMaterial(tool, layer)
+end
+
 local function layerCallback(list, layerName)
     local layer, subLayer = subLayers.parseLayerName(layerName)
 
@@ -3032,7 +3045,7 @@ local function layerCallback(list, layerName)
     local sameSubLayer = not sameLayer and toolWindow.eventStates.subLayer == subLayer
 
     if not sameLayer or not sameTool or not sameSubLayer then
-        local targetMaterial = toolUtils.getPersistenceMaterial(toolHandler.currentTool, layer)
+        local targetMaterial = getLayerTargetMaterial(toolHandler.currentTool, layer)
 
         toolWindow.eventStates.tool = toolHandler.currentToolName
         toolWindow.eventStates.layer = layer
@@ -3056,7 +3069,7 @@ local function toolLayerChangedCallback(self, tool, layer, subLayer)
     local targetMaterial = nil
 
     if not sameLayer then
-        targetMaterial = toolUtils.getPersistenceMaterial(tool, layer)
+        targetMaterial = getLayerTargetMaterial(tool, layer)
     end
 
     if not sameLayer or not sameSubLayer or not sameSearch then

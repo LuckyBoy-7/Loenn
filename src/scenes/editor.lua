@@ -126,7 +126,7 @@ function editorScene:editorMapTargetChanged(item, itemType, previousItem, previo
     if previousItemType == "room" then
         -- Create a new canvas for the previous selected room and rerender it instantly
         -- If we let it be lazily rerendered it will cause flashes after a few frames
-        -- Should not be done if the map target changed because of deletion, check that previous item exists still
+        -- Should not be done if the map target changed because of deletion, check that previous item still exists
 
         local map = self.viewerState.map
         local shouldForceRedraw = false

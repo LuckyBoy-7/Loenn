@@ -177,7 +177,7 @@ function state.getTemporaryFilename(filename)
     return filename .. ".saving"
 end
 
-function state.loadFile(filename, roomName)
+function state.loadFile(filename, roomName, afterLoad)
     if not filename then
         return
     end
@@ -215,6 +215,10 @@ function state.loadFile(filename, roomName)
                     (-> sideStruct.decodeTaskable(binTask.result)),
                     function(decodeTask)
                         updateSideState(decodeTask.result, roomName, filename, "editorMapLoaded")
+
+                        if afterLoad then
+                            afterLoad(filename)
+                        end
                     end
                 )
 

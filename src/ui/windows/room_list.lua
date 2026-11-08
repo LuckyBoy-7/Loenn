@@ -270,6 +270,10 @@ function roomList.getWindow()
                 window._roomListParent:reflow()
             end
 
+            -- While detached the map events could not reach this window: rebuild the list from the
+            -- current map state when it becomes visible again
+            updateList(list)
+
         else
             if window.parent then
                 window._roomListParent = window.parent

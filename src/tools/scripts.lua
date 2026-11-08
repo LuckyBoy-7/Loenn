@@ -33,6 +33,9 @@ tool.subLayer = -1
 
 tool.material = nil
 
+-- Current Room and All Rooms are just scopes: switching them keeps the selected script
+tool.sharedMaterialAcrossLayers = true
+
 -- The tool implements the room/filler selection itself so shift clicking can also deselect a
 -- room that is already part of a multi selection
 tool.manualRoomLogic = true

@@ -39,7 +39,7 @@ table.sort(songs)
 table.sort(ambientSounds)
 
 local defaultFieldOrder = {
-    "name", "color", "customColor",
+    "name", "color",
     "x", "y",
     "width", "height",
     "cameraOffsetX", "cameraOffsetY",
@@ -77,10 +77,6 @@ local defaultFieldInformation = {
         fieldType = "integer",
         options = colorOptions,
         editable = false
-    },
-
-    customColor = {
-        fieldType = "string"
     },
 
     musicProgress = {

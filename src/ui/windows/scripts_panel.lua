@@ -33,7 +33,7 @@ function scriptsPanel.open(script, context, runCallback, options)
 
     local buttons = {
         {
-            text = tostring(language.ui.script_window.run_script),
+            text = tostring(options.runButtonText or language.ui.script_window.run_script),
             formMustBeValid = true,
             callback = function(formFields)
                 local values = form.getFormData(formFields)

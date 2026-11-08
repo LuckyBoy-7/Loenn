@@ -8,7 +8,8 @@ registry.scripts = {
     require("scripts/flip_room"),
     require("scripts/tile_credits"),
     require("scripts/decal_credits"),
-    require("scripts/auto_bg_tiles")
+    require("scripts/auto_bg_tiles"),
+    require("scripts/create_template_mod")
 }
 
 function registry.getScripts()
