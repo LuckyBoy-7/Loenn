@@ -5,6 +5,7 @@ local config = require("utils.config")
 local configs = require("configs")
 local filesystem = require("utils.filesystem")
 local logging = require("logging")
+local launchArguments = require("launch_arguments")
 local virtualFs = require("virtual_fs")
 local startupProgress = require("startup_progress")
 
@@ -992,6 +993,10 @@ function modHandler.mountMods(directory, force)
         ignored = modHandler.readEverestBlacklist(utils.joinpath(directory, "blacklist.txt"))
     end
 
+    -- Launch arguments: --no-mods skips everything except --load-mod entries
+    local noMods = launchArguments.parsed.noMods
+    local alwaysLoad = table.flip(launchArguments.parsed.loadMods or {})
+
     if utils.isDirectory(directory) then
         local filenames = {}
 
@@ -1004,9 +1009,11 @@ function modHandler.mountMods(directory, force)
         for index, filename in ipairs(filenames) do
             startupProgress.reportFiles(#filenames, index, string.format("Loading mod %s", filename))
 
-            if ignored[filename] then
+            local modIgnored = not alwaysLoad[filename] and (ignored[filename] or noMods)
+
+            if modIgnored then
                 if configs.debug.logModLoading then
-                    local message = string.format("Skipped '%s' due to Everest blacklist", filename)
+                    local message = string.format("Skipped '%s' due to Everest blacklist or launch arguments", filename)
 
                     logging.info(message)
                 end

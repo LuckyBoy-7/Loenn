@@ -140,7 +140,7 @@ function loadingScene:firstEnter()
             sceneHandler.loadExternalScenes()
 
             languageRegistry.loadExternalFiles()
-            languageRegistry.setFallbackLanguage(defaultConfig.general.language)
+            languageRegistry.setLanguage(configs.general.language)
             startupProgress.finishPhase()
             phaseDone("scenes+language")
 
