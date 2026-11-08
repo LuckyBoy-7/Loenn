@@ -18,7 +18,6 @@ local dependencyEditor = require("ui.dependency_editor")
 local dependencyFinder = require("dependencies")
 
 local listWidgets = require("ui.widgets.lists")
-local collapsableWidget = require("ui.widgets.collapsable")
 local widgetUtils = require("ui.widgets.utils")
 local gridElement = require("ui.widgets.grid")
 
@@ -87,29 +86,10 @@ local function updateMetadataFile(metadata, newDependencies)
     return false
 end
 
-local function updateSections(interactionData)
-    -- TODO - Keep expand status when moving?
+local moveModSection
+local markMetadataChanged
 
-    local window = interactionData.window
-    local windowContentScrollable = interactionData.windowContentScrollable
-    local modPath = interactionData.modPath
-    local side = interactionData.side
-
-    local previousScrollAmount = windowContentScrollable.inner.y
-    local newContentScrollable, newContent = dependencyWindow.getWindowContent(modPath, side, interactionData)
-
-    newContentScrollable.inner.y = previousScrollAmount
-
-    interactionData.windowContent = newContent
-    interactionData.windowContentScrollable = newContentScrollable
-
-    windowContentScrollable:removeSelf()
-    window:addChild(newContentScrollable)
-    window:layout()
-end
-
-local function getDependenciesList(modName)
-    local currentModMetadata = mods.getModMetadataFromPath(modName)
+local function getDependenciesList(modName)    local currentModMetadata = mods.getModMetadataFromPath(modName)
     local firstMetadata = currentModMetadata and currentModMetadata[1] or {}
     local dependencies = firstMetadata.Dependencies or {}
 
@@ -127,8 +107,12 @@ local function addDependencyCallback(modName, interactionData)
             Version = modVersion
         })
 
-        updateMetadataFile(currentModMetadata, dependencies)
-        updateSections(interactionData)
+        local success = updateMetadataFile(currentModMetadata, dependencies)
+
+        if success then
+            markMetadataChanged()
+            moveModSection(interactionData, modName, "depended_on")
+        end
     end
 end
 
@@ -144,38 +128,17 @@ local function removeDependencyCallback(modName, interactionData)
             end
         end
 
-        updateMetadataFile(currentModMetadata, dependencies)
-        updateSections(interactionData)
-    end
-end
+        local success = updateMetadataFile(currentModMetadata, dependencies)
 
-local function generateCollapsableTree(data)
-    local dataType = type(data)
+        if success then
+            markMetadataChanged()
 
-    if dataType == "table" then
-        local column = uiElements.column({})
+            -- A removed dependency is either missing (still used by the map) or simply available
+            local used = interactionData.usedMods and interactionData.usedMods[modName]
+            local groupName = used and "missing_mods" or "available_mods"
 
-        if #data == 0 then
-            for text, subData in pairs(data) do
-                local content = generateCollapsableTree(subData)
-
-                if content then
-                    local collapsable = collapsableWidget.getCollapsable(tostring(text), content)
-
-                    column:addChild(collapsable)
-                end
-            end
-
-        else
-            for _, subData in ipairs(data) do
-                column:addChild(uiElements.label(subData))
-            end
+            moveModSection(interactionData, modName, groupName)
         end
-
-        return column
-
-    elseif dataType == "string" then
-        return uiElements.label(data)
     end
 end
 
@@ -188,14 +151,8 @@ local function getModSection(modName, localizedModName, reasons, groupName, inte
     local buttonCallbackWrapper = buttonAdds and addDependencyCallback or removeDependencyCallback
     local buttonCallback = buttonCallbackWrapper(modName, interactionData)
 
-    local modContent
-
-    if reasons then
-        modContent = generateCollapsableTree({[localizedModName] = reasons})
-
-    else
-        modContent = uiElements.label(localizedModName)
-    end
+    -- Entity sources are shown in the Debug tool, so only the mod name is listed here
+    local modContent = uiElements.label(localizedModName)
 
     local localizedEverestName = localizeModName(mods.everestModName)
     local isEverest = modName == mods.everestModName or modName == localizedEverestName
@@ -204,6 +161,10 @@ local function getModSection(modName, localizedModName, reasons, groupName, inte
     local column = uiElements.column({
         modContent,
     })
+
+    column._modName = modName
+    column._groupName = groupName
+    column._sortName = localizedModName
 
     -- Everest should not be removable as a dependency
     -- All other mods should have the action button
@@ -221,31 +182,136 @@ local function getModSections(groupName, mods, addPadding, interactionData)
     local separator = uiElements.lineSeparator(labelText, 16, true)
     local column = uiElements.column({separator})
 
+    column._groupName = groupName
+
+    interactionData.sectionColumns = interactionData.sectionColumns or {}
+    interactionData.sectionColumns[groupName] = column
+    interactionData.modSections = interactionData.modSections or {}
+
     if addPadding then
         separator:addBottomPadding()
     end
 
     local orderedSections = {}
 
-    -- Sort by mod name
+    -- Sort by mod name, but keep Everest first in the dependency column
     for modName, reasons in pairs(mods) do
         local localizedModName = localizeModName(modName)
         local modSection = getModSection(modName, localizedModName, reasons, groupName, interactionData)
 
         if modSection then
-            table.insert(orderedSections, {localizedModName, modSection})
+            table.insert(orderedSections, {localizedModName, modSection, modName})
         end
     end
 
+    local localizedEverestName = localizeModName(mods.everestModName)
+
     orderedSections = table.sortby(orderedSections, function(entry)
-        return entry[1]
+        local isEverest = groupName == "depended_on"
+            and (entry[3] == mods.everestModName or entry[3] == localizedEverestName)
+
+        return (isEverest and "0" or "1") .. entry[1]
     end)()
 
     for _, entry in ipairs(orderedSections) do
         column:addChild(entry[2])
+
+        interactionData.modSections[entry[2]._modName] = {
+            element = entry[2],
+            column = column,
+            group = groupName
+        }
     end
 
     return column
+end
+
+function markMetadataChanged()
+    local history = require("history")
+
+    history.madeChanges = true
+    history.lastChange = os.time()
+end
+
+local function removeModSection(interactionData, modName)
+    local entry = interactionData.modSections and interactionData.modSections[modName]
+
+    if entry and entry.element then
+        entry.element:removeSelf()
+    end
+
+    if interactionData.modSections then
+        interactionData.modSections[modName] = nil
+    end
+end
+
+-- Rebuilds only the moved mod instead of the whole window content
+local function insertModSection(interactionData, modName, groupName)
+    local column = interactionData.sectionColumns and interactionData.sectionColumns[groupName]
+
+    if not column then
+        return
+    end
+
+    local localizedName = localizeModName(modName)
+    local section = getModSection(modName, localizedName, nil, groupName, interactionData)
+
+    column:addChild(section)
+
+    -- Sorted insertion: keep the alphabetically ordered list, skipping the separator
+    local element = table.remove(column.children)
+    local index = #column.children + 1
+
+    for i = 2, #column.children do
+        local child = column.children[i]
+
+        if child._sortName and child._sortName > localizedName then
+            index = i
+
+            break
+        end
+    end
+
+    -- Everest always stays on the first line of the dependency column
+    if groupName == "depended_on" then
+        local localizedEverestName = localizeModName(mods.everestModName)
+        local isEverest = modName == mods.everestModName or modName == localizedEverestName
+
+        if isEverest then
+            index = 2
+
+        else
+            for i = 2, #column.children do
+                local child = column.children[i]
+                local childIsEverest = child._modName == mods.everestModName
+                    or child._modName == localizedEverestName
+
+                if childIsEverest and index <= i then
+                    index = i + 1
+                end
+            end
+        end
+    end
+
+    table.insert(column.children, index, element)
+
+    interactionData.modSections[modName] = {
+        element = element,
+        column = column,
+        group = groupName
+    }
+end
+
+function moveModSection(interactionData, modName, groupName)
+    removeModSection(interactionData, modName)
+    insertModSection(interactionData, modName, groupName)
+
+    local window = interactionData.window
+
+    if window then
+        window:layout()
+        window:layoutLate()
+    end
 end
 
 function dependencyWindow.getWindowContent(modPath, side, interactionData)
@@ -256,7 +322,12 @@ function dependencyWindow.getWindowContent(modPath, side, interactionData)
     local availableModNames = mods.getAvailableModNames()
     local dependedOnModsLookup = table.flip(dependedOnModNames)
 
-    local usedMods = dependencyFinder.analyzeSide(side)
+    local usedMods = interactionData.usedMods
+
+    if not usedMods then
+        usedMods = dependencyFinder.analyzeSide(side)
+        interactionData.usedMods = usedMods
+    end
     local missingMods = {}
     local dependedOnMods = {}
     local uncategorized = {}
@@ -299,40 +370,38 @@ function dependencyWindow.getWindowContent(modPath, side, interactionData)
         end
     end
 
-    local hasMissingMods = utils.countKeys(missingMods) > 0
-    local hasDependedOnMods = utils.countKeys(dependedOnMods) > 0
-    local hasUncategorized = utils.countKeys(uncategorized) > 0
-
+    -- Separator lines have to line up: the extra bottom padding used by the old stacked layout
+    -- would shift the line of some columns vertically
     local missingModsSection = getModSections("missing_mods", missingMods, false, interactionData)
-    local dependedOnSection = getModSections("depended_on", dependedOnMods, hasMissingMods, interactionData)
-    local uncategorizedSection = getModSections("available_mods", uncategorized, hasUncategorized, interactionData)
+    local dependedOnSection = getModSections("depended_on", dependedOnMods, false, interactionData)
+    local uncategorizedSection = getModSections("available_mods", uncategorized, false, interactionData)
 
-    local sections = {}
+    -- Three columns side by side instead of one long column. The columns touch so the separator
+    -- lines form one continuous line across the window
+    local columnWidth = 256
 
-    local column = uiElements.column({})
-    local scrollableColumn = uiElements.scrollbox(column)
+    local function prepareColumn(section)
+        section:with({
+            width = columnWidth,
+            minWidth = columnWidth,
+            maxWidth = columnWidth
+        })
 
-    column.style.padding = 8
-
-    if hasMissingMods then
-        table.insert(sections, missingModsSection)
+        return section
     end
 
-    if hasDependedOnMods then
-        table.insert(sections, dependedOnSection)
-    end
+    local columns = uiElements.row({
+        prepareColumn(missingModsSection),
+        prepareColumn(dependedOnSection),
+        prepareColumn(uncategorizedSection)
+    }):with({
+        spacing = 0,
+        style = {
+            padding = {0, 8, 0, 8}
+        }
+    })
 
-    if hasUncategorized then
-        table.insert(sections, uncategorizedSection)
-    end
-
-    -- Add all section children to our main column
-    -- Ended up being easier than figuring out layouting to match column widths
-    for _, section in ipairs(sections) do
-        for _, child in ipairs(section.children) do
-            column:addChild(child)
-        end
-    end
+    local scrollableColumn = uiElements.scrollbox(columns)
 
     scrollableColumn:hook({
         calcWidth = function(orig, self)
@@ -341,14 +410,14 @@ function dependencyWindow.getWindowContent(modPath, side, interactionData)
     })
     scrollableColumn:with(uiUtils.fillHeight(true))
 
-    interactionData.sectionsColumn = column
+    interactionData.sectionsColumn = columns
     interactionData.missingModsSection = missingModsSection
     interactionData.dependedOnSection = dependedOnSection
     interactionData.uncategorizedSection = uncategorizedSection
     interactionData.windowContentScrollable = scrollableColumn
-    interactionData.windowContent = column
+    interactionData.windowContent = columns
 
-    return scrollableColumn, column
+    return scrollableColumn, columns
 end
 
 local function addEverestDependency(metadata)
