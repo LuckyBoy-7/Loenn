@@ -377,10 +377,6 @@ function tilesetDefaults.collectFromMods(backgroundOnly)
     local yBody = tilesetDefaults.getTemplateBody("y")
 
     for modFolderName in pairs(modHandler.loadedMods) do
-        -- The archived mods have to be mounted to read their files. This only happens when the
-        -- user actually asks for the defaults
-        modHandler.ensureModMounted(modFolderName)
-
         local filenames = modHandler.getOrCacheFilenames(modFolderName) or {}
         local fileLookup = {}
 

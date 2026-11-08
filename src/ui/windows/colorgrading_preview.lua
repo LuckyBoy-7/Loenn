@@ -7,7 +7,6 @@ local uiElements = require("ui.elements")
 local uiRoot = require("ui.ui_root")
 local uiUtils = require("ui.utils")
 local widgetUtils = require("ui.widgets.utils")
-local modHandler = require("mods")
 local utils = require("utils")
 
 local colorGradingPreview = {}
@@ -17,6 +16,8 @@ local previewElements = {}
 local baseImages = {}
 local baseData = {}
 local gradeCache = {}
+local gradedImageCache = {}
+local currentGradePath
 
 local GRID_COLUMNS = 3
 local GRID_ROWS = 4
@@ -34,18 +35,6 @@ local function loadImage(path)
 
     if success then
         image = result
-    end
-
-    if not image and path:sub(1, 1) == "$" then
-        local modFolder = string.match(path, "^%$([^%$]+)%$")
-
-        if modFolder and modHandler.ensureModMounted(modFolder) then
-            local ok, retried = pcall(love.graphics.newImage, path)
-
-            if ok then
-                image = retried
-            end
-        end
     end
 
     -- Absolute paths (vanilla content) and archive paths that the graphics loader can not read
@@ -108,18 +97,6 @@ local function loadImageData(path)
 
     if success and data then
         return data
-    end
-
-    if path:sub(1, 1) == "$" then
-        local modFolder = string.match(path, "^%$([^%$]+)%$")
-
-        if modFolder and modHandler.ensureModMounted(modFolder) then
-            local ok, retried = pcall(love.image.newImageData, path)
-
-            if ok then
-                return retried
-            end
-        end
     end
 
     local bytes
@@ -188,39 +165,72 @@ local function gradePixel(grade, r, g, b)
     return grade:getPixel(blue * 16 + red, green)
 end
 
-local function buildGradedImages(path)
+local function buildGradedImage(path, index)
     local grade = getGradeData(path)
+    local source = baseData[index]
 
-    if not grade then
+    if not grade or not source then
         return nil
     end
 
-    local images = {}
+    local data = source:clone()
+    local width, height = data:getDimensions()
 
-    for index = 1, GRID_COLUMNS * GRID_ROWS do
-        local source = baseData[index]
+    for y = 0, height - 1 do
+        for x = 0, width - 1 do
+            local r, g, b, a = data:getPixel(x, y)
 
-        if source then
-            local data = source:clone()
-            local width, height = data:getDimensions()
+            if a > 0 then
+                local gr, gg, gb = gradePixel(grade, r, g, b)
 
-            for y = 0, height - 1 do
-                for x = 0, width - 1 do
-                    local r, g, b, a = data:getPixel(x, y)
-
-                    if a > 0 then
-                        local gr, gg, gb = gradePixel(grade, r, g, b)
-
-                        data:setPixel(x, y, gr, gg, gb, a)
-                    end
-                end
+                data:setPixel(x, y, gr, gg, gb, a)
             end
-
-            table.insert(images, love.graphics.newImage(data))
         end
     end
 
-    return images
+    return love.graphics.newImage(data)
+end
+
+local gradeJob
+
+local function applyGradedImages(path, images)
+    for index, element in ipairs(previewElements) do
+        element:setImage(images and images[index] or baseImages[index])
+    end
+end
+
+local function processGradeJob()
+    local job = gradeJob
+
+    if not job or job.path ~= currentGradePath or not window then
+        gradeJob = nil
+
+        return
+    end
+
+    job.images[job.index] = buildGradedImage(job.path, job.index)
+    job.index = job.index + 1
+
+    if job.index > GRID_COLUMNS * GRID_ROWS then
+        local images = job.images
+
+        for index = 1, GRID_COLUMNS * GRID_ROWS do
+            if images[index] == nil then
+                images[index] = false
+            end
+        end
+
+        gradedImageCache[job.path] = images
+        gradeJob = nil
+
+        if job.path == currentGradePath then
+            applyGradedImages(job.path, images)
+        end
+
+    else
+        -- Spread the 12 samples over 12 frames instead of blocking the hover frame
+        require("ui").runLate(processGradeJob)
+    end
 end
 
 function colorGradingPreview.setGrade(path)
@@ -228,11 +238,38 @@ function colorGradingPreview.setGrade(path)
         return
     end
 
-    local images = path and buildGradedImages(path) or nil
-
-    for index, element in ipairs(previewElements) do
-        element:setImage(images and images[index] or baseImages[index])
+    if path == currentGradePath then
+        return
     end
+
+    currentGradePath = path
+    gradeJob = nil
+
+    if not path then
+        applyGradedImages(nil, nil)
+
+        return
+    end
+
+    local cached = gradedImageCache[path]
+
+    if cached ~= nil then
+        applyGradedImages(path, cached or nil)
+
+        return
+    end
+
+    -- Show the ungraded samples immediately, then fill in the graded versions over the next
+    -- frames. The cache makes repeated hovers instant.
+    applyGradedImages(path, nil)
+
+    gradeJob = {
+        path = path,
+        index = 1,
+        images = {}
+    }
+
+    require("ui").runLate(processGradeJob)
 end
 
 --- Window
@@ -269,6 +306,10 @@ function colorGradingPreview.show()
         return
     end
 
+    -- A reopened window has fresh image elements: make the next hover apply the grade again
+    currentGradePath = nil
+    gradeJob = nil
+
     for index = 1, GRID_COLUMNS * GRID_ROWS do
         loadBasePreview(index)
     end
@@ -279,6 +320,8 @@ function colorGradingPreview.show()
         widgetUtils.addWindowCloseButton(window, function(w)
             w:removeSelf()
             window = nil
+            currentGradePath = nil
+            gradeJob = nil
             ui.root:recollect()
         end)
         widgetUtils.preventOutOfBoundsMovement(window)

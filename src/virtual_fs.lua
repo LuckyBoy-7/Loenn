@@ -89,10 +89,6 @@ local folderOwners = {}
 
 local modIsZip = {}
 
--- Called with a mod folder name when a path resolves to a mod that might not
--- be mounted yet; set by mods.lua
-local mountHandler
-
 -- Ordered list of mod folders, mount order == search order
 local modOrder = {}
 local modIndex = {}
@@ -433,12 +429,6 @@ function virtualFs.resolve(path)
 
         if modFolder then
             local relPath = i == 1 and firstRel or secondRel
-
-            -- Lazy loading: the owning mod may not be mounted yet
-            if mountHandler then
-                mountHandler(modFolder)
-            end
-
             local candidate = mountRoots[modFolder] .. "/" .. relPath
 
             if raw.getInfo(candidate) then
@@ -520,10 +510,6 @@ function virtualFs.isDirectory(path)
     local rel = relativePath(path)
 
     return rel ~= nil and dirSet[rel] ~= nil
-end
-
-function virtualFs.setMountHandler(handler)
-    mountHandler = handler
 end
 
 function virtualFs.markMounted()

@@ -53,10 +53,7 @@ local function getSourceFiles(sourceFile, sourceRelative, atlasRoot)
         return {}
     end
 
-    modHandler.ensureModMounted(modFolder)
-
-    local sourceDirectory = string.match(sourceRelative, "^(.*)/[^/]*$") or ""
-    local baseName = string.gsub(string.match(sourceRelative, "([^/]*)$") or "", "%.png$", "")
+    local sourceDirectory = string.match(sourceRelative, "^(.*)/[^/]*$") or ""    local baseName = string.gsub(string.match(sourceRelative, "([^/]*)$") or "", "%.png$", "")
 
     -- Frames are usually the same name plus a number (default00, default01, ...): strip the
     -- trailing number so every frame sharing the prefix is copied

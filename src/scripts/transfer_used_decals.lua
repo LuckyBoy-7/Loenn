@@ -187,8 +187,6 @@ local function collectSourceGroup(owner, texture, base)
         folder = folder .. "/" .. directory
     end
 
-    modHandler.ensureModMounted(owner)
-
     local files = modHandler.findModFiletype(folder, "png", {owner})
     local group = {}
 

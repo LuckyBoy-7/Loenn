@@ -670,28 +670,6 @@ local function metadataFromCache(data, path, modFolderName)
     return metadata
 end
 
--- Mods that ship Lönn plugin content have to be readable at startup: plugin
--- code addresses its own files through the per-mod mount point
-local function filenamesHavePluginContent(modFolderName, filenames)
-    if not filenames then
-        return false
-    end
-
-    local root = "$" .. modFolderName .. "$"
-
-    for _, folderName in ipairs(modHandler.pluginFolderNames) do
-        local prefix = root .. "/" .. folderName .. "/"
-
-        for i = 1, #filenames do
-            if filenames[i]:sub(1, #prefix) == prefix then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
 function modHandler.invalidateFilenamesCache(modFolderName)
     modHandler.filenamesCache[modFolderName] = nil
 
@@ -837,25 +815,8 @@ function modHandler.mountModFiles(modFolderName, path)
     return true
 end
 
--- Mounts a mod on first use. virtual_fs calls this when a shared path resolves
--- to a mod that was not mounted at startup.
-function modHandler.ensureModMounted(modFolderName)
-    local modInfo = modHandler.loadedMods[modFolderName]
-
-    if not modInfo then
-        return false
-    end
-
-    if modHandler.mountedMods[modFolderName] then
-        return true
-    end
-
-    return modHandler.mountModFiles(modFolderName, modInfo.path)
-end
-
--- Registers a mod: metadata, filename list and virtual_fs index entry. The
--- archive is only mounted when it is actually needed (plugin content, or a
--- missing/stale filename or metadata cache).
+-- Registers a mod: metadata, filename list, virtual_fs index entry and the archive mount. Archives
+-- are mounted here during startup so later file access does not have to build the PhysFS index.
 function modHandler.registerModInfo(path, modFolderName, force)
     local attributes = filesystem.pathAttributes(path) or {}
     local zipFile = attributes.mode == "file"
@@ -922,10 +883,10 @@ function modHandler.registerModInfo(path, modFolderName, force)
 
     virtualFs.registerMod(modFolderName, filenames, zipFile)
 
-    -- Plugin code addresses its own files through the per-mod mount point, so
-    -- mods with plugin content have to be mounted from the start. Everything
-    -- else is mounted on first access (see ensureModMounted).
-    if not modHandler.mountedMods[modFolderName] and filenamesHavePluginContent(modFolderName, filenames) then
+    -- Mount every mod up front: accessing a single file from an archive later means PhysFS has to
+    -- build its index first, which caused the first hover on preview images from a zip to stall.
+    -- Mounting during loading moves that cost to startup and after that every lookup is cached.
+    if not modHandler.mountedMods[modFolderName] then
         modHandler.mountModFiles(modFolderName, path)
     end
 
@@ -1201,9 +1162,5 @@ function modHandler.checkForMissingMods(filename)
 
     return missing
 end
-
--- Shared namespace paths are resolved by virtual_fs; this makes it mount a mod
--- the first time one of its files is actually needed
-virtualFs.setMountHandler(modHandler.ensureModMounted)
 
 return modHandler

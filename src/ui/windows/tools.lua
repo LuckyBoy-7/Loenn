@@ -1216,6 +1216,22 @@ end
 
 -- Images of the Preview tool, loaded directly from the asset file and cached per path
 local previewToolImages = {}
+local previewToolImageOrder = {}
+local previewToolImageQueued = {}
+local previewToolImageQueue = {}
+local previewToolPinned = {}
+local previewToolImageQueueScheduled = false
+local previewUrgentFile
+local previewMouseX, previewMouseY
+local previewMouseMovedAt = 0
+local previewHoverList
+local previewHoverItem
+local currentPreviewItems
+
+local updateHoverPreview
+
+local MAX_PREVIEW_TOOL_IMAGES = 300
+local MAX_CURRENT_MOD_PRELOAD = 64
 
 -- Draws a checkerboard behind the image, so transparent or empty files still show a preview
 -- frame instead of nothing
@@ -1260,7 +1276,7 @@ local function createPreviewCanvas(image)
     return canvas
 end
 
-local function getPreviewToolImage(filename)
+local function loadPreviewToolImage(filename)
     local cached = previewToolImages[filename]
 
     if cached ~= nil then
@@ -1275,57 +1291,185 @@ local function getPreviewToolImage(filename)
     end
 
     if not image then
-        -- A "$Mod$/" path of an archive that is not mounted yet can not be loaded directly.
-        -- Mount the owning mod on demand (same helper virtual_fs uses) and retry.
-        local modFolder = string.match(filename, "^%$([^%$]+)%$")
-
-        if modFolder and modHandler.ensureModMounted(modFolder) then
-            local success, result = pcall(love.graphics.newImage, filename)
-
-            if success then
-                image = result
+        -- Fallback: read the bytes and build the image from them. This can fail on paths the
+        -- filesystem can not chdir into, so it must not take the whole editor down.
+        local readSuccess, bytes = pcall(function()
+            if filename:sub(1, 1) == "$" then
+                return utils.readAll(filename, "rb", true)
             end
-        end
 
-        if not image then
-            -- Fallback: read the bytes and build the image from them. This can fail on paths the
-            -- filesystem can not chdir into, so it must not take the whole editor down.
-            local readSuccess, bytes = pcall(function()
-                if filename:sub(1, 1) == "$" then
-                    return utils.readAll(filename, "rb", true)
-                end
+            -- Absolute path inside the Celeste content folder: read it with plain io, the editor
+            -- filesystem changes the working directory for external files and chokes on some of
+            -- these paths
+            local file = io.open(filename, "rb")
 
-                -- Absolute path inside the Celeste content folder: read it with plain io, the editor
-                -- filesystem changes the working directory for external files and chokes on some of
-                -- these paths
-                local file = io.open(filename, "rb")
+            if file then
+                local contents = file:read("*a")
 
-                if file then
-                    local contents = file:read("*a")
+                file:close()
 
-                    file:close()
+                return contents
+            end
 
-                    return contents
-                end
+            return utils.readAll(filename, "rb", false)
+        end)
 
-                return utils.readAll(filename, "rb", false)
+        if readSuccess and bytes then
+            local ok, fallback = pcall(function()
+                return love.graphics.newImage(love.filesystem.newFileData(bytes, "preview_tool.png"))
             end)
 
-            if readSuccess and bytes then
-                local ok, fallback = pcall(function()
-                    return love.graphics.newImage(love.filesystem.newFileData(bytes, "preview_tool.png"))
-                end)
-
-                if ok then
-                    image = fallback
-                end
+            if ok then
+                image = fallback
             end
         end
     end
 
     previewToolImages[filename] = image or false
+    table.insert(previewToolImageOrder, filename)
+
+    -- Hovering and prefetching must not keep every preview image in memory forever. Pinned images
+    -- (the current map mod) are always kept.
+    while #previewToolImageOrder > MAX_PREVIEW_TOOL_IMAGES do
+        local removed
+
+        for index, candidate in ipairs(previewToolImageOrder) do
+            if not previewToolPinned[candidate] then
+                table.remove(previewToolImageOrder, index)
+
+                if candidate ~= filename then
+                    previewToolImages[candidate] = nil
+                end
+
+                removed = true
+
+                break
+            end
+        end
+
+        if not removed then
+            break
+        end
+    end
 
     return image
+end
+
+local schedulePreviewToolImages
+
+-- Decoding a large PNG on the main thread can drop a frame. Only decode while the pointer is
+-- resting, so moving across the list never competes with image loading.
+local function previewCursorIsIdle()
+    local x, y = love.mouse.getPosition()
+    local now = love.timer.getTime()
+
+    if x ~= previewMouseX or y ~= previewMouseY then
+        previewMouseX, previewMouseY = x, y
+        previewMouseMovedAt = now
+
+        return false
+    end
+
+    return now - previewMouseMovedAt >= 0.15
+end
+
+local function processPreviewToolImages()
+    previewToolImageQueueScheduled = false
+
+    -- The image under the pointer is urgent: show it as soon as possible. Everything else waits
+    -- until the pointer rests, so background decoding can not cause stutter while moving.
+    local nextFile = previewToolImageQueue[1]
+
+    if nextFile ~= previewUrgentFile and not previewCursorIsIdle() then
+        schedulePreviewToolImages()
+
+        return
+    end
+
+    local filename = table.remove(previewToolImageQueue, 1)
+
+    if filename and filename == previewUrgentFile then
+        previewUrgentFile = nil
+    end
+
+    if filename then
+        previewToolImageQueued[filename] = nil
+
+        if previewToolImages[filename] == nil then
+            loadPreviewToolImage(filename)
+        end
+
+        -- If the pointer is still on the same row, swap the placeholder for the real image
+        if previewHoverList and previewHoverItem then
+            updateHoverPreview(previewHoverList)
+        end
+    end
+
+    if #previewToolImageQueue > 0 then
+        schedulePreviewToolImages()
+    end
+end
+
+schedulePreviewToolImages = function()
+    if previewToolImageQueueScheduled or #previewToolImageQueue == 0 then
+        return
+    end
+
+    previewToolImageQueueScheduled = true
+
+    ui.runLate(processPreviewToolImages)
+end
+
+local function enqueuePreviewToolImage(filename, front)
+    if not filename then
+        return
+    end
+
+    if previewToolImages[filename] ~= nil then
+        return
+    end
+
+    if previewToolImageQueued[filename] then
+        if front then
+            for index, queued in ipairs(previewToolImageQueue) do
+                if queued == filename then
+                    table.remove(previewToolImageQueue, index)
+
+                    break
+                end
+            end
+
+            table.insert(previewToolImageQueue, 1, filename)
+            previewUrgentFile = filename
+            schedulePreviewToolImages()
+        end
+
+        return
+    end
+
+    previewToolImageQueued[filename] = true
+
+    if front then
+        table.insert(previewToolImageQueue, 1, filename)
+        previewUrgentFile = filename
+
+    else
+        table.insert(previewToolImageQueue, filename)
+    end
+
+    schedulePreviewToolImages()
+end
+
+local function getPreviewToolImage(filename, front)
+    local cached = previewToolImages[filename]
+
+    if cached ~= nil then
+        return cached or nil
+    end
+
+    enqueuePreviewToolImage(filename, front)
+
+    return nil
 end
 
 local function getPreviewToolPlaceholder()
@@ -1346,10 +1490,12 @@ local function updateColorGradingHover(entry)
     require("ui.windows.colorgrading_preview").setGrade(entry and entry.file or nil)
 end
 
-local function updateHoverPreview(list)
+updateHoverPreview = function(list)
     -- The debug list has no placements to preview
     if toolHandler.currentToolName == "debug" then
         hoverPreview.hide()
+        previewHoverList = nil
+        previewHoverItem = nil
 
         return
     end
@@ -1362,11 +1508,16 @@ local function updateHoverPreview(list)
     if not hovered or hovered == list or not hovered.itemData then
         hoverPreview.hide()
         updateColorGradingHover(nil)
+        previewHoverList = nil
+        previewHoverItem = nil
 
         return
     end
 
     local item = hovered.itemData
+
+    previewHoverList = list
+    previewHoverItem = item
     local material = item.data
     local content
 
@@ -1380,14 +1531,51 @@ local function updateHoverPreview(list)
         -- Rows that are not Preview entries (tool/layer rows, headers) have no preview at all
         if not entry then
             hoverPreview.hide()
+            previewHoverList = nil
+            previewHoverItem = nil
 
             return
+        end
+
+        -- Queue the hovered row first, then its neighbours: moving the pointer down the list
+        -- then finds their images already loaded. Color grading LUTs are tiny, so load those
+        -- directly and the preview is visible on the same hover frame as the grading result.
+        local image
+
+        if not entry.sprite and entry.file then
+            if toolHandler.getLayer() == "colorGrading" then
+                local cached = previewToolImages[entry.file]
+
+                if cached == nil then
+                    cached = loadPreviewToolImage(entry.file)
+                end
+
+                image = cached
+            else
+                image = getPreviewToolImage(entry.file, true)
+            end
+        end
+
+        if not entry.sprite and currentPreviewItems and item.previewIndex then
+            for offset = 1, 8 do
+                for _, index in ipairs({item.previewIndex - offset, item.previewIndex + offset}) do
+                    local other = currentPreviewItems[index]
+                    local otherEntry = other and other.previewEntry
+
+                    if otherEntry and otherEntry.file and not otherEntry.sprite then
+                        enqueuePreviewToolImage(otherEntry.file)
+                    end
+                end
+            end
         end
 
         local key = "preview:" .. tostring(item.data)
         local sprite = entry and entry.sprite
 
-        if not sprite and item.data then
+        -- Entries backed by a real file are decoded by the background queue. Only fall back to
+        -- the runtime atlas for atlas-only resources, otherwise the first hover would load a
+        -- whole atlas page on the main thread
+        if not sprite and not entry.file and item.data then
             sprite = atlases.getResource(item.data, "Gameplay")
         end
 
@@ -1402,14 +1590,16 @@ local function updateHoverPreview(list)
             })
 
         else
-            local image = entry and entry.file and getPreviewToolImage(entry.file)
+            local placeholder = getPreviewToolPlaceholder()
 
             if not image then
-                image = getPreviewToolPlaceholder()
+                image = placeholder
             end
 
             hoverPreview.show(hovered.screenX, hovered.screenY, hovered.height, {
-                key = key,
+                -- Loading the image changes the key, so a placeholder is replaced by the real
+                -- image as soon as the background queue has decoded it
+                key = key .. (image == placeholder and ":placeholder" or ":image"),
                 image = image,
                 width = image:getWidth(),
                 height = image:getHeight()
@@ -2023,6 +2213,16 @@ end
 getMaterialItems = function(layer)
     -- A rebuilt list invalidates whatever row was hovered before
     hoverPreview.hide()
+    previewHoverList = nil
+    previewHoverItem = nil
+    currentPreviewItems = nil
+
+    -- Do not keep decoding preview images after switching away from the Preview tool
+    if not toolHandler.currentTool or toolHandler.currentTool.name ~= "preview" then
+        previewToolImageQueue = {}
+        previewToolImageQueued = {}
+    end
+
     entityPreviewCache = {}
 
     local currentTool = toolHandler.currentTool
@@ -2137,6 +2337,41 @@ getMaterialItems = function(layer)
             end
         end
 
+        currentPreviewItems = items
+
+        -- Current map mod first: those previews are ready by the time the list is browsed,
+        -- everything else is queued while hovering
+        if currentModKey then
+            local preloaded = 0
+
+            for _, item in ipairs(items) do
+                local entry = item.previewEntry
+
+                if entry and entry.file and not entry.sprite and entry.source
+                    and string.lower(entry.source) == currentModKey then
+                    previewToolPinned[entry.file] = true
+
+                    enqueuePreviewToolImage(entry.file)
+
+                    preloaded = preloaded + 1
+
+                    if preloaded >= MAX_CURRENT_MOD_PRELOAD then
+                        break
+                    end
+                end
+            end
+        end
+
+        -- Everything else warms up slowly while the pointer is idle; hovered rows are promoted
+        -- to the front of the queue
+        for _, item in ipairs(items) do
+            local entry = item.previewEntry
+
+            if entry and entry.file and not entry.sprite then
+                enqueuePreviewToolImage(entry.file)
+            end
+        end
+
         -- No fixed row height here: this list mixes source headers and normal rows. A leftover
         -- elementSize from the tile list makes the scroll position twitch.
         if toolWindow.materialList then
@@ -2171,6 +2406,11 @@ getMaterialItems = function(layer)
     -- Preview tool: every image of the selected asset folder, grouped by sub folder. Rows are
     -- action buttons that copy the path relative to the folder (without the file extension).
     if currentTool and currentTool.name == "preview" then
+        -- A new folder/layer invalidates the old warmup queue
+        previewToolImageQueue = {}
+        previewToolImageQueued = {}
+        previewToolPinned = {}
+
         -- path: folder that is scanned, prefix: what the copied path starts with (the folder is
         -- relative to Graphics/Atlases/Gameplay)
         local folders = {
@@ -2462,13 +2702,14 @@ getMaterialItems = function(layer)
         local items = previewItems
 
         -- Rows stay action buttons: clicking copies the path instead of selecting a material
-        for _, item in ipairs(items) do
+        for index, item in ipairs(items) do
             if not item.isSource and not item.isHeader and not item.isFavoritesHeader and item.data then
                 local entry = previewFiles[item.data]
 
                 item.isButton = true
                 item.tooltip = item.data
                 item.previewEntry = entry
+                item.previewIndex = index
 
                 local copyPath = item.data
 
