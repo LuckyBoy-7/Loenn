@@ -27,6 +27,7 @@ local metadataEditor = require("ui.metadata_editor")
 local dependencyEditor = require("ui.dependency_editor")
 local settingsEditor = require("ui.settings_editor")
 local aboutWindow = require("ui.about_window_wrapper")
+local ghost = require("ghost")
 
 local activeMenubar
 local devBuild = meta.version == version("0.0.0")
@@ -230,11 +231,19 @@ menubar.menubar = {
         }},
         {"view_zoom_to_extents", viewportDevice.zoomToExtents},
         {"view_always_show_trigger_nodes", toggleAlwaysShowNodes, "checkbox", getAlwaysShowNodes},
+        {"ghost_show_hitboxes", ghost.toggleHitboxes, "checkbox", ghost.getHitboxes},
     }},
     {"map", {
         {"metadata", metadataEditor.editMetadata},
         {"dependencies", dependencyEditor.editDependencies},
         {"save_map_image", saveMapImage},
+    }},
+    {"ghost", {
+        {"ghost_show_player", ghost.togglePlayer, "checkbox", ghost.getPlayer},
+        {"ghost_show_player_hitbox", ghost.togglePlayerHitbox, "checkbox", ghost.getPlayerHitbox},
+        {"ghost_show_holdables", ghost.toggleHoldables, "checkbox", ghost.getHoldables},
+        {},
+        {"ghost_clear", ghost.clear},
     }},
     -- Only add if enabled
     addDebug and debugMenu or false,

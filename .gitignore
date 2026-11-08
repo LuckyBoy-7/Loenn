@@ -21,3 +21,6 @@
 
 # local handoff / memory notes
 /docs/handoff-*.md
+
+# LoennHelper
+/LoennHelper/*

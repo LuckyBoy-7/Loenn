@@ -5,6 +5,7 @@ local viewportHandler = require("viewport_handler")
 local history = require("history")
 local roomHotkeyUtils = require("room_hotkey_utils")
 local windowUtils = require("window_utils")
+local ghost = require("ghost")
 
 local hotkeys = {}
 
@@ -60,6 +61,9 @@ function hotkeys.addStandardHotkeys(hotkeyHandler)
 
     -- Window
     hotkeyHandler.addHotkey("global", configs.hotkeys.toggleFullscreen, windowUtils.toggleFullscreen)
+
+    -- Ghosts
+    hotkeyHandler.addHotkey("global", "shift + c", ghost.clear)
 
     -- Debug tool: the grave accent selects it, and selects the selection tool again when it is
     -- already active (it used to toggle the coordinate panel)

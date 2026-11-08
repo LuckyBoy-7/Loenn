@@ -341,6 +341,13 @@ ui.menubar.dependencies=Dependencies
 ui.menubar.metadata=Metadata
 ui.menubar.save_map_image=Save Map Image
 
+ui.menubar.ghost=Ghost
+ui.menubar.ghost_show_player=Show Player Ghost
+ui.menubar.ghost_show_player_hitbox=Show Player Hitbox Ghost
+ui.menubar.ghost_show_holdables=Show Holdable Ghosts
+ui.menubar.ghost_clear=Clear Ghosts [Shift + C]
+ui.menubar.ghost_show_hitboxes=Show Spike and Spinner Hitboxes
+
 ui.menubar.room=Room
 ui.menubar.add=Add
 ui.menubar.configure=Edit
