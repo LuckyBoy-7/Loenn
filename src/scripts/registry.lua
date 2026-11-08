@@ -9,7 +9,8 @@ registry.scripts = {
     require("scripts/tile_credits"),
     require("scripts/decal_credits"),
     require("scripts/auto_bg_tiles"),
-    require("scripts/create_template_mod")
+    require("scripts/create_template_mod"),
+    require("scripts/export_to_zip")
 }
 
 function registry.getScripts()
