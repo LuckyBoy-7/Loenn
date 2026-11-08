@@ -282,7 +282,7 @@ function triggers.getDrawable(name, handler, room, trigger, viewport)
     if configs.font.addShadowToFont and viewport ~= nil then
         -- Placement previews (no viewport) are drawn translucent, a shadow would
         -- only muddy them up
-        local offset = fonts.size(1)
+        local offset = fonts.size(triggerFontSize)
         local shadowDrawable = drawableText.fromText(displayName, textX + offset, textY + offset, textWidth, textHeight, nil, triggerFontSize, {0, 0, 0, 1})
 
         shadowDrawable.depth = depths.triggers - 0.9
