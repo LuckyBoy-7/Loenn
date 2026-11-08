@@ -541,6 +541,48 @@ end
 
 -- Search filter for the decal path tree: a matching decal keeps the directory rows above it, so
 -- the result stays readable instead of being a pile of indented leaves.
+local function getThemeListColor()
+    local style = uiElements.__listItem and uiElements.__listItem.__default.style
+    local color = style and style.normalBG
+
+    if color then
+        return {color[1], color[2], color[3], color[4] or 1}
+    end
+
+    return {0.13, 0.13, 0.13, 0.9}
+end
+
+local function getThemeListDisabledColor()
+    local style = uiElements.__listItem and uiElements.__listItem.__default.style
+    local color = style and style.disabledBG
+
+    if color then
+        return {color[1], color[2], color[3], color[4] or 1}
+    end
+
+    local base = getThemeListColor()
+
+    return {base[1] * 0.6, base[2] * 0.6, base[3] * 0.6, base[4]}
+end
+
+-- Source and directory rows are a darker/lighter version of the active theme's list color.
+-- A fixed dark shade looks black on the light theme.
+local function getThemeListHeaderColor(indent)
+    local base = getThemeListColor()
+    local luminance = base[1] * 0.299 + base[2] * 0.587 + base[3] * 0.114
+    local isLight = luminance > 0.5
+    local factor = isLight and 0.82 or 0.52
+    local step = isLight and 0.02 or 0.08
+    local shade = factor + indent * step
+
+    return {
+        math.min(1, base[1] * shade),
+        math.min(1, base[2] * shade),
+        math.min(1, base[3] * shade),
+        1
+    }
+end
+
 local function filterMaterialItems(items, search, options)
     if not search or search == "" then
         -- Keep the scores consistent: a stale mix of numbers and nils makes the sorting
@@ -739,8 +781,8 @@ local function materialDataToElement(list, data, element)
                 element.style.spacing = 4
             end
 
-            element.style.normalBG = {0.13, 0.13, 0.13, 0.9}
-            element.style.disabledBG = {0.05, 0.05, 0.05, 0.7}
+            element.style.normalBG = getThemeListColor()
+            element.style.disabledBG = getThemeListDisabledColor()
 
             -- Rows are recycled: a header may have left the bold flag behind
             if element.label then
@@ -809,15 +851,15 @@ local function materialDataToElement(list, data, element)
             -- deeper level gets a little lighter, always staying darker than a decal row.
             -- This has to be normalBG: the list item's update fades style.bg from normalBG every
             -- frame, so writing style.bg directly is simply overwritten.
-            local shade = math.min(0.11, 0.06 + (data.indent or 0) * 0.01)
+            local shade = getThemeListHeaderColor(indent)
 
-            element.style.normalBG = { shade, shade, shade, 1 }
-            element.style.disabledBG = { shade, shade, shade, 1 }
+            element.style.normalBG = shade
+            element.style.disabledBG = shade
 
         else
             element.interactive = 1
-            element.style.normalBG = { 0.13, 0.13, 0.13, 0.9 }
-            element.style.disabledBG = { 0.05, 0.05, 0.05, 0.7 }
+            element.style.normalBG = getThemeListColor()
+            element.style.disabledBG = getThemeListDisabledColor()
         end
 
         -- The UI only ships one (bitmap) font, so "bold" is emulated by drawing the label twice.
@@ -3601,6 +3643,27 @@ end
 local function focusMaterialSearchHandler()
     if toolWindow.materialSearch then
         widgetUtils.focusElement(toolWindow.materialSearch)
+    end
+end
+
+function toolWindow.refreshMaterialList()
+    if toolWindow.materialList then
+        toolWindow.materialList:updateItems(getMaterialItems())
+    end
+end
+
+function toolWindow.refreshThemeLists()
+    if toolWindow.toolList then
+        toolWindow.toolList:updateItems(getToolItems())
+        styleToolSeparators(toolWindow.toolList)
+    end
+
+    if toolWindow.layerList then
+        toolWindow.layerList:updateItems(getLayerItems())
+    end
+
+    if toolWindow.materialList then
+        toolWindow.materialList:updateItems(getMaterialItems())
     end
 end
 

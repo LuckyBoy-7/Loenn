@@ -48,12 +48,14 @@ function themer.apply(theme, scale)
 
     scale = configs.ui.theme.uiScale or 1
 
+    local previousFont = uiElements.__label.__default.style.font
+
     themer.applyElementStyles(theme)
-    themer.applyFontInfo(theme, scale)
+    themer.applyFontInfo(theme, scale, previousFont)
     themer.applyStyleScale(scale)
 end
 
-function themer.applyFontInfo(theme, scale)
+function themer.applyFontInfo(theme, scale, previousFont)
     local defaultFontSize = configs.ui.theme.defaultFontSize or 12
     local labelFontSizeFallback = math.floor(defaultFontSize * scale)
     local labelFontSize = theme.labelFontSize or labelFontSizeFallback
@@ -71,10 +73,81 @@ function themer.applyFontInfo(theme, scale)
 
     if labelFont then
         uiElements.__label.__default.style.font = labelFont
+
+        -- Existing labels keep the font they were created with. Walk every known label and the
+        -- current UI tree, otherwise switching back from a font theme leaves its font behind.
+        if previousFont and previousFont ~= labelFont then
+            local function updateLabel(label)
+                local style = label and label.style
+
+                if style and style.font == previousFont then
+                    style.font = labelFont
+
+                    if label.forceText and label._textStr then
+                        label._text = false
+                        label:forceText(label._textStr)
+
+                        if label.reflow then
+                            label:reflow()
+                        end
+                    end
+                end
+            end
+
+            local labels = uiElements.label and uiElements.label.__instances
+
+            if labels then
+                for label in pairs(labels) do
+                    updateLabel(label)
+                end
+            end
+
+            if ui.root then
+                local function updateLabels(element)
+                    if not element then
+                        return
+                    end
+
+                    -- Only labels have the font styling property. Reading style.font on other
+                    -- elements (notably the UI root) raises an "unknown styling property" error.
+                    if element.is and element:is("label") then
+                        updateLabel(element)
+                    end
+
+                    for _, child in ipairs(element.children or {}) do
+                        updateLabels(child)
+                    end
+                end
+
+                updateLabels(ui.root)
+            end
+        end
     end
 end
 
 function themer.applyElementStyles(theme)
+    -- Drop keys that were introduced by the previous theme but are not part of the new theme.
+    -- Without this, switching from a theme with extra style keys leaves those values behind on
+    -- elements that the next theme does not override.
+    local previous = themer.current
+
+    if previous and previous ~= themer.default and previous ~= theme then
+        for id, previousTheme in pairs(previous) do
+            local baseTheme = themer.default[id] or {}
+            local nextTheme = theme[id] or {}
+            local el = uiElements[id]
+            local style = el and el.__default and el.__default.style
+
+            if style then
+                for key in pairs(previousTheme) do
+                    if baseTheme[key] == nil and nextTheme[key] == nil then
+                        style[key] = nil
+                    end
+                end
+            end
+        end
+    end
+
     if themer.current ~= themer.default and theme ~= themer.default then
         themer.applyElementStyles(themer.default)
     end

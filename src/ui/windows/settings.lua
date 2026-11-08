@@ -299,6 +299,10 @@ for themeName, theme in pairs(themes.themes) do
     table.insert(themeOptions, themeName)
 end
 
+table.sort(themeOptions, function(a, b)
+    return string.lower(a) < string.lower(b)
+end)
+
 local uiScaleOptions = {
     {"50%", 0.5},
     {"75%", 0.75},
@@ -650,6 +654,17 @@ local function applyNewSettings(newSettings, oldSettings)
 
     if settingChanged("ui.theme.themeName") or settingChanged("ui.theme.uiScale") then
         themes.useTheme(newSettings.ui.theme.themeName)
+
+        -- Layered list rows derive their backgrounds from the theme, so rebuild the right list
+        local windowsHandler = require("ui.windows")
+        local toolsWindow = windowsHandler.windowHandlers.tools
+
+        if toolsWindow and toolsWindow.refreshThemeLists then
+            toolsWindow.refreshThemeLists()
+
+        elseif toolsWindow and toolsWindow.refreshMaterialList then
+            toolsWindow.refreshMaterialList()
+        end
     end
 
     if settingChanged("editor.triggersTrimModName") or settingChanged("editor.triggersUseCategoryColors")
