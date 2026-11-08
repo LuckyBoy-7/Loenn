@@ -75,7 +75,7 @@ local function copyAsset(assetName, target)
     return writeFile(target, content)
 end
 
-local function templateRoomData()
+local function templateRoomData(authorName, modName)
     return {
         __name = "level",
         __children = {
@@ -118,6 +118,39 @@ local function templateRoomData()
                         removeCameraTriggers = false,
                         x = 208,
                         y = 56
+                    },
+                    {
+                        __name = "XaphanHelper/CustomEndScreenController",
+                        atlas = "EndScreens/" .. authorName .. "/" .. modName,
+                        hideVanillaTimer = false,
+                        id = 0,
+                        images = "end_screen",
+                        itemPercentColor = "FFFFFF",
+                        itemPercentMaxColor = "FFD700",
+                        mapPercentColor = "FFFFFF",
+                        mapPercentMaxColor = "FFD700",
+                        music = "",
+                        priority = 0,
+                        requiredFlags = "",
+                        requiredItemPercent = 0,
+                        requiredMapPercent = 0,
+                        requiredStrawberries = 0,
+                        requiredTime = 0,
+                        requirementsCheck = "Chapter",
+                        showItemPercent = false,
+                        showMapPercent = false,
+                        showStrawberries = false,
+                        showTime = false,
+                        showTitle = true,
+                        strawberriesColor = "FFFFFF",
+                        strawberriesMaxColor = "FFD700",
+                        subText1 = "",
+                        subText1Color = "FFFFFF",
+                        subText2 = "",
+                        subText2Color = "FFFFFF",
+                        title = "",
+                        x = 136,
+                        y = 40
                     }
                 }
             }
@@ -161,7 +194,7 @@ local function encodeBlankMap(path, mapName, authorName, modName)
     }
 
     side.map.package = ""
-    side.map.rooms = {roomStruct.decode(templateRoomData())}
+    side.map.rooms = {roomStruct.decode(templateRoomData(authorName, modName))}
     -- Like File -> New, only write the metadata that is actually needed. The metadata window
     -- merges the defaults when it is opened, and empty strings here would be invalid enum values
     -- for the game (e.g. CoreMode = "" throws while parsing MapMeta)
@@ -218,7 +251,7 @@ local function createTemplate(values, options)
 
     -- everest.yaml
     local yamlContent = string.format(
-        "- Name: %s\n  Version: 1.0.0\n  Dependencies:\n    - Name: Everest\n      Version: 1.5577.0\n",
+        "- Name: %s\n  Version: 1.0.0\n  Dependencies:\n    - Name: Everest\n      Version: 1.5577.0\n    - Name: XaphanHelper\n      Version: 1.0.79\n",
         modName)
 
     if not writeFile(utils.joinpath(modFolder, "everest.yaml"), yamlContent) then
@@ -255,6 +288,10 @@ local function createTemplate(values, options)
 
     copyAsset("city.png", utils.joinpath(areasFolder, "city.png"))
     copyAsset("city_back.png", utils.joinpath(areasFolder, "city_back.png"))
+
+    local endScreensFolder = utils.joinpath(modFolder, "Graphics", "Atlases", "EndScreens", authorName, modName)
+
+    copyAsset("end_screen.png", utils.joinpath(endScreensFolder, "end_screen.png"))
 
     -- Empty map
     local mapPath = utils.joinpath(modFolder, "Maps", authorName, modName, mapName .. ".bin")
