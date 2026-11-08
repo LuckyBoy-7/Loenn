@@ -24,3 +24,6 @@
 
 # LoennHelper
 /LoennHelper/*
+
+# publish
+/publish_template/*

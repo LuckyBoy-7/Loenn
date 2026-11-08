@@ -7,7 +7,6 @@ local history = require("history")
 local debugUtils = require("debug_utils")
 local notifications = require("ui.notification")
 local sceneHandler = require("scene_handler")
-local updater = require("updater")
 local configs = require("configs")
 local fileLocations = require("file_locations")
 local filesystem = require("utils.filesystem")
@@ -41,10 +40,6 @@ local function deleteCurrentRoom()
     if map and item then
         sceneHandler.sendEvent("editorRoomDelete", map, item)
     end
-end
-
-local function checkForUpdates()
-    updater.checkForUpdates(true)
 end
 
 local function openStorageDirectory()

@@ -13,13 +13,32 @@ local launchArguments = require("launch_arguments")
 
 local updater = {}
 
+-- Older settings files still point at the upstream repository. This is a fork, so migrate that
+-- target in memory; otherwise update checks would offer the original Lönn releases.
+local function getRepository()
+    local author = configs.updater.githubAuthor
+    local repository = configs.updater.githubRepository
+
+    if author == "CelestialCartographers" and repository == "Loenn" then
+        author = "LuckyBoy-7"
+        repository = "Loenn"
+    end
+
+    return author, repository
+end
+
 -- Only allow if install is "fused" (.exe on Windows) or ran from a .love
 function updater.canUpdate()
+    if configs.updater.enabled ~= true then
+        return false
+    end
+
     return love.filesystem.isFused() or filesystem.fileExtension(love.filesystem.getSource()) == "love"
 end
 
 function updater.getAvailableVersions(sort)
-    local releases = github.getReleases(configs.updater.githubAuthor, configs.updater.githubRepository)
+    local author, repository = getRepository()
+    local releases = github.getReleases(author, repository)
     local res = {}
 
     for i, release in ipairs(releases or {}) do
@@ -52,7 +71,8 @@ function updater.isLatestVersion()
 end
 
 function updater.getRelevantRelease(tagName)
-    local releases = github.getReleases(configs.updater.githubAuthor, configs.updater.githubRepository)
+    local author, repository = getRepository()
+    local releases = github.getReleases(author, repository)
 
     if tagName then
         local targetVersion = versionParser(tagName)
@@ -77,12 +97,14 @@ function updater.getRelevantReleaseAsset(tagName, targetOS)
 
     if release then
         for _, asset in ipairs(release.assets) do
-            local assetOS = asset.name:match("-([A-Za-z0-9_]+)%.zip$")
+            local assetOS = asset.name:match("%-([A-Za-z0-9_]+)%.zip$")
+                or asset.name:match("for%s+([A-Za-z0-9_]+)%.zip$")
 
             if assetOS then
                 local assetOSLower = assetOS:lower()
 
-                if assetOSLower == userOSLower or assetOSLower:gsub("_", " ") == userOSLower then
+                if assetOSLower == userOSLower or assetOSLower:gsub("_", " ") == userOSLower
+                    or (userOSLower == "os x" and assetOSLower == "mac") then
                     return asset
                 end
             end
@@ -169,6 +191,10 @@ end
 
 -- Check for updates and queue up related events
 function updater.checkForUpdates()
+    if configs.updater.enabled ~= true then
+        return
+    end
+
     local code = [[
         require("selene").load()
         require("selene/selene/wrappers/searcher/love2d/searcher").load()
