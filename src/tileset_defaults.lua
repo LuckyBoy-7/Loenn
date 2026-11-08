@@ -919,6 +919,15 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
     end
 
     if added == 0 then
+        -- AnimatedTiles is a foreground-only feature. Background Add Defaults must not touch it.
+        if layer == "tilesFg" and not tilesetDefaults.dryRun then
+            tilesetDefaults.mergeAnimatedTiles(modFolder)
+
+            local debugUtils = require("debug_utils")
+            debugUtils.reloadKnownModFilenames()
+            debugUtils.redrawMap()
+        end
+
         notifyMessage("tilesetDefaultsNothingAdded")
 
         return false, "nothing"
@@ -982,8 +991,11 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
 
     logging.info(string.format("[tileset-defaults] tileset meta now holds %d tilesets", metaCount))
 
-    -- Animated tiles are collected as well: vanilla, the other mods and the maps own definitions
-    tilesetDefaults.mergeAnimatedTiles(modFolder)
+    -- Animated tiles are collected as well: vanilla, the other mods and the maps own definitions.
+    -- They are only relevant to foreground tiles, so a background Add Defaults must not touch them.
+    if layer == "tilesFg" then
+        tilesetDefaults.mergeAnimatedTiles(modFolder)
+    end
 
     local toolHandler = require("tools")
     local currentTool = toolHandler.currentTool
@@ -1287,9 +1299,13 @@ function tilesetDefaults.keepUsed(layer, onDone, targetFolder)
         logging.info(string.format("[tileset-defaults] removed %d unused images", removedImages))
     end
 
-    -- Animated tiles are referenced by the "sprites" attribute of the tileset rules: drop the
-    -- ones no tileset of the map asks for any more
-    local trimmedAnimated = tilesetDefaults.pruneAnimatedTiles(modFolder)
+    -- Animated tiles are referenced by the "sprites" attribute of foreground tileset rules;
+    -- background tilesets do not own AnimatedTiles entries.
+    local trimmedAnimated = 0
+
+    if layer == "tilesFg" then
+        trimmedAnimated = tilesetDefaults.pruneAnimatedTiles(modFolder)
+    end
 
     if trimmedAnimated > 0 then
         logging.info(string.format("[tileset-defaults] removed %d unreferenced animated tiles", trimmedAnimated))
@@ -1475,8 +1491,24 @@ end
 -- copied along, otherwise the entries would reference sprites of other mods.
 function tilesetDefaults.mergeAnimatedTiles(modFolder, onDone)
     local modFolderName = filesystem.filename(utils.convertToUnixPath(modFolder), "/")
-    local targetRelative = "Graphics/" .. modFolderName .. "/AnimatedTiles.xml"
+    local configured = loadedState.side and loadedState.side.meta and loadedState.side.meta.AnimatedTiles
+
+    if type(configured) == "string" then
+        configured = string.gsub(configured, "%z", "")
+    end
+
+    -- If the map already points at an AnimatedTiles.xml, append to that file instead of creating
+    -- a second one under the default Graphics/<mod>/ name.
+    local targetRelative
+
+    if configured and configured ~= "" then
+        targetRelative = utils.convertToUnixPath(configured)
+    else
+        targetRelative = "Graphics/" .. modFolderName .. "/AnimatedTiles.xml"
+    end
+
     local targetPath = utils.joinpath(modFolder, (utils.convertToUnixPath(targetRelative)))
+    local targetText = readTargetFile(targetPath)
 
     local sources = collectAnimatedTilesSources(modFolder)
     local entries = {}
@@ -1590,25 +1622,56 @@ function tilesetDefaults.mergeAnimatedTiles(modFolder, onDone)
     end
 
     local blocks = {"<Data>\n"}
+    local newBlocks = {}
+    local existingNames = parseAnimatedSprites(targetText)
 
     for _, name in ipairs(order) do
         table.insert(blocks, string.format("  <sprite %s/>\n", entries[name].attributes))
+
+        if not existingNames[name] then
+            table.insert(newBlocks, string.format("  <sprite %s/>\n", entries[name].attributes))
+        end
     end
 
     table.insert(blocks, "</Data>\n")
 
-    if not writeTargetFile(targetPath, table.concat(blocks)) then
-        notifyMessage("tilesetDefaultsWriteFailed")
+    if targetText then
+        -- The configured file already exists: append only the entries it does not have, so its
+        -- formatting, comments and any hand-written definitions stay intact.
+        if #newBlocks > 0 then
+            local insertAt = string.find(targetText, "</Data>", 1, true)
 
-        return false
+            if not insertAt then
+                notifyMessage("tilesetDefaultsInvalidXml", tostring(targetRelative), "no </Data> tag")
+
+                return false, "invalid"
+            end
+
+            local newText = string.sub(targetText, 1, insertAt - 1) .. table.concat(newBlocks)
+                .. string.sub(targetText, insertAt)
+
+            if not tilesetDefaults.dryRun and not writeTargetFile(targetPath, newText) then
+                notifyMessage("tilesetDefaultsWriteFailed")
+
+                return false,
+                    "writeFailed"
+            end
+        end
+
+    elseif not tilesetDefaults.dryRun then
+        if not writeTargetFile(targetPath, table.concat(blocks)) then
+            notifyMessage("tilesetDefaultsWriteFailed")
+
+            return false, "writeFailed"
+        end
     end
 
     if loadedState.side and loadedState.side.meta then
         loadedState.side.meta.AnimatedTiles = utils.convertToUnixPath(targetRelative)
     end
 
-    logging.info(string.format("[tileset-defaults] animated tiles: %d entries from %d sources, %d frames copied, %d without frames",
-        #order, #sources, copiedFrames, missingFrames))
+    logging.info(string.format("[tileset-defaults] animated tiles: %d entries from %d sources, %d added, %d frames copied, %d without frames -> %s",
+        #order, #sources, #newBlocks, copiedFrames, missingFrames, tostring(targetRelative)))
 
     if onDone then
         onDone(#order)
