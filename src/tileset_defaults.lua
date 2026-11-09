@@ -24,6 +24,20 @@ tilesetDefaults.packRoot = "assets/tile_pack"
 tilesetDefaults.imageFolder = "Graphics/Atlases/Gameplay/tilesets/Loenn"
 tilesetDefaults.ruleFolder = "Graphics/Loenn"
 
+-- Foreground and background tilesets must not share an image folder: Only Keep Used on the
+-- background layer would otherwise delete foreground images that its own XML does not reference.
+function tilesetDefaults.getImageSubFolder(layer)
+    return layer == "tilesBg" and "Background" or "Foreground"
+end
+
+function tilesetDefaults.getImageFolder(layer)
+    return utils.joinpath(tilesetDefaults.imageFolder, tilesetDefaults.getImageSubFolder(layer))
+end
+
+function tilesetDefaults.getImageRelativeFolder(layer)
+    return "Loenn/" .. tilesetDefaults.getImageSubFolder(layer)
+end
+
 -- Single character ids for the new tilesets. Chinese characters are used because mods already
 -- use most of the ascii alphabet for their own ids.
 local idPool =
@@ -608,7 +622,7 @@ local function fileExists(path)
 end
 
 -- Copies the image into the target mod, returns the tileset path (relative to tilesets/) or nil
-local function copyImage(candidate, modFolder, usedNames)
+local function copyImage(candidate, modFolder, usedNames, layer)
     local resolved = virtualFs.resolve(candidate.image) or candidate.image
     local imageBytes = utils.readAll(resolved, "rb", true)
 
@@ -626,10 +640,11 @@ local function copyImage(candidate, modFolder, usedNames)
 
     local name = baseName
     local index = 2
+    local relativeFolder = tilesetDefaults.getImageRelativeFolder(layer)
 
     while true do
-        local relative = "Loenn/" .. name .. ".png"
-        local target = utils.joinpath(modFolder, tilesetDefaults.imageFolder, name .. ".png")
+        local relative = relativeFolder .. "/" .. name .. ".png"
+        local target = utils.joinpath(modFolder, tilesetDefaults.getImageFolder(layer), name .. ".png")
 
         if usedNames[relative] then
             name = string.format("%s_%d", baseName, index)
@@ -869,7 +884,7 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
                 skipped = skipped + 1
 
             else
-                local imageRelative = copyImage(candidate, modFolder, usedNames)
+                local imageRelative = copyImage(candidate, modFolder, usedNames, layer)
 
                 if imageRelative and not existingPaths[imageRelative] then
                     usedIds[id] = true
@@ -1276,15 +1291,17 @@ function tilesetDefaults.keepUsed(layer, onDone, targetFolder)
 
     logging.info(string.format("[tileset-defaults] removed %d unused tilesets from %s (%s)", removed, ruleRelative, modName))
 
-    -- Also drop the images of the removed tilesets, but only the ones in the folder this feature
-    -- manages: never touch the rest of the mod
+    -- Also drop the images of the removed tilesets, but only the ones in this layer's folder.
+    -- Foreground and background image folders are separate, so this never touches the other
+    -- layer's tilesets (or legacy images in the shared Loenn/ folder).
     local removedImages = 0
-    local imageFolder = utils.joinpath(modFolder, tilesetDefaults.imageFolder)
+    local imageFolder = utils.joinpath(modFolder, tilesetDefaults.getImageFolder(layer))
+    local relativeFolder = tilesetDefaults.getImageRelativeFolder(layer)
 
     if filesystem.isDirectory(imageFolder) then
         for fileName in filesystem.listDir(imageFolder) do
             if string.lower(filesystem.fileExtension(fileName) or "") == "png" then
-                local relative = "Loenn/" .. string.gsub(fileName, "%.png$", "")
+                local relative = relativeFolder .. "/" .. string.gsub(fileName, "%.png$", "")
 
                 if not keepPaths[relative] then
                     if filesystem.remove(utils.joinpath(imageFolder, fileName)) then
