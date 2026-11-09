@@ -943,6 +943,99 @@ function modHandler.readEverestBlacklist(filename)
     return ignored
 end
 
+-- PhysFS's archive parser used to hold the global filesystem lock for the whole mount. Our patched
+-- runtime lets the parsers run concurrently; this pre-pass keeps Lönn's registration loop unchanged
+-- and only moves the expensive archive indexing off the serial critical path.
+function modHandler.preMountMods(directory, filenames, ignored, noMods, alwaysLoad)
+    -- Only the bundled patched LÖVE runtime can mount archives concurrently without serializing on
+    -- PhysFS's global state lock. With an unpatched system LÖVE this would only add thread overhead.
+    if not (love.filesystem.hasParallelMount and love.filesystem.hasParallelMount()) then
+        return
+    end
+
+    local tasks = {}
+
+    for _, filename in ipairs(filenames) do
+        local modIgnored = not alwaysLoad[filename] and (ignored[filename] or noMods)
+
+        if not modIgnored then
+            local path = utils.joinpath(directory, filename)
+
+            if modHandler.mountable(path) then
+                local modFolderName = filename:gsub("%.", "_")
+
+                -- Match the exact path string mountModFiles uses, so PhysFS sees it as already
+                -- mounted instead of parsing the archive a second time.
+                local mountPath = utils.joinpath(utils.dirname(path), ".", utils.filename(path))
+
+                table.insert(tasks, {
+                    path = mountPath,
+                    mountPoint = string.format(modHandler.specificModContent, modFolderName)
+                })
+            end
+        end
+    end
+
+    if #tasks == 0 then
+        return
+    end
+
+    local preMountStart = love.timer.getTime()
+    local threadCount = math.min(16, #tasks)
+    local code = [[
+        local function run(tasks, first, last, channelName)
+            local physfs = require("lib.physfs")
+            local channel = love.thread.getChannel(channelName)
+            local failures = 0
+
+            for i = first, last do
+                local task = tasks[i]
+
+                if physfs.mount(task.path, task.mountPoint, 1) == 0 then
+                    failures = failures + 1
+                end
+            end
+
+            channel:push(failures)
+        end
+
+        run(...)
+    ]]
+
+    local channelName = "mod-premount-" .. tostring(love.timer.getTime())
+    local threads = {}
+    local perThread = math.ceil(#tasks / threadCount)
+
+    for i = 1, threadCount do
+        local first = (i - 1) * perThread + 1
+        local last = math.min(i * perThread, #tasks)
+
+        if first <= last then
+            local thread = love.thread.newThread(code)
+            thread:start(tasks, first, last, channelName)
+            table.insert(threads, thread)
+        end
+    end
+
+    for _, thread in ipairs(threads) do
+        thread:wait()
+    end
+
+    local channel = love.thread.getChannel(channelName)
+    local failures = 0
+
+    while channel:getCount() > 0 do
+        failures = failures + (channel:pop() or 0)
+    end
+
+    if configs.debug.logModLoading then
+        logging.info(string.format("[mods] pre-mounted %d archives in parallel (%d threads, %d failures)",
+            #tasks, threadCount, failures))
+    end
+
+    logging.info(string.format("[mods] pre-mount took %.2fs", love.timer.getTime() - preMountStart))
+end
+
 function modHandler.mountMods(directory, force)
     directory = directory or utils.joinpath(fileLocations.getCelesteDir(), "Mods")
 
@@ -966,6 +1059,8 @@ function modHandler.mountMods(directory, force)
                 table.insert(filenames, filename)
             end
         end
+
+        modHandler.preMountMods(directory, filenames, ignored, noMods, alwaysLoad)
 
         for index, filename in ipairs(filenames) do
             startupProgress.reportFiles(#filenames, index, string.format("Loading mod %s", filename))
