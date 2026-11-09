@@ -1533,14 +1533,6 @@ local function updateColorGradingHover(entry)
 end
 
 updateHoverPreview = function(list)
-    -- The debug list has no placements to preview
-    if toolHandler.currentToolName == "debug" then
-        hoverPreview.hide()
-        previewHoverList = nil
-        previewHoverItem = nil
-
-        return
-    end
     local hovered = ui.hovering
 
     while hovered and hovered ~= list and not hovered.itemData do
@@ -1654,6 +1646,17 @@ updateHoverPreview = function(list)
     if type(material) ~= "string" then
         hoverPreview.hide()
         return
+    end
+
+    -- Debug rows only get previews for the layers that have usable placement/atlas data.
+    if toolHandler.currentToolName == "debug" then
+        local layerName = toolHandler.getLayer()
+
+        if layerName ~= "entities" and layerName ~= "decalsFg" and layerName ~= "decalsBg" then
+            hoverPreview.hide()
+
+            return
+        end
     end
 
     local thumbnail = item.thumbnail
@@ -2824,6 +2827,29 @@ getMaterialItems = function(layer)
         local sourceGroups = getRulesSourceGroups(currentLayer)
         local tilerMeta = brushHelper.getTilerMeta(currentLayer) or {}
         local debugMaterials = {}
+        local entityPlacements
+
+        -- Debug entity rows carry the entity name only. The hover preview needs the placement
+        -- template (sprite data/defaults), so resolve one placement for every used entity.
+        local function getDebugEntityPlacement(name)
+            if currentLayer ~= "entities" or not name then
+                return nil
+            end
+
+            if not entityPlacements then
+                entityPlacements = {}
+
+                for _, placement in ipairs(placementUtils.getPlacements("entities")) do
+                    local entityName = placement.itemTemplate and placement.itemTemplate._name
+
+                    if entityName and not entityPlacements[entityName] then
+                        entityPlacements[entityName] = placement
+                    end
+                end
+            end
+
+            return entityPlacements[name]
+        end
 
         for _, material in ipairs(materials or {}) do
             local name = type(material) == "table" and material.name or material
@@ -2848,7 +2874,7 @@ getMaterialItems = function(layer)
             })
         end
 
-        return getPathTreeItems(debugMaterials, currentTool, currentLayer, favoritesLookup, language, {
+        local items = getPathTreeItems(debugMaterials, currentTool, currentLayer, favoritesLookup, language, {
             flat = true,
             leafText = function(entry)
                 return entry.displayName or entry.name
@@ -2860,6 +2886,17 @@ getMaterialItems = function(layer)
                 return entry.displayName or entry.name
             end
         })
+
+        -- The hover preview normally uses the placement attached by the path tree. Debug rows
+        -- only have an entity name, so attach the matching placement template after the tree is
+        -- built.
+        if currentLayer == "entities" then
+            for _, item in ipairs(items) do
+                item.placement = getDebugEntityPlacement(item.data)
+            end
+        end
+
+        return items
     end
 
     -- Tile tools list their tilesets grouped by source, with a thumbnail per entry. The special
