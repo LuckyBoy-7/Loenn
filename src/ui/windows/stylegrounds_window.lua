@@ -1886,6 +1886,13 @@ function stylegroundWindow.closeForTool()
     currentInteractionData = nil
 end
 
+-- Called before the UI is rebuilt. The window is created outside the regular windows registry, so
+-- a stale currentWindow would otherwise keep isOpen() true even after its old window group has
+-- been detached.
+function stylegroundWindow.reset()
+    stylegroundWindow.closeForTool()
+end
+
 -- Adds one style of a given kind to the foreground or background list: "parallax" (empty
 -- texture), "group" or "effect" with the effect name
 function stylegroundWindow.addStyleOfType(kind, effectName, foreground)

@@ -19,6 +19,15 @@ local configs = require("configs")
 function debugUtils.reloadUI()
     logging.info("Reloading UI elements")
 
+    -- The stylegrounds panel is created outside the windows registry. Its stale currentWindow
+    -- would make isOpen() return true after the old window group is gone, so it has to be reset
+    -- before the UI is rebuilt.
+    local stylegroundsLoaded, stylegroundsWindow = pcall(require, "ui.windows.stylegrounds_window")
+
+    if stylegroundsLoaded and stylegroundsWindow.reset then
+        stylegroundsWindow.reset()
+    end
+
     windows.storeWindowPositions()
     windows.unloadWindows()
 
