@@ -621,6 +621,20 @@ local function addListItemData(listItem, item)
     listItem.iconClicked = item.iconClicked
 end
 
+local function clearListHovering(list)
+    local hovering = ui.hovering
+
+    if hovering and findListParent(hovering) == list then
+        ui.hovering = false
+
+        local onLeave = hovering.onLeave
+
+        if onLeave then
+            onLeave(hovering)
+        end
+    end
+end
+
 function listWidgets.updateItems(list, items, target, fromFilter, preventCallback, callbackRequiresChange, forceSort)
     local options = list.options
     local filterItems = options.filterItems or defaultFilterItems
@@ -651,9 +665,33 @@ function listWidgets.updateItems(list, items, target, fromFilter, preventCallbac
     end
 
     if list._magicList then
+        clearListHovering(list)
         list:invalidate()
 
         list.data = processedItems
+
+        -- updateItems defers the real selection callback until after layout. Moving a magic list's
+        -- selected index immediately prevents the old row (for example ColorGrading in the tool
+        -- layer list) from rendering as selected for one frame and flashing when the list is
+        -- rebuilt.
+        local desiredSelection = target or newSelection
+        local desiredIndex = 0
+
+        if type(desiredSelection) == "number" then
+            desiredIndex = desiredSelection
+
+        elseif desiredSelection then
+            for index, item in ipairs(list.data) do
+                if item == desiredSelection or item.data == desiredSelection
+                    or item.text == desiredSelection then
+                    desiredIndex = index
+
+                    break
+                end
+            end
+        end
+
+        list._selectedIndex = desiredIndex
 
     else
         -- Check if list items are listItem or just data
@@ -675,6 +713,16 @@ function listWidgets.updateItems(list, items, target, fromFilter, preventCallbac
 
     ui.runLate(function()
         listWidgets.setSelection(list, target or newSelection, preventCallback, callbackRequiresChange)
+
+        -- Rebuilding/reflowing a list can leave ui.hovering pointing at an old row. The layout pass
+        -- itself is deferred, so wait one more tick before recalculating the hover target; doing it
+        -- immediately can hit the old screen rectangles and leave the previous row highlighted
+        -- until the next real mouse move.
+        ui.runLate(function()
+            if ui.refreshHovering then
+                ui.refreshHovering()
+            end
+        end)
     end)
 
     list:reflow()
