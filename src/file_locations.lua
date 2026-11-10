@@ -10,6 +10,9 @@ local sourceDirectory = love.filesystem.getSource()
 fileLocations.loennSimpleFolderName = "Loenn"
 fileLocations.loennLinuxFolderName = "Lönn"
 
+local settingsFilename = "loenn2-settings.conf"
+local legacySettingsFilename = "settings.conf"
+
 function fileLocations.getStorageDir()
     if launchArguments.parsed.storageDirectory then
         return launchArguments.parsed.storageDirectory
@@ -52,7 +55,20 @@ function fileLocations.getLogPath()
 end
 
 function fileLocations.getSettingsPath()
-    return filesystem.joinpath(fileLocations.getStorageDir(), "settings.conf")
+    local storageDir = fileLocations.getStorageDir()
+    local settingsPath = filesystem.joinpath(storageDir, settingsFilename)
+
+    -- Keep the fork's settings separate from upstream Loenn. Existing forks migrate their old
+    -- settings.conf once, while upstream can keep using its own file unchanged.
+    if not filesystem.isFile(settingsPath) then
+        local legacyPath = filesystem.joinpath(storageDir, legacySettingsFilename)
+
+        if filesystem.isFile(legacyPath) then
+            filesystem.copy(legacyPath, settingsPath)
+        end
+    end
+
+    return settingsPath
 end
 
 function fileLocations.getPersistencePath()

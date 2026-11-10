@@ -5,7 +5,7 @@
 window_title.new_map=新地图
 
 # Scenes
-scenes.loading.loading=Loading...
+scenes.loading.loading=Loading
 scenes.editor.no_map_loaded=没有加载地图
 scenes.startup.windows=请在对话框中选择 Celeste.exe，或将文件拖入窗口。\n如果拖入 Celeste.exe，需要手动关闭对话框。
 scenes.startup.linux=请在对话框中选择 Celeste 可执行文件，或将文件拖入窗口。\n如果拖入可执行文件，需要手动关闭对话框。

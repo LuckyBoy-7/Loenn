@@ -11,6 +11,18 @@ local loadingScene = {}
 
 loadingScene.name = "Loading"
 
+local function getLoadingText(language)
+    local scenes = language and language.scenes
+    local loading = scenes and scenes.loading
+    local text = loading and loading.loading
+
+    if text and text._exists then
+        return tostring(text)
+    end
+
+    return "Loading"
+end
+
 function loadingScene:setText(text)
     self.text = tostring(text)
     self.alignment = "left"
@@ -26,7 +38,7 @@ function loadingScene:enter()
     local configs = require("configs")
 
     fonts.setUseHires(configs.font.useHiresPixelFont)
-    self:setText(languageRegistry.getLanguage().scenes.loading.loading)
+    self:setText(getLoadingText(languageRegistry.getLanguage()))
 end
 
 function loadingScene:loaded()
@@ -88,7 +100,7 @@ function loadingScene:firstEnter()
     -- loading screen always uses the configured font
     fonts.setUseHires(configs.font.useHiresPixelFont)
 
-    self:setText(language.scenes.loading.loading)
+    self:setText(getLoadingText(language))
 
     startupProgress.reset()
 

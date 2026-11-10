@@ -138,14 +138,14 @@ local function clearCache()
     notifications.notify(tostring(language.ui.notifications.cacheCleared))
 end
 
--- Restores the built-in defaults in settings.conf. The previous file is kept as
--- settings.backup.conf next to it, since a reset is easy to trigger by accident
+-- Restores the built-in defaults in loenn2-settings.conf. The previous file is kept as
+-- loenn2-settings.backup.conf next to it, since a reset is easy to trigger by accident
 local function resetSettings()
     local defaultConfig = require("default_config")
     local config = require("utils.config")
 
     local settingsPath = fileLocations.getSettingsPath()
-    local backupPath = utils.joinpath(fileLocations.getStorageDir(), "settings.backup.conf")
+    local backupPath = utils.joinpath(fileLocations.getStorageDir(), "loenn2-settings.backup.conf")
 
     if filesystem.isFile(settingsPath) then
         filesystem.copy(settingsPath, backupPath)

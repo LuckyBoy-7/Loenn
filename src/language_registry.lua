@@ -20,6 +20,14 @@ end
 function languageRegistry.getLanguage()
     -- If language is completely missing
     if not languageRegistry.language then
+        return languageRegistry.fallbackLanguage or {}
+    end
+
+    -- A partial language (for example a standalone UI language without the core scenes
+    -- section) must not crash the loading scene. Fall back to the core language.
+    if languageRegistry.language.scenes == nil
+        and languageRegistry.fallbackLanguage
+        and languageRegistry.fallbackLanguage.scenes ~= nil then
         return languageRegistry.fallbackLanguage
     end
 
