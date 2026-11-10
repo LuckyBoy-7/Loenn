@@ -29,6 +29,8 @@ layers.name.danger=危险物
 layers.name.objects=对象
 
 # Tools
+tools.name.tile=图块
+tools.description.tile=图块绘制工具的集合。点击后默认使用矩形工具，也可以在下方选择其他图块工具。
 tools.name.brush=笔刷
 tools.name.line=直线
 tools.name.bucket=油漆桶

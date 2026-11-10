@@ -41,6 +41,10 @@ local toolWindow = {}
 toolWindow.toolList = false
 toolWindow.toolPanel = false
 
+toolWindow.tileToolList = false
+toolWindow.tileToolPanel = false
+toolWindow.tileToolPanelVisible = false
+
 toolWindow.layerList = false
 toolWindow.layerPanel = false
 toolWindow.layerPanelVisible = true
@@ -56,6 +60,15 @@ toolWindow.materialPanel = false
 toolWindow.subLayers = {}
 
 toolWindow.eventStates = {}
+
+-- The individual tile tools are exposed through the single Tile entry and its secondary toolbar.
+-- The order is the original visual order reversed: Brush, Rectangle, Bucket, Line, Circle, Ellipse.
+local tileToolNames = {"brush", "rectangle", "bucket", "line", "circle", "ellipse"}
+local tileToolSet = {}
+
+for _, name in ipairs(tileToolNames) do
+    tileToolSet[name] = true
+end
 
 local layersWithSubLayers = {
     entities = true,
@@ -3432,6 +3445,8 @@ local function updateLayerList(toolName, tool, targetLayer, preventCallback)
 
     if newVisible ~= toolWindow.layerPanelVisible then
         if newVisible then
+            -- Layer entries stay above the Tile secondary toolbar; the toolbar is inserted below
+            -- the layer panel.
             toolWindow.leftColumn:addChild(toolWindow.layerPanel, 2)
 
         else
@@ -3501,6 +3516,75 @@ local function getModeItems(toolName)
     end
 
     return modeItems
+end
+
+local function getTileToolItems()
+    local language = languageRegistry.getLanguage()
+    local items = {}
+    local toolNames = language.tools.name
+    local toolDescriptions = language.tools.description
+
+    for _, name in ipairs(tileToolNames) do
+        local tool = toolHandler.tools[name]
+
+        if tool then
+            local displayName = getLanguageOrDefault(toolNames[name], name)
+            local tooltipText = getLanguageOrDefault(toolDescriptions[name])
+
+            local item = uiElements.listItem({
+                text = displayName,
+                data = name
+            })
+
+            item.toolName = name
+
+            if tooltipText then
+                item.tooltipText = tooltipText
+            end
+
+            table.insert(items, item)
+        end
+    end
+
+    return items
+end
+
+local function tileToolCallback(_, toolName)
+    if not toolName or not tileToolSet[toolName] then
+        return
+    end
+
+    toolWindow.eventStates.tileTool = toolName
+    toolHandler.selectTool(toolName)
+end
+
+local function updateTileToolList(toolName)
+    if not toolWindow.tileToolList then
+        return
+    end
+
+    local isTileTool = toolName and tileToolSet[toolName]
+    local items = isTileTool and getTileToolItems() or {}
+
+    toolWindow.tileToolList:updateItems(items, isTileTool and toolName or nil, false, true)
+
+    local newVisible = #items > 0
+        and toolWindow.tileToolPanel
+        and toolWindow.leftColumn
+
+    if newVisible ~= toolWindow.tileToolPanelVisible then
+        if newVisible then
+            -- Layer entries are above the secondary tile toolbar; put the toolbar after them.
+            local tileIndex = toolWindow.layerPanelVisible and 3 or 2
+
+            toolWindow.leftColumn:addChild(toolWindow.tileToolPanel, tileIndex)
+
+        elseif toolWindow.tileToolPanel then
+            toolWindow.tileToolPanel:removeSelf()
+        end
+
+        toolWindow.tileToolPanelVisible = newVisible
+    end
 end
 
 local function modeCallback(list, mode)
@@ -3589,27 +3673,48 @@ local function getToolItems(sortItems)
     local toolNames = language.tools.name
     local toolDescriptions = language.tools.description
 
+    local tileGroupItem = uiElements.listItem({
+        text = getLanguageOrDefault(toolNames.tile, "Tile"),
+        data = "tile"
+    })
+
+    tileGroupItem.toolName = "tile"
+    tileGroupItem.toolOrder = -1
+    tileGroupItem.isTileGroup = true
+
+    local tileGroupTooltip = getLanguageOrDefault(toolDescriptions.tile)
+
+    if tileGroupTooltip then
+        tileGroupItem.tooltipText = tileGroupTooltip
+    end
+
+    table.insert(toolItems, tileGroupItem)
+
+    local regularItems = {}
+
     for name, tool in pairs(tools) do
-        local displayName = getLanguageOrDefault(toolNames[name], name)
-        local tooltipText = getLanguageOrDefault(toolDescriptions[name])
+        if not tileToolSet[name] then
+            local displayName = getLanguageOrDefault(toolNames[name], name)
+            local tooltipText = getLanguageOrDefault(toolDescriptions[name])
 
-        local item = uiElements.listItem({
-            text = displayName,
-            data = name
-        })
+            local item = uiElements.listItem({
+                text = displayName,
+                data = name
+            })
 
-        item.toolName = name
-        item.toolOrder = tool.order or defaultToolOrder
+            item.toolName = name
+            item.toolOrder = tool.order or defaultToolOrder
 
-        table.insert(toolItems, item)
+            table.insert(regularItems, item)
 
-        if tooltipText then
-            item.tooltipText = tooltipText
+            if tooltipText then
+                item.tooltipText = tooltipText
+            end
         end
     end
 
     if sortItems ~= false then
-        table.sort(toolItems, function(lhs, rhs)
+        table.sort(regularItems, function(lhs, rhs)
             if lhs.toolOrder ~= rhs.toolOrder then
                 return lhs.toolOrder < rhs.toolOrder
             end
@@ -3620,11 +3725,19 @@ local function getToolItems(sortItems)
             return lhsGroup == rhsGroup and lhs.text < rhs.text or lhsGroup < rhsGroup
         end)
 
+        for _, item in ipairs(regularItems) do
+            table.insert(toolItems, item)
+        end
+
         -- Separators are inserted after sorting, so they never take part in it
         for index = #toolItems, 1, -1 do
             if toolSeparatorsBefore[toolItems[index].toolName] then
                 table.insert(toolItems, index, getToolSpacer())
             end
+        end
+    else
+        for _, item in ipairs(regularItems) do
+            table.insert(toolItems, item)
         end
     end
 
@@ -3635,6 +3748,12 @@ local function toolCallback(list, toolName)
     -- Blank separator rows have no tool behind them
     if not toolName then
         return
+    end
+
+    -- Clicking the Tile group selects its default tool. The six tile tools remain individually
+    -- selectable through the secondary rows below it.
+    if toolName == "tile" then
+        toolName = "rectangle"
     end
 
     local sameTool = toolName == toolWindow.eventStates.tool
@@ -3649,11 +3768,36 @@ local function toolCallback(list, toolName)
         toolHandler.selectTool(toolName)
         updateLayerList(toolName, toolHandler.tools[toolName])
         updateToolModeList(toolName)
+        updateTileToolList(toolName)
     end
 end
 
 local function toolChangedCallback(self, tool)
-    toolWindow.toolList:setSelection(tool.name)
+    local isTileTool = tileToolSet[tool.name]
+
+    -- Never run the tool callback from an externally-triggered selection change: selecting the
+    -- virtual Tile row would invoke its default Rectangle action and overwrite a subtool selected
+    -- by a keyboard shortcut.
+    toolWindow.toolList:setSelection(isTileTool and "tile" or tool.name, true)
+
+    if isTileTool then
+        if toolWindow.tileToolList then
+            toolWindow.tileToolList:setSelection(tool.name, true)
+        end
+
+        updateTileToolList(tool.name)
+
+        if toolWindow.layerList then
+            updateLayerList(tool.name, tool)
+        end
+
+        if toolWindow.modeList then
+            updateToolModeList(tool.name)
+        end
+
+    else
+        updateTileToolList(nil)
+    end
 end
 
 local function updateLayerAndPlacementsCallback(list, layer, value)
@@ -3698,6 +3842,12 @@ function toolWindow.refreshThemeLists()
         styleToolSeparators(toolWindow.toolList)
     end
 
+    if toolWindow.tileToolList then
+        local tileToolName = tileToolSet[toolHandler.currentToolName] and toolHandler.currentToolName or nil
+        toolWindow.tileToolList:updateItems(
+            tileToolName and getTileToolItems() or {}, tileToolName, false, true)
+    end
+
     if toolWindow.layerList then
         toolWindow.layerList:updateItems(getLayerItems())
     end
@@ -3711,8 +3861,12 @@ function toolWindow.getWindow()
     -- Update known sub layers
     toolWindow.subLayers = loadedState.subLayers or {}
 
+    local tileListOptions = {
+        initialItem = tileToolSet[toolHandler.currentToolName] and toolHandler.currentToolName or false
+    }
+
     local toolListOptions = {
-        initialItem = toolHandler.currentToolName
+        initialItem = tileToolSet[toolHandler.currentToolName] and "tile" or toolHandler.currentToolName
     }
 
     local modeListOptions = {
@@ -3753,6 +3907,9 @@ function toolWindow.getWindow()
 
     styleToolSeparators(toolList)
 
+    local tileToolItems = getTileToolItems()
+    local scrolledTileToolList, tileToolList = lists.getList(tileToolCallback, tileToolItems, tileListOptions)
+
     local modeItems = getModeItems()
     local scrolledModeList, modeList = lists.getList(modeCallback, modeItems, modeListOptions)
 
@@ -3771,9 +3928,11 @@ function toolWindow.getWindow()
     ui.runLate(function()
         updateLayerList()
         updateToolModeList()
+        updateTileToolList(toolHandler.currentToolName)
     end)
 
     toolWindow.toolList = toolList
+    toolWindow.tileToolList = tileToolList
     toolWindow.layerList = layerList
     toolWindow.materialList = materialList
 
@@ -3787,6 +3946,7 @@ function toolWindow.getWindow()
     }))
     toolWindow.modeList = modeList
     toolWindow.toolPanel = uiElements.panel({toolList})
+    toolWindow.tileToolPanel = uiElements.panel({tileToolList})
     toolWindow.layerPanel = uiElements.panel({layerList})
     toolWindow.modePanel = uiElements.panel({modeList})
     toolWindow.leftColumn = uiElements.column({

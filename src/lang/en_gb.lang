@@ -42,6 +42,8 @@ layers.name.objects=Objects
 # tools.description.toolName
 # tools.toolName.mode.name.modeName
 # tools.toolName.mode.description.modeName
+tools.name.tile=Tile
+tools.description.tile=Tile tools grouped together. Click to use the Rectangle tool, or pick another tile tool below it.
 tools.name.brush=Brush
 
 tools.name.line=Line
