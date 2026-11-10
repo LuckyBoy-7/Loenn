@@ -105,16 +105,18 @@ local function copyFiles(params, relativePath)
     local atlasRoot, layerFolder = pathRoots(params.copyPath, params.layer)
     local sourceFiles, sourceModFolder = getSourceFiles(params.sourceFile, params.copyPath, atlasRoot)
     if #sourceFiles == 0 then
-        return 0
+        return 0, {}
     end
 
     local mapModFolder, mapModName = tilesetDefaults.getMapModFolder()
 
     if not mapModFolder then
-        return 0
+        return 0, {}
     end
 
+    local targetPath = getTargetCopyPath(params, relativePath)
     local targetDirectory = atlasRoot
+    local mountName = mapModName:gsub("%.", "_")
 
     if layerFolder and layerFolder ~= "" then
         targetDirectory = targetDirectory .. "/" .. layerFolder
@@ -123,6 +125,7 @@ local function copyFiles(params, relativePath)
     targetDirectory = targetDirectory .. "/" .. relativePath
 
     local written = 0
+    local copied = {}
 
     for _, source in ipairs(sourceFiles) do
         local bytes = utils.readAll(source.filename, "rb", true)
@@ -139,11 +142,24 @@ local function copyFiles(params, relativePath)
                 handle:close()
 
                 written = written + 1
+
+                local resource
+
+                if params.layer ~= "colorGrading" then
+                    resource = (targetDirectory:gsub("^Graphics/Atlases/Gameplay/", ""))
+                        .. "/" .. string.gsub(source.name, "%.png$", "")
+                end
+
+                table.insert(copied, {
+                    file = utils.convertToUnixPath(string.format("$%s$/%s/%s", mountName, targetDirectory, source.name)),
+                    resource = resource,
+                    prefix = targetPath
+                })
             end
         end
     end
 
-    return written
+    return written, copied
 end
 
 function previewCopyWindow.open(params)
@@ -185,9 +201,13 @@ function previewCopyWindow.open(params)
 
                 love.system.setClipboardText(targetPath)
 
-                local written = copyFiles(params, relativePath)
+                local written, copied = copyFiles(params, relativePath)
 
                 if written > 0 then
+                    local _, layerFolder = pathRoots(params.copyPath, params.layer)
+
+                    require("ui.windows.tools").reloadPreviewCopiedFiles(copied, layerFolder or "")
+
                     finish(string.format(tostring(strings.copied_files), written, targetPath))
 
                 else

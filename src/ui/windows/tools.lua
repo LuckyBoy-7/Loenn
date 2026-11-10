@@ -3846,4 +3846,58 @@ function toolWindow.getWindow()
     return simpleDocks.pinWidgetToEdge("right", window)
 end
 
+-- Called after Preview's "Copy Path And File" wrote new images into the map mod. Invalidate only
+-- the affected image resources and file-list cache, then rebuild the Preview list so the copied
+-- files are visible without a full Ctrl+F5 reload.
+function toolWindow.reloadPreviewCopiedFiles(copied, copyPrefix)
+    if not copied or #copied == 0 then
+        return
+    end
+
+    local runtimeAtlas = require("runtime_atlas")
+
+    if atlases.Gameplay then
+        for _, target in ipairs(copied) do
+            local prefix = target.resource and target.prefix
+
+            if prefix then
+                for resource, sprite in pairs(atlases.Gameplay) do
+                    if type(resource) == "string" and resource:sub(1, #prefix) == prefix then
+                        if type(sprite) == "table" and sprite.image and sprite.quad then
+                            pcall(runtimeAtlas.removeImage, sprite.image, sprite.quad, sprite.layer)
+                        end
+
+                        atlases.Gameplay[resource] = nil
+                    end
+                end
+            end
+        end
+    end
+
+    for _, target in ipairs(copied) do
+        if target.file then
+            previewToolImages[target.file] = nil
+            previewToolImageQueued[target.file] = nil
+
+            for index = #previewToolImageQueue, 1, -1 do
+                if previewToolImageQueue[index] == target.file then
+                    table.remove(previewToolImageQueue, index)
+                end
+            end
+        end
+    end
+
+    previewToolFileCache[copyPrefix] = nil
+
+    -- The new files are not in the map mod's cached filename list yet.
+    require("debug_utils").reloadKnownModFilenames()
+
+    -- Room canvases may already contain the previous version of a copied image.
+    require("celeste_render").invalidateRoomCache()
+
+    if toolHandler.currentToolName == "preview" and toolWindow.materialList then
+        toolWindow.materialList:updateItems(getMaterialItems())
+    end
+end
+
 return toolWindow
