@@ -2985,8 +2985,11 @@ local function materialCallback(list, material)
     end
 
     local sameMaterial = material == toolWindow.eventStates.material
+    local currentTool = toolHandler.currentTool
 
-    if not sameMaterial then
+    -- The Debug tool's selection is not persisted like a paint brush material. Always apply the
+    -- clicked row, including when the list restored the same value while switching tools.
+    if not sameMaterial or (currentTool and currentTool.name == "debug") then
         toolWindow.eventStates.material = material
 
         toolHandler.setMaterial(material)

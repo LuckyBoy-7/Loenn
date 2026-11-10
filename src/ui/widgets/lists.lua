@@ -103,6 +103,8 @@ end
 function listWidgets.clearSelection(list)
     local magicList = list._magicList
 
+    list.selected = nil
+
     if magicList then
         list._selectedIndex = nil
 
@@ -155,6 +157,20 @@ function listWidgets.setSelection(list, target, preventCallback, callbackRequire
     if newSelection and (newSelection.isHeader or newSelection.isButton
         or (newSelection.interactive and newSelection.interactive < 0)) then
         newSelection = nil
+    end
+
+    -- A list containing only action buttons (Stylegrounds, Preview) must not keep the previous
+    -- material row highlighted when switching tools. Clear the stale selection as well as the
+    -- selection index; clearing only the index left the old row visually selected.
+    if not newSelection then
+        list.selected = nil
+
+        if magicList then
+            list._selectedIndex = nil
+
+        else
+            list.selectedIndex = nil
+        end
     end
 
     local dataChanged = false

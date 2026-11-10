@@ -65,6 +65,12 @@ local function tryRoomSwap(x, y, button, istouch, presses)
         local actionButton = configs.editor.toolActionButton
         local addModifier = configs.editor.selectionAddModifier
 
+        -- Tools are unloaded and reloaded by the debug reload actions, and a plugin tool may fail
+        -- to load. Do not let a click during that window crash the editor.
+        if not currentTool then
+            return false
+        end
+
         if currentTool.manualRoomLogic then
             return false
         end

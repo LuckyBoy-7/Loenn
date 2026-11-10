@@ -182,9 +182,16 @@ function tool.getMaterial()
 end
 
 function tool.setLayer(layer, subLayer)
-    tool.layer = layer or "entities"
+    local newLayer = layer or "entities"
+
+    -- The tools window can reselect the current layer after a material click. Only clear the
+    -- highlight when the layer really changes, otherwise the first click appears to do nothing.
+    if newLayer ~= tool.layer then
+        selectedName = nil
+    end
+
+    tool.layer = newLayer
     tool.subLayer = subLayer or -1
-    selectedName = nil
 
     return true
 end
