@@ -1,4 +1,5 @@
 local persistence = require("persistence")
+local config = require("utils.config")
 
 local device = {_enabled = true, _type = "device"}
 
@@ -14,6 +15,8 @@ local function persistWindowData()
 
     persistence.windowDisplay = windowDisplay
     persistence.windowMaximized = windowMaximized
+    persistence.windowFullscreen = fullscreen
+    persistence.windowFullscreenType = fullscreenType
 
     if not windowMaximized and not windowMinimized and not fullscreen then
         persistence.windowX = windowX
@@ -32,6 +35,14 @@ function device.update(dt)
 
         persistWindowData()
     end
+end
+
+-- Saving is normally buffered for five minutes. Window state is cheap to write and must survive
+-- a normal quit even when the editor was not open long enough for the periodic update.
+function device.persistNow()
+    persistWindowData()
+
+    config.writeConfig(persistence, true)
 end
 
 return device

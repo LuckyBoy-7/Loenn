@@ -58,6 +58,7 @@ function editorScene:firstEnter()
     local roomResizeDevice = require("input_devices.room_resizer")
     local toolHandlerDevice = require("input_devices.tool_device")
     local windowDataDevice = require("input_devices.window_persister")
+    self.windowDataDevice = windowDataDevice
     local graphicsDevice = require("input_devices.graphics_device")
     local inputCaptureDevice = require("input_devices.input_capture_device")
     local titleUpdaterDevice = require("input_devices.title_updater")
@@ -90,6 +91,11 @@ function editorScene:firstEnter()
 end
 
 function editorScene:quit(arg)
+    -- Persist the current window state before the save prompt can return early
+    if self.windowDataDevice then
+        self.windowDataDevice.persistNow()
+    end
+
     if history.madeChanges then
         sceneHandler.sendEvent("editorQuitWithChanges", arg)
 

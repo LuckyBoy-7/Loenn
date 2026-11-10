@@ -22,6 +22,15 @@ local threadHandler = require("utils.threads")
 
 local tasks = require("utils.tasks")
 
+-- Restore the maximized state after the window exists. conf.lua restores the windowed size and
+-- position, but LÖVE has no portable conf flag for "maximized".
+local configs = require("configs")
+local persistence = require("persistence")
+
+if configs.general.persistWindowSize and persistence.windowMaximized and not love.window.getFullscreen() then
+    pcall(love.window.maximize)
+end
+
 local function getInstallInformation()
     local major, minor, revision, codename = love.getVersion()
     local installInfoLines = {
