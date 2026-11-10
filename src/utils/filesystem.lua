@@ -317,34 +317,119 @@ function filesystem.removeDirectoryRecursive(path)
 end
 
 -- Use Unix paths
-local function findRecursive(filenames, path, recursive, predicate, useYields, counter)
-    counter = counter or 0
+local ffi = require("ffi")
+local utf8 = require("utf8")
+local bit = require("bit")
 
-    for _, filename in ipairs(love.filesystem.getDirectoryItems(path)) do
-        local fullPath = path .. "/" .. filename
+local isWindowsReparsePoint
 
-        local fileInfo = love.filesystem.getInfo(fullPath)
+if ffi.os == "Windows" then
+    local hasFFI, _ = pcall(ffi.cdef, [[
+        unsigned int GetFileAttributesW(const uint16_t *lpFileName);
+    ]])
 
-        if useYields and counter % 100 == 0 then
-            coroutine.yield()
-        end
+    if hasFFI then
+        local kernel32 = ffi.load("kernel32")
+        local FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+        local INVALID_FILE_ATTRIBUTES = 0xFFFFFFFF
 
-        if fileInfo then
-            if fileInfo.type == "file" then
-                if predicate then
-                    if predicate(filename) then
-                        table.insert(filenames, fullPath)
-                    end
+        local function utf8ToUtf16(path)
+            local codepoints = {}
+
+            for _, codepoint in utf8.codes(path) do
+                if codepoint <= 0xFFFF then
+                    table.insert(codepoints, codepoint)
 
                 else
-                    table.insert(filenames, fullPath)
+                    codepoint = codepoint - 0x10000
+                    table.insert(codepoints, 0xD800 + math.floor(codepoint / 0x400))
+                    table.insert(codepoints, 0xDC00 + (codepoint % 0x400))
+                end
+            end
+
+            local buffer = ffi.new("uint16_t[?]", #codepoints + 1)
+
+            for index, codepoint in ipairs(codepoints) do
+                buffer[index - 1] = codepoint
+            end
+
+            return buffer
+        end
+
+        isWindowsReparsePoint = function(path)
+            local attributes = kernel32.GetFileAttributesW(utf8ToUtf16(path))
+
+            return attributes ~= INVALID_FILE_ATTRIBUTES
+                and bit.band(attributes, FILE_ATTRIBUTE_REPARSE_POINT) ~= 0
+        end
+    end
+end
+
+local function isDirectoryLink(path)
+    if isWindowsReparsePoint then
+        return isWindowsReparsePoint(path)
+    end
+
+    local attributes = lfs.symlinkattributes and lfs.symlinkattributes(path)
+
+    return attributes and attributes.mode == "link" or false
+end
+
+local function normalizeVisitedPath(path)
+    local normalized = path:gsub("\\", "/")
+
+    if ffi.os == "Windows" then
+        normalized = normalized:lower()
+    end
+
+    return normalized
+end
+
+local function findRecursive(filenames, path, recursive, predicate, useYields)
+    local visited = {}
+    local stack = {path}
+    local counter = 0
+
+    while #stack > 0 do
+        local currentPath = table.remove(stack)
+        local normalizedPath = normalizeVisitedPath(currentPath)
+
+        -- A directory can be reachable through more than one path (junctions, symlinks, hard-linked
+        -- directories). Track every directory once to prevent revisiting the same tree.
+        if not visited[normalizedPath] then
+            visited[normalizedPath] = true
+
+            local entries = love.filesystem.getDirectoryItems(currentPath)
+
+            -- Push directories in reverse so the traversal keeps the same order as the old
+            -- depth-first recursive implementation.
+            for index = #entries, 1, -1 do
+                local filename = entries[index]
+                local fullPath = currentPath .. "/" .. filename
+                local fileInfo = love.filesystem.getInfo(fullPath)
+
+                if useYields and counter % 100 == 0 then
+                    coroutine.yield()
                 end
 
-                counter += 1
+                if fileInfo then
+                    if fileInfo.type == "file" then
+                        if predicate then
+                            if predicate(filename) then
+                                table.insert(filenames, fullPath)
+                            end
 
-            else
-                if recursive then
-                    findRecursive(filenames, fullPath, recursive, predicate, useYields, counter)
+                        else
+                            table.insert(filenames, fullPath)
+                        end
+
+                        counter += 1
+
+                    elseif recursive and not isDirectoryLink(fullPath) then
+                        -- Do not follow directory links/junctions: a link back to an ancestor makes
+                        -- the scan loop forever. The visited-path check also handles other aliases.
+                        table.insert(stack, fullPath)
+                    end
                 end
             end
         end
