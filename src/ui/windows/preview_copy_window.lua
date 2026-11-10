@@ -115,14 +115,16 @@ local function copyFiles(params, relativePath)
     end
 
     local targetPath = getTargetCopyPath(params, relativePath)
-    local targetDirectory = atlasRoot
+    local relativeTargetDirectory = atlasRoot
     local mountName = mapModName:gsub("%.", "_")
 
     if layerFolder and layerFolder ~= "" then
-        targetDirectory = targetDirectory .. "/" .. layerFolder
+        relativeTargetDirectory = relativeTargetDirectory .. "/" .. layerFolder
     end
 
-    targetDirectory = targetDirectory .. "/" .. relativePath
+    relativeTargetDirectory = relativeTargetDirectory .. "/" .. relativePath
+
+    local targetDirectory = utils.joinpath(mapModFolder, relativeTargetDirectory)
 
     local written = 0
     local copied = {}
@@ -131,7 +133,7 @@ local function copyFiles(params, relativePath)
         local bytes = utils.readAll(source.filename, "rb", true)
 
         if bytes then
-            local target = utils.joinpath(mapModFolder, targetDirectory, source.name)
+            local target = utils.joinpath(targetDirectory, source.name)
 
             filesystem.mkpath(filesystem.dirname(target))
 
@@ -146,12 +148,12 @@ local function copyFiles(params, relativePath)
                 local resource
 
                 if params.layer ~= "colorGrading" then
-                    resource = (targetDirectory:gsub("^Graphics/Atlases/Gameplay/", ""))
+                    resource = (relativeTargetDirectory:gsub("^Graphics/Atlases/Gameplay/", ""))
                         .. "/" .. string.gsub(source.name, "%.png$", "")
                 end
 
                 table.insert(copied, {
-                    file = utils.convertToUnixPath(string.format("$%s$/%s/%s", mountName, targetDirectory, source.name)),
+                    file = utils.convertToUnixPath(string.format("$%s$/%s/%s", mountName, relativeTargetDirectory, source.name)),
                     resource = resource,
                     prefix = targetPath
                 })
@@ -159,7 +161,7 @@ local function copyFiles(params, relativePath)
         end
     end
 
-    return written, copied
+    return written, copied, targetDirectory
 end
 
 function previewCopyWindow.open(params)
@@ -201,7 +203,7 @@ function previewCopyWindow.open(params)
 
                 love.system.setClipboardText(targetPath)
 
-                local written, copied = copyFiles(params, relativePath)
+                local written, copied, targetDirectory = copyFiles(params, relativePath)
 
                 if written > 0 then
                     local _, layerFolder = pathRoots(params.copyPath, params.layer)
@@ -209,6 +211,10 @@ function previewCopyWindow.open(params)
                     require("ui.windows.tools").reloadPreviewCopiedFiles(copied, layerFolder or "")
 
                     finish(string.format(tostring(strings.copied_files), written, targetPath))
+
+                    if values.showExplorer and targetDirectory then
+                        love.system.openURL("file://" .. utils.convertToUnixPath(targetDirectory))
+                    end
 
                 else
                     finish(string.format(tostring(strings.copy_failed), targetPath))
@@ -228,12 +234,19 @@ function previewCopyWindow.open(params)
         relativePath = {
             displayName = tostring(strings.relative_path),
             tooltipText = tostring(strings.relative_path_tooltip)
+        },
+        showExplorer = {
+            displayName = tostring(strings.show_explorer),
+            tooltipText = tostring(strings.show_explorer_tooltip)
         }
     }
 
-    local body = form.getForm(buttons, {relativePath = "YourName/YourMod/"}, {
+    local body = form.getForm(buttons, {
+        relativePath = "YourName/YourMod/",
+        showExplorer = true
+    }, {
         fields = fieldInformation,
-        fieldOrder = {"relativePath"},
+        fieldOrder = {"relativePath", "showExplorer"},
         formFieldChanged = function() end
     })
 
