@@ -243,7 +243,7 @@ function roomList.getWindow()
     local column, list = lists.getMagicList(roomList.roomSelectedCallback, roomItems, listOptions)
 
     local panel = uiElements.panel({column}):with(uiUtils.fillHeight(false))
-    local window = uiElements.window("Room List", panel):with(uiUtils.fillHeight(false))
+    local window = uiElements.window(tostring(languageRegistry.getLanguage().ui.room_list.window_title), panel):with(uiUtils.fillHeight(false))
 
     window:with({
         editorRoomOrderChanged = roomList.editorRoomOrderChanged(list),

@@ -26,6 +26,42 @@ function languageRegistry.getLanguage()
     return languageRegistry.language
 end
 
+function languageRegistry.getLanguageDisplayName(name, data)
+    data = data or languageRegistry.languages[name]
+
+    if data and data.language and data.language.name and data.language.name._exists then
+        return tostring(data.language.name)
+    end
+
+    return name
+end
+
+function languageRegistry.getLanguageOptions()
+    local options = {}
+    local seenNames = {}
+    local seenLabels = {}
+
+    for name, data in pairs(languageRegistry.languages or {}) do
+        local displayName = languageRegistry.getLanguageDisplayName(name, data)
+
+        if not seenNames[name] and not seenLabels[displayName] then
+            seenNames[name] = true
+            seenLabels[displayName] = true
+
+            table.insert(options, {
+                displayName,
+                name
+            })
+        end
+    end
+
+    table.sort(options, function(a, b)
+        return string.lower(a[1]) < string.lower(b[1])
+    end)
+
+    return options
+end
+
 function languageRegistry.setFallbackLanguage(name)
     languageRegistry.fallbackLanguageName = name
     languageRegistry.fallbackLanguage = languageRegistry.languages[name]

@@ -8,7 +8,7 @@ window_title.new_map=New map
 
 # -- Scenes --
 # scenes.sceneName.*
-scenes.loading.loading=Loading
+scenes.loading.loading=Loading...
 
 scenes.editor.no_map_loaded=No map loaded
 

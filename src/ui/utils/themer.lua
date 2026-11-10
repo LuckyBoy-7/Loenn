@@ -72,6 +72,12 @@ function themer.applyFontInfo(theme, scale, previousFont)
     end
 
     if labelFont then
+        local fonts = require("fonts")
+
+        if fonts.addCJKFallback then
+            fonts.addCJKFallback(labelFont, labelFontSize)
+        end
+
         uiElements.__label.__default.style.font = labelFont
 
         -- Existing labels keep the font they were created with. Walk every known label and the

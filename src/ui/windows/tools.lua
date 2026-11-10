@@ -3812,7 +3812,7 @@ function toolWindow.getWindow()
         materialPanel
     }):with(uiUtils.fillHeight(true))
 
-    local window = uiElements.window("Tools", row):with(uiUtils.fillHeight(false))
+    local window = uiElements.window(tostring(languageRegistry.getLanguage().ui.tools_window.window_title), row):with(uiUtils.fillHeight(false))
 
     -- Same reason as the material panel: don't cache the window which contains the live list
     window.cacheable = false

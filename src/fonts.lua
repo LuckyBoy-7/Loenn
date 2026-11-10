@@ -7,6 +7,33 @@
 
 local font = {}
 
+local cjkFontPath = "assets/fonts/FusionPixel12-zh_hans.ttf"
+local cjkFonts = {}
+
+-- Chinese glyphs are not part of the pixel image fonts. Keep the themed/pixel font for Latin text
+-- and let LÖVE fall back to a CJK font for the missing glyphs.
+function font.getCJKFont(size)
+    size = math.max(1, math.floor((size or 12) + 0.5))
+
+    if not cjkFonts[size] then
+        cjkFonts[size] = love.graphics.newFont(cjkFontPath, size)
+    end
+
+    return cjkFonts[size]
+end
+
+function font.addCJKFallback(target, size)
+    if not target then
+        return
+    end
+
+    local ok, cjk = pcall(font.getCJKFont, size or target:getHeight())
+
+    if ok and cjk then
+        pcall(target.setFallbacks, target, cjk)
+    end
+end
+
 local vanilla = {
     path = "fonts/pico8_font.png",
     glyphs = [=[abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"'`-_/1234567890!?[](){}.,;:<>+=%#^*~ ]=]
@@ -28,6 +55,9 @@ font.fontString = vanilla.glyphs
 font.fontScale = 4
 font.pixelFactor = 1
 font.useHires = false
+
+font.addCJKFallback(vanillaFont, vanillaFont:getHeight())
+font.addCJKFallback(hiresFont, hiresFont:getHeight())
 
 font.font:setLineHeight(1.25)
 hiresFont:setLineHeight(1.25)
@@ -68,6 +98,7 @@ function font.setUseHires(useHires)
     font.pixelFactor = useHires and 0.5 or 1
     font.fontScale = 4 * font.pixelFactor
 
+    font.addCJKFallback(font.font, font.font:getHeight())
     love.graphics.setFont(font.font)
 
     notifyChanged()

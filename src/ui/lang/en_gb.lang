@@ -2,6 +2,8 @@
 # Only for language file specific text!
 # Comments start with '#'
 
+language.name=English
+
 # Common button text
 ui.button.yes=Yes
 ui.button.no=No
@@ -45,6 +47,7 @@ ui.notifications.mapImageSaveFailed=Failed to save map image
 ui.notifications.cacheCleared=Caches cleared.\nRestart Lönn to rebuild them.
 
 ui.notifications.settingsReset=Settings were reset to their defaults.\nThe previous file was kept as settings.backup.conf.\nRestart Lönn to apply them.
+ui.notifications.languageChanged=Language will be applied after restarting Lönn.
 
 
 # Styleground Window
@@ -125,6 +128,8 @@ ui.settings_window.group.font.trigger_text=Trigger Text
 ui.settings_window.tab.debug=Debug
 
 # Settings - Editor - Interface
+settings.general.attribute.language=Language
+settings.general.description.language=Language used by the editor interface.\nRequires restart to apply.
 settings.ui.theme.attribute.themeName=Theme
 settings.ui.theme.attribute.uiScale=UI Scale
 settings.ui.lists.attribute.shrinkToFit=Adapt List Width to Content
@@ -135,6 +140,9 @@ settings.ui.lists.description.shrinkToFit=Make the lists on the sides exactly as
 
 # Settings - Editor - Search
 settings.ui.searching.attribute.searchCaseSensitive=Case Sensitive Search
+settings.ui.searching.option.contextual=Contextual
+settings.ui.searching.option.always=Always
+settings.ui.searching.option.never=Never
 settings.ui.searching.attribute.searchFuzzy=Always Use Fuzzy Search
 settings.ui.searching.attribute.sortByScore=Show Closest Matches First
 
@@ -203,6 +211,7 @@ ui.dependency_window.no_everest_yaml=No everest.yaml found.\nWould you like to c
 
 
 # Tools Window
+ui.tools_window.window_title=Tools
 ui.tools_window.favorite=Favorite
 ui.tools_window.add_sub_layer=Add group
 ui.tools_window.delete_sub_layer=Delete group
@@ -255,8 +264,12 @@ ui.about_window.credits=Created by Cruor and Vexatos
 
 
 # Room List
+ui.room_list.window_title=Room List
 ui.room_list.action.edit=Edit
 ui.room_list.action.delete=Delete
+
+# Color Grading Preview
+ui.color_grading_preview.window_title=Color Grading Preview
 
 
 # Selection Context Window

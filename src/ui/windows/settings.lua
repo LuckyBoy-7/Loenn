@@ -69,6 +69,7 @@ local defaultTabForms = {
                 title = "ui.settings_window.group.editor.interface",
                 fieldOrder = {
                     "ui.theme.themeName",
+                    "general.language",
                     "ui.theme.uiScale",
                     "spacer",
                     "ui.lists.shrinkToFit",
@@ -331,6 +332,12 @@ local defaultFieldInformation = {
         filenameProcessor = function(filename)
             return startup.cleanupPath(filename)
         end,
+    },
+
+    ["general.language"] = {
+        fieldType = "string",
+        editable = false,
+        options = {}
     },
 
     ["hotkeys.cameraZoomIn"] = {
@@ -667,6 +674,10 @@ local function applyNewSettings(newSettings, oldSettings)
         end
     end
 
+    if settingChanged("general.language") then
+        require("ui.notification").notify(tostring(languageRegistry.getLanguage().ui.notifications.languageChanged))
+    end
+
     if settingChanged("editor.triggersTrimModName") or settingChanged("editor.triggersUseCategoryColors")
         or settingChanged("editor.extendedTriggerText") then
         -- The display text changed, cached label layouts are stale
@@ -796,6 +807,20 @@ function settingsWindow.editSettings()
 
     local formData = prepareFormData()
     local fieldInformation = utils.deepcopy(defaultFieldInformation)
+    local searchOptions = language.settings.ui.searching.option
+
+    local function searchOptionLabel(key, default)
+        local value = searchOptions and searchOptions[key]
+
+        return value and value._exists and tostring(value) or default
+    end
+
+    fieldInformation["general.language"].options = languageRegistry.getLanguageOptions()
+    fieldInformation["ui.searching.searchCaseSensitive"].options = {
+        {searchOptionLabel("contextual", "Contextual"), "contextual"},
+        {searchOptionLabel("always", "Always"), "always"},
+        {searchOptionLabel("never", "Never"), "never"}
+    }
 
     local tabs = {}
     local allFields = {}
@@ -826,7 +851,20 @@ function settingsWindow.editSettings()
     local windowCloseCallback = windowPersister.getWindowCloseCallback(windowPersisterName)
 
     windowPersister.trackWindow(windowPersisterName, window)
-    settingsWindowGroup.parent:addChild(window)
+
+    -- The group is normally attached to the UI root, but during startup or after a UI reload it
+    -- can temporarily have no usable parent. Fall back to the current window group.
+    local parentGroup = settingsWindowGroup.parent
+
+    if type(parentGroup) ~= "table" then
+        local success, uiRoot = pcall(require, "ui.ui_root")
+        parentGroup = success and uiRoot.getWindowGroup() or nil
+    end
+
+    if parentGroup then
+        parentGroup:addChild(window)
+    end
+
     widgetUtils.addWindowCloseButton(window, windowCloseCallback)
     widgetUtils.preventOutOfBoundsMovement(window)
     widgetUtils.consumeKeyboardEvents(window)

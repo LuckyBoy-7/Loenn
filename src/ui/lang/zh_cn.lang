@@ -1,0 +1,537 @@
+# Lönn Language File
+# Simplified Chinese (zh_cn)
+
+language.name=简体中文
+
+# Common button text
+ui.button.yes=是
+ui.button.no=否
+ui.button.confirm=确认
+ui.button.cancel=取消
+ui.button.quit=退出
+
+# Notifications
+ui.notifications.editorMapSaved=地图已保存：%s
+ui.notifications.editorMapSaveFailed=保存地图失败：%s
+ui.notifications.editorMapVerificationFailed=保存地图失败：%s
+ui.notifications.editorMapLoaded=地图已加载：%s
+ui.notifications.editorMapLoadFailed=加载地图失败：%s
+ui.notifications.editorMapNew=已创建新地图
+ui.notifications.editorMapMissingDependencies=缺少依赖：%s
+ui.notifications.editorHistoryUndoEmpty=无法撤销，已经是历史开头
+ui.notifications.editorHistoryRedoEmpty=无法重做，已经是历史末尾
+ui.notifications.editorQuitWithChanges=还有未保存的修改。\n确定要退出吗？
+ui.notifications.editorLoadWithChanges=还有未保存的修改。\n确定要加载这张地图吗？
+ui.notifications.editorNewWithChanges=还有未保存的修改。\n确定要新建地图吗？
+ui.notifications.editorDeleteRoom=确定要删除这个房间吗？
+ui.notifications.editorSaveAndQuit=保存并退出
+ui.notifications.teleportFailed=传送失败，Celeste 是否正在运行且安装了 Everest？
+ui.notifications.editorSaveFirst=先保存
+ui.notifications.editorDiscardChanges=不保存
+
+ui.notifications.updaterUpdateFound=发现更新！\n当前版本 %s，最新版本 %s\n要更新吗？
+ui.notifications.updaterUpdateYes=更新
+ui.notifications.updaterUpdateNo=现在不
+ui.notifications.updaterRemindMeLater=稍后提醒
+ui.notifications.updaterDontRemindMeAgain=不再提醒
+
+ui.notifications.saveSanitizerDependenciesMissing=检测到缺少依赖。\n要打开依赖窗口吗？
+ui.notifications.saveSanitizerDependenciesRemindMeLater=稍后提醒
+ui.notifications.saveSanitizerVanillaMapWarning=确定要覆盖原版地图吗？\n大多数情况下不应该这样做。
+ui.notifications.mapImageSaveFailed=保存地图图片失败
+ui.notifications.cacheCleared=缓存已清除。\n请重启 Lönn 以重新生成。
+ui.notifications.settingsReset=设置已恢复默认值。\n原文件保留为 settings.backup.conf。\n请重启 Lönn 以应用。
+ui.notifications.languageChanged=语言将在重启 Lönn 后生效。
+
+# Styleground Window
+ui.styleground_window.window_title=背景样式
+ui.styleground_window.tab_foreground=前景
+ui.styleground_window.tab_background=背景
+ui.styleground_window.preview.unknown_texture=没有可用预览
+ui.styleground_window.preview.no_preview=没有可用预览
+ui.styleground_window.form.update=更新
+ui.styleground_window.form.new=新建
+ui.styleground_window.form.remove=移除
+ui.styleground_window.form.move_up=上移
+ui.styleground_window.form.move_down=下移
+ui.styleground_window.form.move_to_foreground=移到前景
+ui.styleground_window.form.move_to_background=移到背景
+ui.styleground_window.form.add_to_group=添加到组
+ui.styleground_window.form.create_group=创建组
+ui.styleground_window.form.remove_from_group=从组中移除
+ui.styleground_window.new_options.based_on_current=基于当前项
+ui.styleground_window.new_options.parallax=视差层
+ui.styleground_window.new_options.apply=组
+ui.stylegrounds_window.delete_style_warning=确定要删除这一项吗？
+
+# Metadata Window
+ui.metadata_window.window_title=地图元数据
+ui.metadata_window.save_changes=保存更改
+ui.metadata_window.group.general.name=常规
+ui.metadata_window.group.overworld.name=地图总览
+ui.metadata_window.group.xml.name=XML
+ui.metadata_window.group.music.name=音乐
+
+metadata.meta.attribute.IntroType=入场类型
+metadata.meta.attribute.ColorGrade=调色
+metadata.meta.attribute.Wipe=转场效果
+metadata.meta.attribute.DarknessAlpha=黑暗透明度
+metadata.meta.attribute.BloomBase=泛光基础值
+metadata.meta.attribute.BloomStrength=泛光强度
+metadata.meta.attribute.Jumpthru=跳跃穿透块
+metadata.meta.attribute.CoreMode=核心模式
+metadata.meta.attribute.PostcardSoundID=明信片音效
+metadata.meta.attribute.Dreaming=梦境
+metadata.meta.attribute.OverrideASideMeta=覆盖 A 面元数据
+metadata.meta.attribute.Interlude=间章
+metadata.meta.attribute.Name=名称
+metadata.meta.attribute.SID=SID
+metadata.meta.attribute.Icon=图标
+metadata.meta.attribute.CompleteScreenName=完成界面名称
+metadata.meta.attribute.TitleBaseColor=标题底色
+metadata.meta.attribute.TitleAccentColor=标题强调色
+metadata.meta.attribute.TitleTextColor=标题文字颜色
+metadata.meta.attribute.ForegroundTiles=前景图块 XML
+metadata.meta.attribute.BackgroundTiles=背景图块 XML
+metadata.meta.attribute.AnimatedTiles=动画图块 XML
+metadata.meta.attribute.Portraits=立绘 XML
+metadata.meta.attribute.Sprites=精灵 XML
+metadata.meta.attribute.CassetteCheckpointIndex=磁带检查点索引
+metadata.meta.attribute.CassetteNoteColor=磁带音符颜色
+metadata.meta.attribute.CassetteSong=磁带音乐
+
+metadata.mode.attribute.Inventory=物品栏
+metadata.mode.attribute.StartLevel=起始关卡
+metadata.mode.attribute.HeartIsEnd=吃心视为结束
+metadata.mode.attribute.SeekerSlowdown=新浪靠近是否减速
+metadata.mode.attribute.TheoInBubble=在泡泡中能举起 Theo 水晶
+metadata.mode.attribute.CoreModeIceTileOverlay=核心模式冰砖覆盖
+metadata.mode.attribute.IgnoreLevelAudioLayerData=忽略关卡音频层数据
+metadata.audiostate.attribute.Music=音乐
+metadata.audiostate.attribute.Ambience=环境音
+metadata.cassettemodifier.attribute.BeatsMax=最大节拍数
+metadata.cassettemodifier.attribute.BeatsPerTick=每拍节拍数
+metadata.cassettemodifier.attribute.TicksPerSwap=每次切换的节拍数
+metadata.cassettemodifier.attribute.LeadBeats=前置节拍
+metadata.cassettemodifier.attribute.BeatIndexOffset=节拍索引偏移
+metadata.cassettemodifier.attribute.TempoMult=速度倍率
+metadata.cassettemodifier.attribute.Blocks=方块
+metadata.cassettemodifier.attribute.OldBehavior=旧版行为
+metadata.cassettemodifier.attribute.ActiveDuringTransitions=转场期间生效
+
+# Settings Window
+ui.settings_window.window_title=设置
+ui.settings_window.save_changes=保存更改
+ui.settings_window.defaultTooltipFormat=%s\n默认：%s
+ui.settings_window.defaultValueEnabled=启用
+ui.settings_window.defaultValueDisabled=禁用
+ui.settings_window.tab.general=常规
+ui.settings_window.group.general.startup=启动
+ui.settings_window.group.general.backups=备份
+ui.settings_window.group.general.files=文件
+ui.settings_window.group.general.notifications=通知
+ui.settings_window.tab.editor=编辑器
+ui.settings_window.group.editor.interface=界面
+ui.settings_window.group.editor.clipboard=剪贴板
+ui.settings_window.group.editor.tools=工具
+ui.settings_window.group.editor.triggers=触发器
+ui.settings_window.group.editor.search=搜索
+ui.settings_window.tab.hotkeys=快捷键
+ui.settings_window.group.hotkeys.general=常规
+ui.settings_window.group.hotkeys.map_view=地图视图
+ui.settings_window.group.hotkeys.tools=工具
+ui.settings_window.group.hotkeys.selections=选择
+ui.settings_window.group.hotkeys.rooms=房间
+ui.settings_window.group.hotkeys.lists=列表
+ui.settings_window.group.hotkeys.search=搜索
+ui.settings_window.group.hotkeys.debug=调试
+ui.settings_window.tab.graphics=图形
+ui.settings_window.tab.font=字体
+ui.settings_window.group.font.font=字体
+ui.settings_window.group.font.trigger_text=触发器文本
+ui.settings_window.tab.debug=调试
+
+# Settings fields
+settings.attribute.celesteGameDirectory=Celeste 游戏目录
+settings.general.attribute.language=语言
+settings.general.description.language=编辑器界面使用的语言。\n需要重启 Lönn 才会生效。
+settings.general.attribute.persistWindowFullscreen=记住全屏状态
+settings.general.attribute.persistWindowPosition=记住窗口位置
+settings.general.attribute.persistWindowSize=记住窗口大小
+settings.general.attribute.useEverestBlacklist=使用 Everest 黑名单
+
+settings.editor.attribute.recentFilesEntryLimit=最近文件数量
+settings.editor.attribute.checkDependenciesOnSave=保存时检查依赖
+settings.editor.attribute.sortRoomsOnSave=保存时排序房间
+settings.editor.attribute.copyUsesClipboard=复制时使用系统剪贴板
+settings.editor.attribute.pasteCentered=在视口中心粘贴
+settings.editor.attribute.toolsPersistUsingGroup=记住工具的分组选择
+settings.editor.attribute.triggersTrimModName=移除触发器名称中的 Mod 前缀
+settings.editor.attribute.triggersUseCategoryColors=按触发器分类着色
+settings.editor.attribute.extendedTriggerText=使用扩展触发器文本
+settings.editor.attribute.displayFPS=显示 FPS
+settings.editor.attribute.alwaysRedrawUnselectedRooms=始终重绘未选中的房间
+settings.editor.attribute.lazyLoadExternalAtlases=延迟加载外部图集
+settings.editor.attribute.prepareRoomRenderInBackground=后台预渲染房间
+settings.editor.attribute.warnOnMissingEntityHandler=实体处理器缺失时警告
+settings.editor.attribute.warnOnMissingTexture=纹理缺失时警告
+
+settings.backups.attribute.enabled=启用自动备份
+settings.backups.attribute.backupRate=备份间隔（分钟）
+settings.backups.attribute.maximumFiles=最大备份数量
+settings.general.attribute.notificationDuration=通知显示时间（秒）
+
+settings.graphics.attribute.vsync=垂直同步
+
+settings.ui.theme.attribute.themeName=主题
+settings.ui.theme.attribute.uiScale=界面缩放
+settings.ui.lists.attribute.shrinkToFit=列表宽度适应内容
+settings.ui.searching.attribute.searchCaseSensitive=区分大小写搜索
+settings.ui.searching.option.contextual=自动
+settings.ui.searching.option.always=始终
+settings.ui.searching.option.never=从不
+settings.ui.searching.attribute.searchFuzzy=始终使用模糊搜索
+settings.ui.searching.attribute.sortByScore=最接近的结果优先
+settings.ui.searching.attribute.searchPreviousResultKey=上一个元素
+settings.ui.searching.attribute.searchNextResultKey=下一个元素
+settings.ui.searching.attribute.searchRearrangeModifier=重排元素（修饰键）
+settings.ui.searching.attribute.searchExitKey=退出搜索
+settings.ui.searching.attribute.searchExitAndClearKey=清空并退出搜索
+settings.ui.searching.attribute.searchSelectKey=选择并退出搜索
+settings.ui.hotkeys.attribute.focusMaterialSearch=聚焦搜索框
+
+settings.ui.theme.description.themeName=Lönn 使用的视觉主题。可以通过 Mod 添加额外主题。
+settings.ui.theme.description.uiScale=界面元素的缩放比例。\n部分元素需要重启后生效。
+settings.ui.lists.description.shrinkToFit=让侧边列表的宽度刚好适应内容。\n关闭后列表会始终保持能容纳最长内容的宽度。\n需要重启。
+settings.ui.searching.description.searchCaseSensitive=搜索时是否区分大小写。\n- 自动：搜索词包含大写字母时区分大小写。\n- 始终：始终区分大小写。\n- 从不：始终忽略大小写。
+settings.ui.searching.description.searchFuzzy=强制始终进行模糊匹配。\n模糊搜索不要求条目完全匹配搜索词，其他相近结果也会显示。\n关闭后仍可在搜索词前加 ~ 来临时启用。
+settings.ui.searching.description.sortByScore=按匹配程度排序，最接近的结果显示在最上方。\n关闭后按字母顺序排列。
+settings.ui.searching.description.searchPreviousResultKey=在列表中向上移动。
+settings.ui.searching.description.searchNextResultKey=在列表中向下移动。
+settings.ui.searching.description.searchRearrangeModifier=使用“上一个元素”或“下一个元素”时移动当前选中的元素。\n仅适用于可重排的列表，例如背景样式列表。
+settings.ui.searching.description.searchExitKey=退出搜索框。
+settings.ui.searching.description.searchExitAndClearKey=清空搜索框并退出。
+settings.ui.searching.description.searchSelectKey=选择当前元素并退出搜索框。
+settings.ui.hotkeys.description.focusMaterialSearch=聚焦搜索框。
+settings.ui.hotkeys.attribute.bypassDangerousActionWarningModifier=跳过确认（修饰键）
+settings.ui.hotkeys.description.bypassDangerousActionWarningModifier=按住时跳过确认提示并立即应用修改。
+
+settings.font.attribute.useHiresPixelFont=使用高清像素字体
+settings.font.attribute.autoSwitchFont=放大时切换字体
+settings.font.attribute.addShadowToFont=触发器标签阴影
+settings.font.attribute.doubleTriggerTextSize=双倍触发器标签大小
+settings.font.attribute.highlightSelectedTriggerText=高亮选中的标签
+settings.font.attribute.highlightColor=高亮颜色
+settings.font.attribute.selectTriggerByClickingText=点击标签选择触发器
+settings.font.attribute.showCompleteTriggerText=保持完整单词可见
+settings.font.attribute.extrudeOverlappingTriggerText=分离重叠的标签
+settings.font.attribute.ignoreOutOfRoomTextExtruding=忽略房间外的标签
+
+settings.font.description.useHiresPixelFont=使用更大、更清晰的像素字体替代小型原版字体。\n字形的视觉大小保持不变。
+settings.font.description.autoSwitchFont=放大到 100% 以上时使用高清字体，缩小时使用原版字体。\n启用后会覆盖手动选择。
+settings.font.description.addShadowToFont=在触发器标签后方绘制深色副本，使其在明亮背景上仍然清晰。
+settings.font.description.doubleTriggerTextSize=使用高清像素字体且缩放低于 2 倍时，以双倍大小绘制触发器标签，使缩小时仍然清晰。\n仅适用于高清字体。
+settings.font.description.highlightSelectedTriggerText=使用高亮颜色绘制选中触发器的标签。
+settings.font.description.highlightColor=选中触发器标签使用的颜色，可使用 ffff00 这样的十六进制值或 XNA 颜色名。
+settings.font.description.selectTriggerByClickingText=点击触发器标签即可选中对应触发器，即使点击位置在触发器本身之外。
+settings.font.description.showCompleteTriggerText=当最长单词放不下时加宽标签框，避免单词被截断。
+settings.font.description.extrudeOverlappingTriggerText=将互相重叠的触发器标签分开，确保都能看清。
+settings.font.description.ignoreOutOfRoomTextExtruding=完全位于房间外的标签不参与重叠分离。
+
+settings.hotkeys.attribute.new=新建
+settings.hotkeys.attribute.open=打开
+settings.hotkeys.attribute.save=保存
+settings.hotkeys.attribute.saveAs=另存为
+settings.hotkeys.attribute.undo=撤销
+settings.hotkeys.attribute.redo=重做
+settings.hotkeys.attribute.toggleFullscreen=切换全屏
+settings.hotkeys.attribute.cameraZoomIn=放大
+settings.hotkeys.attribute.cameraZoomOut=缩小
+settings.hotkeys.attribute.toggleCoordinatePanel=切换坐标面板
+settings.hotkeys.attribute.selectToolRoom=选择房间工具
+settings.hotkeys.attribute.selectToolPlacement=选择放置工具
+settings.hotkeys.attribute.selectToolSelection=选择选择工具
+settings.hotkeys.attribute.selectToolBrush=选择笔刷工具
+settings.hotkeys.attribute.selectToolRectangle=选择矩形工具
+settings.hotkeys.attribute.selectToolBucket=选择油漆桶工具
+settings.hotkeys.attribute.selectToolLine=选择直线工具
+settings.hotkeys.attribute.selectToolCircle=选择圆形工具
+settings.hotkeys.attribute.selectToolEllipse=选择椭圆工具
+settings.hotkeys.attribute.itemsCopy=复制
+settings.hotkeys.attribute.itemsCut=剪切
+settings.hotkeys.attribute.itemsPaste=粘贴
+settings.hotkeys.attribute.itemsSelectAll=全选
+settings.hotkeys.attribute.itemsDeselect=取消选择
+settings.hotkeys.attribute.roomAddNew=新建房间
+settings.hotkeys.attribute.roomDelete=删除房间
+settings.hotkeys.attribute.roomConfigureCurrent=编辑当前房间
+settings.hotkeys.attribute.roomMoveUp=房间上移
+settings.hotkeys.attribute.roomMoveDown=房间下移
+settings.hotkeys.attribute.roomMoveLeft=房间左移
+settings.hotkeys.attribute.roomMoveRight=房间右移
+settings.hotkeys.attribute.roomResizeUpGrow=房间向上扩展
+settings.hotkeys.attribute.roomResizeDownGrow=房间向下扩展
+settings.hotkeys.attribute.roomResizeLeftGrow=房间向左扩展
+settings.hotkeys.attribute.roomResizeRightGrow=房间向右扩展
+settings.hotkeys.attribute.roomResizeUpShrink=房间向上收缩
+settings.hotkeys.attribute.roomResizeDownShrink=房间向下收缩
+settings.hotkeys.attribute.roomResizeLeftShrink=房间向左收缩
+settings.hotkeys.attribute.roomResizeRightShrink=房间向右收缩
+settings.hotkeys.attribute.debugReloadEntities=重新加载实体
+settings.hotkeys.attribute.debugRedrawMap=重绘地图
+settings.hotkeys.attribute.debugReloadTools=重新加载工具
+settings.hotkeys.attribute.debugReloadEverything=重新加载全部
+settings.hotkeys.attribute.debugReloadLuaInstance=重启 Lua 实例
+
+settings.editor.attribute.toolActionButton=工具操作键
+settings.editor.attribute.canvasMoveButton=移动画布按键
+settings.editor.attribute.contextMenuButton=上下文菜单按键
+settings.editor.attribute.canvasZoomExtentsButton=缩放到范围按键
+settings.editor.attribute.selectionAddModifier=添加选择（修饰键）
+settings.editor.attribute.itemAddNode=添加节点
+settings.editor.attribute.objectCloneButton=克隆对象
+settings.editor.attribute.itemDelete=删除
+settings.editor.attribute.itemFlipHorizontal=水平翻转
+settings.editor.attribute.itemFlipVertical=垂直翻转
+settings.editor.attribute.itemRotateLeft=向左旋转
+settings.editor.attribute.itemRotateRight=向右旋转
+settings.editor.attribute.precisionModifier=精确操作（修饰键）
+settings.editor.attribute.movementAxisBoundModifier=轴向约束（修饰键）
+settings.editor.attribute.itemMoveUp=上移
+settings.editor.attribute.itemMoveDown=下移
+settings.editor.attribute.itemMoveLeft=左移
+settings.editor.attribute.itemMoveRight=右移
+settings.editor.attribute.itemResizeUpGrow=向上扩展
+settings.editor.attribute.itemResizeDownGrow=向下扩展
+settings.editor.attribute.itemResizeLeftGrow=向左扩展
+settings.editor.attribute.itemResizeRightGrow=向右扩展
+settings.editor.attribute.itemResizeUpShrink=向上收缩
+settings.editor.attribute.itemResizeDownShrink=向下收缩
+settings.editor.attribute.itemResizeLeftShrink=向左收缩
+settings.editor.attribute.itemResizeRightShrink=向右收缩
+
+settings.debug.attribute.enableDebugOptions=启用调试选项
+settings.debug.attribute.displayConsole=显示控制台
+settings.debug.attribute.logModLoading=记录 Mod 加载
+settings.debug.attribute.logPluginLoading=记录插件加载
+settings.debug.attribute.logImageLoading=记录图片加载
+
+# Dependency Window
+ui.dependency_window.window_title=依赖
+ui.dependency_window.group.missing_mods=依赖中缺失
+ui.dependency_window.group.depended_on=依赖
+ui.dependency_window.group.available_mods=可用 Mod
+ui.dependency_window.add_dependency=添加依赖
+ui.dependency_window.remove_dependency=移除依赖
+ui.dependency_window.no_map_loaded=没有加载地图。
+ui.dependency_window.requires_packaged_mod=无法编辑未打包 Mod 的依赖。
+ui.dependency_window.no_everest_yaml=没有找到 everest.yaml。\n要创建吗？
+
+# Tools Window
+ui.tools_window.window_title=工具
+ui.tools_window.favorite=收藏
+ui.tools_window.add_sub_layer=添加组
+ui.tools_window.delete_sub_layer=删除组
+ui.tools_window.rename_sub_layer=重命名组
+ui.tools_window.add_first_sub_layer=对象已从基础组移到“%s”。
+ui.tools_window.remove_last_sub_layer=对象已从“%s”移回基础组。
+ui.tools_window.add_defaults=添加默认图块
+ui.tools_window.add_defaults_description=将所有 Mod（以及 Lönn 自带）的图块集复制到当前 Mod。
+ui.tools_window.only_keep_used=仅保留已使用的砖
+ui.tools_window.only_keep_used_description=从图块文件中移除地图未使用的所有图块集。
+
+ui.notifications.tilesetDefaultsRemoved=已移除 %d 个未使用的图块集。
+ui.notifications.tilesetDefaultsNothingRemoved=所有图块集都在使用，没有移除任何内容。
+ui.notifications.previewPathCopied=已复制路径：%s
+ui.notifications.previewCopyInvalidMod=当前 Mod 结构无效，因此只复制了路径：%s
+ui.notifications.previewCopyDone=已复制 %d 个文件到“%s”。
+ui.script_window.run_script=运行脚本
+
+ui.preview_copy_window.title=复制对象
+ui.preview_copy_window.relative_path=相对路径
+ui.preview_copy_window.relative_path_tooltip=地图 Mod 内的文件夹，例如 Lucky_boy/TestMap。
+ui.preview_copy_window.copy_path_and_file=复制路径和文件
+ui.preview_copy_window.only_copy_path=仅复制路径
+ui.preview_copy_window.copied_path=已复制路径：%s
+ui.preview_copy_window.copied_files=已复制 %d 个文件。路径：%s
+ui.preview_copy_window.copy_failed=无法复制文件，已改为复制路径：%s
+
+ui.notifications.tilesetDefaultsInvalidMod=这张地图不在 Mod 文件夹内（Celeste/Mods/<Mod>/...）。没有添加任何内容。
+ui.notifications.tilesetDefaultsInvalidXml=图块文件“%s”无法使用（%s）。
+ui.notifications.tilesetDefaultsNothingAdded=没有新的图块集可添加。
+ui.notifications.tilesetDefaultsWriteFailed=无法写入图块文件。
+ui.notifications.tilesetDefaultsAdded=已向当前 Mod 添加 %d 个图块集。
+ui.notifications.tilesetDefaultsAddedSkipped=已向当前 Mod 添加 %d 个图块集（跳过 %d 个：没有空闲图块 ID）。
+
+# Room Window
+ui.room_window.editing_room=正在编辑房间 - %s
+ui.room_window.creating_room=正在创建房间
+ui.room_window.save_changes_create=创建房间
+ui.room_window.save_changes_update=更新房间
+ui.room_window.close_window=关闭窗口
+
+# About Window
+ui.about_window.title=关于
+ui.about_window.readme_button=打开 README
+ui.about_window.description=Celeste 的关卡编辑器\n由 LÖVE 和 Lua 驱动。
+ui.about_window.version=编辑器版本：%s
+ui.about_window.credits=作者：Cruor 和 Vexatos
+
+# Room List
+ui.room_list.window_title=房间列表
+ui.room_list.action.edit=编辑
+ui.room_list.action.delete=删除
+
+# Color Grading Preview
+ui.color_grading_preview.window_title=调色预览
+
+# Selection Context Window
+ui.selection_context_window.title=编辑选择
+ui.selection_context_window.save_changes=保存更改
+ui.selection_context_window.close_window=关闭窗口
+ui.selection_context_window.multiple_selections=当前不支持同时编辑多个选择。
+
+# Color Picker
+ui.colorPicker.fieldTypes.name.r=红
+ui.colorPicker.fieldTypes.name.g=绿
+ui.colorPicker.fieldTypes.name.b=蓝
+ui.colorPicker.fieldTypes.name.h=色相
+ui.colorPicker.fieldTypes.name.s=饱和度
+ui.colorPicker.fieldTypes.name.v=明度
+ui.colorPicker.fieldTypes.name.hexColor=十六进制
+ui.colorPicker.fieldTypes.name.alpha=透明度
+ui.colorPicker.fieldTypes.description.r=颜色的红色分量，范围 0 到 255。
+ui.colorPicker.fieldTypes.description.g=颜色的绿色分量，范围 0 到 255。
+ui.colorPicker.fieldTypes.description.b=颜色的蓝色分量，范围 0 到 255。
+ui.colorPicker.fieldTypes.description.h=颜色的色相，范围 0 到 360。
+ui.colorPicker.fieldTypes.description.s=颜色的饱和度，范围 0 到 100。
+ui.colorPicker.fieldTypes.description.v=颜色的明度，范围 0 到 100。
+ui.colorPicker.fieldTypes.description.hexColor=颜色的十六进制表示。
+ui.colorPicker.fieldTypes.description.alpha=颜色的透明度，范围 0 到 255。
+
+# User Input Capturing
+ui.userInput.capturing=正在捕获…
+ui.userInput.noValue=未设置
+ui.userInput.mouseButton=鼠标按键 %s
+
+# Forms field list
+forms.fieldTypes.list.addButton=添加值
+forms.fieldTypes.list.removeButton=–
+forms.fieldTypes.unknown_type.label=字段“%s”中存在未知类型“%s”
+
+# Menubar
+ui.menubar.file=文件
+ui.menubar.new=新建
+ui.menubar.open=打开
+ui.menubar.recent=最近
+ui.menubar.save=保存
+ui.menubar.save_as=另存为
+ui.menubar.exit=退出
+ui.menubar.edit=编辑
+ui.menubar.undo=撤销
+ui.menubar.redo=重做
+ui.menubar.settings=设置
+ui.menubar.view=视图
+ui.menubar.view_layer=图层
+ui.menubar.view_tiles_fg=前景图块
+ui.menubar.view_tiles_bg=背景图块
+ui.menubar.view_entities=实体
+ui.menubar.view_triggers=触发器
+ui.menubar.view_decals_fg=前景贴花
+ui.menubar.view_decals_bg=背景贴花
+ui.menubar.view_trigger_categories=触发器分类
+ui.menubar.view_trigger_category_general=常规
+ui.menubar.view_trigger_category_camera=相机
+ui.menubar.view_trigger_category_audio=音频
+ui.menubar.view_trigger_category_visual=视觉
+ui.menubar.view_only_depended_on=仅显示依赖
+ui.menubar.view_depended_on_entities=实体
+ui.menubar.view_depended_on_triggers=触发器
+ui.menubar.view_depended_on_decals=贴花
+ui.menubar.view_zoom_to_extents=缩放到范围
+ui.menubar.view_always_show_trigger_nodes=始终显示触发器节点
+ui.menubar.mod=Mod
+ui.menubar.map=地图
+ui.menubar.stylegrounds=背景样式
+ui.menubar.dependencies=依赖
+ui.menubar.metadata=元数据
+ui.menubar.save_map_image=保存地图图片
+ui.menubar.ghost=玩家残影
+ui.menubar.ghost_show_player=显示玩家残影
+ui.menubar.ghost_show_player_hitbox=显示玩家判定框残影
+ui.menubar.ghost_show_holdables=显示可持有物残影
+ui.menubar.ghost_clear=清除残影 [Shift + C]
+ui.menubar.ghost_show_hitboxes=显示尖刺和旋转刺判定框
+ui.menubar.room=房间
+ui.menubar.add=添加
+ui.menubar.configure=编辑
+ui.menubar.delete=删除
+ui.menubar.debug=调试
+ui.menubar.reload=重新加载
+ui.menubar.reload_everything=全部
+ui.menubar.reload_scenes=场景
+ui.menubar.reload_tools=工具
+ui.menubar.reload_entities=实体
+ui.menubar.reload_triggers=触发器
+ui.menubar.reload_effects=效果
+ui.menubar.reload_user_interface=用户界面
+ui.menubar.reload_language_files=语言文件
+ui.menubar.redraw_map=重绘地图
+ui.menubar.clear_cache=清除缓存
+ui.menubar.reset_settings=重置设置
+ui.menubar.test_console=测试控制台
+ui.menubar.help=帮助
+ui.menubar.about=关于
+ui.menubar.check_for_updates=检查更新
+ui.menubar.open_storage_directory=打开配置目录
+ui.menubar.not_yet_implemented=此功能尚未实现。
+ui.menubar.no_recent_files=没有最近文件。
+
+# Coordinate window
+ui.coordinate_window.title=调试信息
+ui.coordinate_window.roomName=房间
+ui.coordinate_window.screen=屏幕
+ui.coordinate_window.world=世界
+ui.coordinate_window.worldTiles=世界图块
+ui.coordinate_window.worldSnap=世界吸附
+ui.coordinate_window.room=房间像素
+ui.coordinate_window.roomTiles=房间图块
+ui.coordinate_window.roomSnap=房间吸附
+ui.coordinate_window.zoom=缩放
+
+# Tools and layers
+tools.name.brush=笔刷
+tools.name.bucket=油漆桶
+tools.name.circle=圆形
+tools.name.debug=调试
+tools.name.ellipse=椭圆
+tools.name.line=直线
+tools.name.placement=放置
+tools.name.preview=预览
+tools.name.rectangle=矩形
+tools.name.room=房间
+tools.name.scripts=脚本
+tools.name.selection=选择
+tools.name.stylegrounds=背景样式
+
+tools.description.brush=用图块或对象绘制。
+tools.description.bucket=用选中的图块或对象填充一片区域。
+tools.description.circle=绘制圆形。
+tools.description.debug=查看实体和触发器的使用位置，并显示坐标信息。
+tools.description.ellipse=绘制椭圆。
+tools.description.line=绘制直线。
+tools.description.placement=放置实体和触发器。
+tools.description.preview=浏览并复制游戏内资源。
+tools.description.rectangle=绘制矩形。
+tools.description.room=创建、移动和调整房间。
+tools.description.scripts=运行内置或 Mod 提供的脚本。
+tools.description.selection=选择、移动和编辑地图中的对象。
+tools.description.stylegrounds=编辑地图的背景样式。
+
+layers.name.tilesFg=前景图块
+layers.name.tilesBg=背景图块
+layers.name.entities=实体
+layers.name.triggers=触发器
+layers.name.decalsFg=前景贴花
+layers.name.decalsBg=背景贴花
+layers.name.stylegrounds=背景样式

@@ -8,6 +8,7 @@ local uiRoot = require("ui.ui_root")
 local uiUtils = require("ui.utils")
 local widgetUtils = require("ui.widgets.utils")
 local utils = require("utils")
+local languageRegistry = require("language_registry")
 
 local colorGradingPreview = {}
 
@@ -296,7 +297,7 @@ local function createWindow()
     end
 
     local content = uiElements.column(rows):with({spacing = 4})
-    local result = uiElements.window("Color Grading Preview", content)
+    local result = uiElements.window(tostring(languageRegistry.getLanguage().ui.color_grading_preview.window_title), content)
 
     return result
 end
