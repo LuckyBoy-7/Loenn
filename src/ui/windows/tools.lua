@@ -1006,6 +1006,10 @@ local function materialDataToElement(list, data, element)
         end
     end
 
+    if data and data.itemFavorited then
+        element.text = "★ " .. element.text
+    end
+
     return element
 end
 
@@ -4368,6 +4372,15 @@ function toolWindow.getWindow()
     materialList.updateItems = function(list, ...)
         materialUpdateItems(list, ...)
         ui.runLate(updateMaterialListWidth)
+    end
+
+    local materialSearchCallback = materialSearchField and materialSearchField.cb
+
+    if materialSearchCallback then
+        materialSearchField.cb = function(field, new, old)
+            materialSearchCallback(field, new, old)
+            ui.runLate(updateMaterialListWidth)
+        end
     end
 
     if materialList.scrolledList then
