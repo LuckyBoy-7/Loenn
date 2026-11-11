@@ -23,9 +23,19 @@ function toolHandler.addHotkeyScopes(scopes)
     end
 end
 
+local function selectToolThroughUi(name)
+    local success, toolsWindow = pcall(require, "ui/windows/tools")
+
+    if success and toolsWindow and toolsWindow.selectTool then
+        return toolsWindow.selectTool(name)
+    end
+
+    return toolHandler.selectTool(name)
+end
+
 local function selectToolHotkey(name)
     return function()
-        toolHandler.selectTool(name)
+        selectToolThroughUi(name)
     end
 end
 
@@ -34,7 +44,7 @@ local function selectPreviousTool()
     local previous = toolHandler.previousToolName
 
     if current and previous and previous ~= current and toolHandler.tools[previous] then
-        toolHandler.selectTool(previous)
+        selectToolThroughUi(previous)
     end
 end
 
