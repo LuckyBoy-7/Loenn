@@ -176,6 +176,108 @@ end
 --   searchText(entry) -> text used for searching that row
 --   favoritesText(entry) -> display text in the favorites group (defaults to the full path)
 --   resolveOwner      -> ask virtual_fs for the mod when the material has no associated mods
+-- Collapse chains like A/B/C that have exactly one directory child at every level. This is the
+-- same compact-folder behaviour used by VS Code: only chains without a sibling/leaf branch are
+-- merged, so normal directory trees keep their structure.
+local function compactPathTree(items)
+    local index = 1
+
+    while index <= #items do        local header = items[index]
+
+        if header.isHeader and not header.isSource and not header.isFavoritesHeader and not header.isGap then
+            local depth = header.indent
+            local child
+            local childIndex
+            local childCount = 0
+            local scan = index + 1
+
+            while scan <= #items do
+                local item = items[scan]
+
+                if not item.isGap then
+                    if item.indent <= depth then
+                        break
+                    end
+
+                    if item.indent == depth + 1 then
+                        childCount = childCount + 1
+                        child = item
+                        childIndex = scan
+                    end
+                end
+
+                scan = scan + 1
+            end
+
+            if childCount == 1 and child and child.isHeader then
+                header.text = header.text .. "/" .. child.text
+
+                if header.textNoMods and child.textNoMods and header.textNoMods ~= "" then
+                    header.textNoMods = header.textNoMods .. "/" .. child.textNoMods
+                end
+
+                table.remove(items, childIndex)
+
+                local subtreeIndex = childIndex
+
+                while subtreeIndex <= #items do
+                    local item = items[subtreeIndex]
+
+                    if not item.isGap and item.indent <= depth then
+                        break
+                    end
+
+                    if item.indent > depth then
+                        item.indent = item.indent - 1
+                    end
+
+                    for ancestorIndex, ancestor in ipairs(item.ancestors or {}) do
+                        if ancestor == child then
+                            item.ancestors[ancestorIndex] = header
+                        end
+                    end
+
+                    subtreeIndex = subtreeIndex + 1
+                end
+
+                -- Re-check the same header: A/B/C can collapse one level at a time.
+            else
+                index = index + 1
+            end
+
+        else
+            index = index + 1
+        end
+    end
+end
+
+-- A directory header needs breathing room when it follows actual content. Consecutive headers
+-- stay in the same visual group, so only content -> header transitions get a gap.
+local function insertHierarchyGaps(items)
+    local index = 1
+
+    while index <= #items do
+        local item = items[index]
+        local previous = items[index - 1]
+
+        if item.isHeader and not item.isSource and not item.isFavoritesHeader
+            and previous and not previous.isHeader and not previous.isGap then
+            table.insert(items, index, {
+                isGap = true,
+                gapFraction = 0.5,
+                text = "",
+                data = nil,
+                indent = 0,
+                ancestors = {}
+            })
+
+            index = index + 1
+        end
+
+        index = index + 1
+    end
+end
+
 local function getPathTreeItems(materials, currentTool, currentLayer, favoritesLookup, language, options)
     options = options or {}
 
@@ -265,11 +367,30 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
             return lhs.sourceKey < rhs.sourceKey
         end
 
-        local lhsPath = table.concat(lhs.segments, "/")
-        local rhsPath = table.concat(rhs.segments, "/")
+        local lhsSegments = lhs.segments
+        local rhsSegments = rhs.segments
+        local commonLength = math.min(#lhsSegments, #rhsSegments)
 
-        if lhsPath ~= rhsPath then
-            return lhsPath < rhsPath
+        for segmentIndex = 1, commonLength do
+            local lhsSegment = lhsSegments[segmentIndex]
+            local rhsSegment = rhsSegments[segmentIndex]
+
+            if lhsSegment ~= rhsSegment then
+                local lhsIsFile = segmentIndex == #lhsSegments
+                local rhsIsFile = segmentIndex == #rhsSegments
+
+                if lhsIsFile ~= rhsIsFile then
+                    -- Files directly inside a directory come before its subdirectories.
+                    return lhsIsFile
+                end
+
+                return lhsSegment < rhsSegment
+            end
+        end
+
+        if #lhsSegments ~= #rhsSegments then
+            -- A shorter path ends in a file at this point and therefore comes first.
+            return #lhsSegments < #rhsSegments
         end
 
         return lhs.name < rhs.name
@@ -283,6 +404,17 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
         item.currentLayer = currentLayer
 
         table.insert(items, item)
+    end
+
+    local function addGap(fraction)
+        addItem({
+            isGap = true,
+            gapFraction = fraction or 1,
+            text = "",
+            data = nil,
+            indent = 0,
+            ancestors = {}
+        })
     end
 
     local previousSource
@@ -333,9 +465,12 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
     end
 
     for _, entry in ipairs(treeEntries) do
+        local sourceChanged = false
+
         if entry.sourceLabel ~= previousSource then
             previousSource = entry.sourceLabel
             previousSegments = {}
+            sourceChanged = true
 
             local sourceItem = {
                 text = entry.sourceLabel,
@@ -346,6 +481,10 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
                 indent = 0,
                 ancestors = {}
             }
+
+            if #items > 0 then
+                addGap()
+            end
 
             addItem(sourceItem)
 
@@ -402,6 +541,9 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
 
         previousSegments = segments
     end
+
+    compactPathTree(items)
+    insertHierarchyGaps(items)
 
     -- Keep the generated tree order and ignore the favorite-first sorting of the material list
     for i, item in ipairs(items) do
@@ -776,7 +918,47 @@ local function materialDataToElement(list, data, element)
         element = uiElements.listItem()
     end
 
+    if data and data.isGap then
+        element.text = ""
+        element.data = nil
+        element.itemData = data
+        element.isGap = true
+        element.isButton = nil
+        element.interactive = -1
+        element.itemFavorited = false
+        element._thumbnailCanvas = nil
+        element.style.padding = 0
+        element.style.spacing = 0
+
+        local baseHeight = list.getRowBaseHeight and list:getRowBaseHeight() or list:getElementSize()
+        local gapHeight = math.max(1, math.floor(baseHeight * (data.gapFraction or 1)))
+
+        element.height = gapHeight
+        element.minHeight = gapHeight
+        element.maxHeight = gapHeight
+        element.autoHeight = false
+
+        if element._thumbnailSpacer then
+            element._thumbnailSpacer:removeSelf()
+            element._thumbnailSpacer = nil
+        end
+
+        listItemUtils.clearIcon(element)
+
+        local gapColor = getThemeListColor()
+
+        element.style.normalBG = gapColor
+        element.style.disabledBG = gapColor
+
+        return element
+    end
+
     if data then
+        element.isGap = nil
+        element.autoHeight = true
+        element.maxHeight = -1
+        element.height = -1
+
         -- Button rows are actions, not materials: they only run their onPress and never take a
         -- selection or a thumbnail. Rows are recycled, so everything a material row may have left
         -- behind (thumbnail, spacer, extra height, favorite icon) is reset here.
@@ -908,7 +1090,9 @@ local function materialDataToElement(list, data, element)
         if element.label then
             element.label.cacheable = false
             installBoldLabelHook(element)
-            element.label._bold = data.isHeader or false
+            -- Keep only source/favorites headers bold. Directory headers and files use the same
+            -- weight so the hierarchical middle of the list does not alternate thin/thick rows.
+            element.label._bold = data.isSource or false
         end
 
         -- Hover preview is driven from the list update (see updateHoverPreview): enter/leave
