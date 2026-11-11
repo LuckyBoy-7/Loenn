@@ -102,6 +102,22 @@ local layersWithDecalPaths = {
 }
 
 local decalPathIndent = "    "
+
+-- Hierarchical material rows use a bullet for interactive entries. Headers keep the plain
+-- indentation so the tree structure stays readable without every row looking like a list item.
+local function formatHierarchyText(text, indent, interactive)
+    if indent <= 0 or text:find(decalPathIndent, 1, true) then
+        return text
+    end
+
+    if interactive then
+        -- Keep the normal four-space indent for every ancestor level. Only the leaf level is
+        -- shortened to "  • ", replacing the last four spaces with two spaces + bullet + space.
+        return string.rep(decalPathIndent, indent - 1) .. "  • " .. text
+    end
+
+    return string.rep(decalPathIndent, indent) .. text
+end
 local vanillaDecalSource = "[Celeste/Vanilla]"
 
 -- Cached entity previews (name -> preview content or false), rebuilt with the material list
@@ -782,9 +798,7 @@ local function materialDataToElement(list, data, element)
             local indent = data.indent or 0
             local text = data.text or ""
 
-            if indent > 0 and not text:find(decalPathIndent, 1, true) then
-                text = string.rep(decalPathIndent, indent) .. text
-            end
+            text = formatHierarchyText(text, indent, true)
 
             element.text = text
             element.data = data
@@ -858,7 +872,7 @@ local function materialDataToElement(list, data, element)
         -- Tile lists are flat: the thumbnail already sits where the indent would be, so the
         -- text starts right after it
         if indent > 0 and not tileList then
-            text = string.rep(decalPathIndent, indent) .. text
+            text = formatHierarchyText(text, indent, not data.isHeader)
         end
 
         element.text = text
