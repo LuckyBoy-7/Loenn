@@ -70,6 +70,18 @@ for _, name in ipairs(tileToolNames) do
     tileToolSet[name] = true
 end
 
+-- Top-level tool order in the right toolbar. The Tile group sits after Selection, while the
+-- individual tile tools are shown in the secondary toolbar below the layer entries.
+local toolOrderOverrides = {
+    room = 1,
+    placement = 2,
+    selection = 3,
+    stylegrounds = 5,
+    preview = 6,
+    scripts = 7,
+    debug = 8
+}
+
 local layersWithSubLayers = {
     entities = true,
     triggers = true,
@@ -3631,16 +3643,28 @@ local defaultToolOrder = 1000
 -- Blank rows separating the groups of tools in the tool list. They are not interactive at all:
 -- no hover, no click, no selection and no keyboard navigation.
 local toolSeparatorsBefore = {
-    selection = true,
     stylegrounds = true,
-    debug = true
+    scripts = true
 }
 
 local function getToolSpacer()
-    return uiElements.listItem({
+    -- A listItem is used here because list:init wraps every plain item in one. The optional
+    -- separatorHeight is consumed by listItem.init after that wrapping, so the row can still be
+    -- exactly half of a normal row instead of growing to the label's normal height.
+    local height = math.max(1, math.floor(9 * (configs.ui.theme.uiScale or 1)))
+
+    local spacer = uiElements.listItem({
         text = "",
-        data = false
+        data = false,
+        isSeparator = true,
+        separatorHeight = height
     })
+
+    -- list:init wraps every entry in another listItem. Keep the marker on the element so the
+    -- wrapper can apply the fixed separator height too.
+    spacer.separatorHeight = height
+
+    return spacer
 end
 
 -- The list rebuilds its rows from the items that are handed to it, so the separator rows can only
@@ -3679,7 +3703,7 @@ local function getToolItems(sortItems)
     })
 
     tileGroupItem.toolName = "tile"
-    tileGroupItem.toolOrder = -1
+    tileGroupItem.toolOrder = 4
     tileGroupItem.isTileGroup = true
 
     local tileGroupTooltip = getLanguageOrDefault(toolDescriptions.tile)
@@ -3687,8 +3711,6 @@ local function getToolItems(sortItems)
     if tileGroupTooltip then
         tileGroupItem.tooltipText = tileGroupTooltip
     end
-
-    table.insert(toolItems, tileGroupItem)
 
     local regularItems = {}
 
@@ -3703,7 +3725,7 @@ local function getToolItems(sortItems)
             })
 
             item.toolName = name
-            item.toolOrder = tool.order or defaultToolOrder
+            item.toolOrder = toolOrderOverrides[name] or tool.order or defaultToolOrder
 
             table.insert(regularItems, item)
 
@@ -3724,20 +3746,31 @@ local function getToolItems(sortItems)
 
             return lhsGroup == rhsGroup and lhs.text < rhs.text or lhsGroup < rhsGroup
         end)
+    end
 
-        for _, item in ipairs(regularItems) do
-            table.insert(toolItems, item)
+    -- Insert the virtual Tile row according to its order. It used to be prepended, which put it
+    -- above Rooms/Placement/Selection regardless of its configured position.
+    local tileGroupInserted = false
+
+    for _, item in ipairs(regularItems) do
+        if not tileGroupInserted and item.toolOrder > tileGroupItem.toolOrder then
+            table.insert(toolItems, tileGroupItem)
+            tileGroupInserted = true
         end
 
+        table.insert(toolItems, item)
+    end
+
+    if not tileGroupInserted then
+        table.insert(toolItems, tileGroupItem)
+    end
+
+    if sortItems ~= false then
         -- Separators are inserted after sorting, so they never take part in it
         for index = #toolItems, 1, -1 do
             if toolSeparatorsBefore[toolItems[index].toolName] then
                 table.insert(toolItems, index, getToolSpacer())
             end
-        end
-    else
-        for _, item in ipairs(regularItems) do
-            table.insert(toolItems, item)
         end
     end
 

@@ -1038,7 +1038,9 @@ function listWidgets.addListIcons(list)
     end
 
     for _, listItem in ipairs(list.children) do
-        listWidgets.addListIcon(listItem)
+        if not listItem.isSeparator then
+            listWidgets.addListIcon(listItem)
+        end
     end
 end
 
