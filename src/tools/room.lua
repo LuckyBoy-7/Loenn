@@ -780,26 +780,55 @@ function tool.load()
 end
 
 -- The room list only makes sense while the rooms tool is active
-local ui = require("ui")
-
-local function setRoomListVisible(visible)
-    local window = ui.roomListWindow
-
-    if window and window.setRoomListVisible then
-        window.setRoomListVisible(visible)
-    end
-end
-
 function tool.selected()
-    setRoomListVisible(true)
-
     return true
 end
 
 function tool.unselected()
-    setRoomListVisible(false)
+    return true
+end
+
+local function cleanRoomName(name)
+    return name:match("^lvl_(.*)") or name
+end
+
+function tool.getMaterials()
+    local map = state.map
+
+    if not map then
+        return {}
+    end
+
+    local materials = {}
+
+    for _, room in ipairs(map.rooms) do
+        table.insert(materials, {
+            name = room.name,
+            displayNameNoMods = cleanRoomName(room.name),
+            displayName = cleanRoomName(room.name)
+        })
+    end
+
+    return materials
+end
+
+function tool.setMaterial(roomName)
+    local room = state.map and state.getRoomByName(roomName)
+
+    if not room then
+        return false
+    end
+
+    state.selectItem(room)
+    viewportHandler.moveToPosition(room.x + room.width / 2, room.y + room.height / 2, 1, true)
 
     return true
+end
+
+function tool.getMaterial()
+    local room = state.getSelectedRoom()
+
+    return room and room.name or false
 end
 
 return tool

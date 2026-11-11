@@ -3824,6 +3824,10 @@ local function toolCallback(list, toolName)
         updateLayerList(toolName, toolHandler.tools[toolName])
         updateToolModeList(toolName)
         updateTileToolList(toolName)
+
+        if toolWindow.materialList then
+            toolWindow.materialList:updateItems(getMaterialItems(), toolHandler.getMaterial())
+        end
     end
 end
 
@@ -4349,6 +4353,12 @@ function toolWindow.getWindow()
 
     local window = uiElements.window(tostring(languageRegistry.getLanguage().ui.tools_window.window_title), row):with(uiUtils.fillHeight(false))
 
+    local function refreshRoomMaterialList()
+        if toolHandler.currentToolName == "room" and materialList then
+            materialList:updateItems(getMaterialItems(), toolHandler.getMaterial())
+        end
+    end
+
     -- Explicit visibility state for the whole tool sidebar. The draw/update hooks are needed on
     -- top of window.visible because the sidebar is laid out outside the normal window list and
     -- must also stop running list preview/scroll work while hidden.
@@ -4392,6 +4402,10 @@ function toolWindow.getWindow()
         editorLayerInformationChanged = layerInformationChangedCallback,
         editorLayerAdded = layerAddedCallback,
         editorLayerDeleted = layerDeletedCallback,
+        editorRoomAdded = refreshRoomMaterialList,
+        editorRoomDeleted = refreshRoomMaterialList,
+        editorRoomChanged = refreshRoomMaterialList,
+        editorRoomOrderChanged = refreshRoomMaterialList,
 
         interactive = 0
     })
