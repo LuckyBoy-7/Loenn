@@ -2,7 +2,6 @@ local ui = require("ui")
 local uiElements = require("ui.elements")
 local uiUtils = require("ui.utils")
 
-local languageRegistry = require("language_registry")
 local utils = require("utils")
 local widgetUtils = require("ui.widgets.utils")
 local form = require("ui.forms.form")
@@ -18,6 +17,16 @@ local windowPersisterName = "about_window"
 local aboutWindow = {}
 
 local aboutWindowGroup = uiElements.group({})
+
+-- The About content is intentionally fixed to Chinese. Edit this table to add credits without
+-- changing every language file.
+local aboutText = {
+    title = "关于",
+    readme = "打开 README",
+    description = "Celeste 的关卡编辑器\n由 LÖVE 和 Lua 驱动。",
+    credits = "作者：Cruor、Vexatos、Lucky_boy\n特别鸣谢：Myn_Gen、格莱西亚",
+    version = "编辑器版本：%s"
+}
 
 local function openReadmeUrl()
     local author = configs.updater.githubAuthor
@@ -35,12 +44,11 @@ local noPaddingSpacing = {
 }
 
 function aboutWindow.showAboutWindow()
-    local language = languageRegistry.getLanguage()
-    local windowTitle = tostring(language.ui.about_window.title)
-    local readmeText = tostring(language.ui.about_window.readme_button)
-    local description = tostring(language.ui.about_window.description)
-    local credits = tostring(language.ui.about_window.credits)
-    local versionText = string.format(tostring(language.ui.about_window.version), meta.version)
+    local windowTitle = aboutText.title
+    local readmeText = aboutText.readme
+    local description = aboutText.description
+    local credits = aboutText.credits
+    local versionText = string.format(aboutText.version, meta.version)
 
     local logoScaleX = 0.5
     local logoScaleY = 0.5
