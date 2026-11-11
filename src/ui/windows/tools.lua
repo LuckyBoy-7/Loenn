@@ -251,8 +251,8 @@ local function compactPathTree(items)
     end
 end
 
--- A directory header needs breathing room when it follows actual content. Consecutive headers
--- stay in the same visual group, so only content -> header transitions get a gap.
+-- Source groups are separated by one empty row. Intermediate directory headers do not get any
+-- extra gap, so the hierarchy stays compact.
 local function insertHierarchyGaps(items)
     local index = 1
 
@@ -260,11 +260,10 @@ local function insertHierarchyGaps(items)
         local item = items[index]
         local previous = items[index - 1]
 
-        if item.isHeader and not item.isSource and not item.isFavoritesHeader
-            and previous and not previous.isHeader and not previous.isGap then
+        if item.isHeader and item.isSource and not item.isFavoritesHeader
+            and previous and not previous.isGap then
             table.insert(items, index, {
                 isGap = true,
-                gapFraction = 0.5,
                 text = "",
                 data = nil,
                 indent = 0,
@@ -406,10 +405,9 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
         table.insert(items, item)
     end
 
-    local function addGap(fraction)
+    local function addGap()
         addItem({
             isGap = true,
-            gapFraction = fraction or 1,
             text = "",
             data = nil,
             indent = 0,
@@ -833,6 +831,12 @@ local function filterMaterialItems(items, search, options)
         end
     end
 
+    insertHierarchyGaps(filtered)
+
+    for i, item in ipairs(filtered) do
+        item.sortIndex = i
+    end
+
     return filtered
 end
 
@@ -918,6 +922,19 @@ local function materialDataToElement(list, data, element)
         element = uiElements.listItem()
     end
 
+    if not element._thumbnailBasePadding then
+        local basePadding = element.style.padding
+
+        -- Gap rows set padding to zero for their custom height. If such a recycled row is reused
+        -- as a normal row before this is captured, taking the current padding would leave that
+        -- row with a permanently different left edge.
+        if type(basePadding) ~= "number" or basePadding <= 0 then
+            basePadding = 4
+        end
+
+        element._thumbnailBasePadding = basePadding
+    end
+
     if data and data.isGap then
         element.text = ""
         element.data = nil
@@ -925,18 +942,15 @@ local function materialDataToElement(list, data, element)
         element.isGap = true
         element.isButton = nil
         element.interactive = -1
+        element._selected = false
         element.itemFavorited = false
         element._thumbnailCanvas = nil
-        element.style.padding = 0
-        element.style.spacing = 0
-
-        local baseHeight = list.getRowBaseHeight and list:getRowBaseHeight() or list:getElementSize()
-        local gapHeight = math.max(1, math.floor(baseHeight * (data.gapFraction or 1)))
-
-        element.height = gapHeight
-        element.minHeight = gapHeight
-        element.maxHeight = gapHeight
-        element.autoHeight = false
+        element.style.padding = element._thumbnailBasePadding or 4
+        element.style.spacing = 4
+        element.minHeight = -1
+        element.maxHeight = -1
+        element.autoHeight = true
+        element.height = -1
 
         if element._thumbnailSpacer then
             element._thumbnailSpacer:removeSelf()
@@ -966,6 +980,9 @@ local function materialDataToElement(list, data, element)
             if element._thumbnailBasePadding == nil then
                 element._thumbnailBasePadding = element.style.padding or 4
             end
+
+            element.style.padding = element._thumbnailBasePadding
+            element.style.spacing = 4
 
             if element._thumbnailSpacer then
                 element._thumbnailSpacer:removeSelf()
@@ -4379,80 +4396,28 @@ function toolWindow.getWindow()
     local materialMaxWidth = math.floor(720 * uiScale)
     local materialListManualWidth = false
 
-    local function updateMaterialListWidth()
-        if materialListManualWidth then
-            return
-        end
-
-        -- Materialize and lay out the magic list before reading row positions. Without this the
-        -- first update runs while every recycled row still reports screenY = 0, so the width is
-        -- computed from all hidden rows and only becomes correct after the first scroll.
-        if materialList.updateView then
-            materialList:updateView()
-        end
-
-        materialList:layout()
-        materialList:layoutLate()
-
-        local maxTextWidth = 0
-        local visibleRect = materialList.__cached and materialList.__cached.visibleRect
-        local visibleTop = visibleRect and visibleRect[2]
-        local visibleBottom = visibleRect and visibleRect[4]
-
-        for _, child in ipairs(materialList.children or {}) do
-            local childY = child.screenY
-
-            if visibleTop and childY and childY > 0 and child.height then
-                if childY + child.height < visibleTop or childY > visibleBottom then
-                    -- Row is materialized outside the current viewport; do not let a long
-                    -- off-screen material keep the whole list wide.
-                    goto continue
-                end
-            end
-
-            local label = child.label
-            local textWidth = label and label._text and label._text:getWidth() or 0
-
-            if textWidth > maxTextWidth then
-                maxTextWidth = textWidth
-            end
-
-            ::continue::
-        end
-
-        if maxTextWidth <= 0 then
-            -- updateItems() can run before the magic list has materialized its rows. Retry once
-            -- after the layout pass instead of waiting for the user to scroll.
-            if not materialList._widthRetryScheduled then
-                materialList._widthRetryScheduled = true
-
-                ui.runLate(function()
-                    materialList._widthRetryScheduled = false
-                    updateMaterialListWidth()
-                end)
-            end
-
-            return
-        end
-
-        local target = math.ceil(maxTextWidth + 20)
+    -- Single place that applies a material-list width. Both the automatic content-based grow and
+    -- the draggable splitter use this, so their layout/scrollbar calculations cannot drift apart.
+    local function applyMaterialListWidth(target)
         target = math.max(materialMinWidth, math.min(materialMaxWidth, target))
+
+        local innerWidth = math.max(1, target)
 
         materialPanel.width = target
         materialPanel.maxWidth = target
         materialPanel.autoWidth = false
-        scrolledMaterialList.width = target
-        scrolledMaterialList.maxWidth = target
+        scrolledMaterialList.width = innerWidth
+        scrolledMaterialList.maxWidth = innerWidth
         scrolledMaterialList.autoWidth = false
-        materialList._manualWidth = target
-        materialList.width = target
-        materialList.maxWidth = target
+        materialList._manualWidth = innerWidth
+        materialList.width = innerWidth
+        materialList.maxWidth = innerWidth
         materialList.autoWidth = false
-        materialList._forcedWidth = target
+        materialList._forcedWidth = innerWidth
 
         for _, item in ipairs(materialList.children or {}) do
-            item.width = target
-            item.maxWidth = target
+            item.width = innerWidth
+            item.maxWidth = innerWidth
             item.autoWidth = false
             item:layoutLate()
         end
@@ -4479,13 +4444,76 @@ function toolWindow.getWindow()
         end
 
         if materialList.scrolledList then
-            materialList.scrolledList.width = target
-            materialList.scrolledList.maxWidth = target
+            materialList.scrolledList.width = innerWidth
+            materialList.scrolledList.maxWidth = innerWidth
             materialList.scrolledList.autoWidth = false
         end
 
         materialPanel:reflow()
         materialList:reflow()
+    end
+
+    -- Ask the list how wide it wants to be: widest visible row text plus the list's own padding.
+    -- This is the single measurement used by automatic growth.
+    local updateMaterialListWidth
+
+    local function measureMaterialListWidth()
+        if materialListManualWidth then
+            return nil
+        end
+
+        if materialList.updateView then
+            materialList:updateView()
+        end
+
+        materialList:layout()
+        materialList:layoutLate()
+
+        local maxTextWidth = 0
+        local visibleRect = materialList.__cached and materialList.__cached.visibleRect
+        local visibleTop = visibleRect and visibleRect[2]
+        local visibleBottom = visibleRect and visibleRect[4]
+
+        for _, child in ipairs(materialList.children or {}) do
+            local childY = child.screenY
+
+            if visibleTop and childY and childY > 0 and child.height then
+                if childY + child.height < visibleTop or childY > visibleBottom then
+                    goto continue
+                end
+            end
+
+            local label = child.label
+            local textWidth = label and label._text and label._text:getWidth() or 0
+
+            if textWidth > maxTextWidth then
+                maxTextWidth = textWidth
+            end
+
+            ::continue::
+        end
+
+        if maxTextWidth <= 0 then
+            if not materialList._widthRetryScheduled then
+                materialList._widthRetryScheduled = true
+
+                ui.runLate(function()
+                    materialList._widthRetryScheduled = false
+                    updateMaterialListWidth()
+                end)
+            end
+
+            return nil
+        end
+
+        return math.ceil(maxTextWidth + 20)
+    end
+    updateMaterialListWidth = function()
+        local target = measureMaterialListWidth()
+
+        if target then
+            applyMaterialListWidth(target)
+        end
     end
 
     local materialSplitter
@@ -4501,54 +4529,12 @@ function toolWindow.getWindow()
 
         setWidth = function(width)
             materialListManualWidth = true
-            materialPanel.width = width
-            materialPanel.maxWidth = width
-            materialPanel.autoWidth = false
-
-            -- The column contains the search field and the scrolled list. Size it explicitly so
-            -- both the search field and the rows expand with the panel instead of keeping their
-            -- old content width.
-            local padding = materialPanel.style:getIndex("padding", 1) or 0
-            local innerWidth = math.max(1, width - padding * 2)
-
-            scrolledMaterialList.width = innerWidth
-            scrolledMaterialList.maxWidth = innerWidth
-            scrolledMaterialList.autoWidth = false
-
-            local scrolledList = materialList.scrolledList
-
-            if scrolledList then
-                scrolledList.width = innerWidth
-                scrolledList.maxWidth = innerWidth
-                scrolledList.autoWidth = false
-            end
-
-            materialList._manualWidth = innerWidth
-            materialList.grow = false
-            materialList.shrinkOnce = false
-            materialList.width = innerWidth
-            materialList.maxWidth = innerWidth
-            materialList.autoWidth = false
-            materialList._forcedWidth = innerWidth
-
-            -- Synchronize the recycled rows before the normal magic-list grow pass runs. The grow
-            -- pass takes max(innerWidth, row widths); if old rows keep their old width, shrinking
-            -- makes it grow the list again and reflow forever.
-            for _, child in ipairs(materialList.children or {}) do
-                child.width = innerWidth
-                child.autoWidth = false
-                child:layoutLate()
-            end
-
-            materialPanel:reflow()
-            materialList:reflow()
+            applyMaterialListWidth(width)
         end
     })
 
     -- Overlay the handle on the material panel instead of putting it in the row. As a row child
     -- it consumed spacing and shifted the entire toolbar to the left.
-    local materialPadding = materialPanel.style:getIndex("padding", 1) or 0
-    materialSplitter.x = -materialPadding
     materialPanel:addChild(materialSplitter)
 
     local materialUpdateItems = materialList.updateItems
@@ -4577,6 +4563,14 @@ function toolWindow.getWindow()
     end
 
     ui.runLate(updateMaterialListWidth)
+
+    -- The initial natural panel width can be below the splitter minimum. Normalize it before the
+    -- user can grab the handle, otherwise the first drag clamps to the minimum and jumps.
+    ui.runLate(function()
+        if materialPanel.width < materialMinWidth then
+            applyMaterialListWidth(materialMinWidth)
+        end
+    end)
 
     local row = uiElements.row({
         toolWindow.leftColumn,

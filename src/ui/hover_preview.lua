@@ -14,9 +14,9 @@ local gap = 10
 local arrowSize = 11
 local bubbleRadius = 3
 local edgePadding = 12
-local defaultArea = 300 * 400 * 0.6
-local defaultMaxWidth = 360
-local defaultMaxHeight = 420
+local defaultArea = 300 * 400 * 0.6 * 0.64
+local defaultMaxWidth = 360 * 0.8
+local defaultMaxHeight = 420 * 0.8
 local panelPadding = 10
 
 -- Transparency checkerboard

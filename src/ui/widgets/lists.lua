@@ -960,10 +960,6 @@ function listWidgets.getMagicListHeight(list, itemCount)
         return 0
     end
 
-    if list.getRowsHeight then
-        return list:getRowsHeight(itemCount)
-    end
-
     local elementSize = list:getElementSize()
     local spacing = list.style.spacing
     local listHeight = elementSize * itemCount + spacing * (itemCount - 2)
