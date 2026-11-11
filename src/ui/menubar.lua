@@ -54,11 +54,20 @@ local function saveMapImage()
             return
         end
 
-        local saved = mapImageGenerator.saveMapImage(filename)
+        local saved, reason = mapImageGenerator.saveMapImage(filename)
 
         if not saved then
             local language = languageRegistry.getLanguage()
-            local text = tostring(language.ui.notifications.mapImageSaveFailed)
+            local template = language.ui.notifications.mapImageSaveFailedReason
+            local text
+
+            if template then
+                text = string.format(tostring(template), tostring(reason or "unknown error"))
+            else
+                text = string.format("%s: %s",
+                    tostring(language.ui.notifications.mapImageSaveFailed),
+                    tostring(reason or "unknown error"))
+            end
 
             notifications.notify(text, -1)
         end

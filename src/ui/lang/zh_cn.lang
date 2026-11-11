@@ -39,6 +39,7 @@ ui.notifications.saveSanitizerDependenciesMissing=检测到缺少依赖。\n要�
 ui.notifications.saveSanitizerDependenciesRemindMeLater=稍后提醒
 ui.notifications.saveSanitizerVanillaMapWarning=确定要覆盖原版地图吗？\n大多数情况下不应该这样做。
 ui.notifications.mapImageSaveFailed=保存地图图片失败
+ui.notifications.mapImageSaveFailedReason=保存地图图片失败：%s
 ui.notifications.cacheCleared=缓存已清除。\n请重启 Lönn 以重新生成。
 ui.notifications.settingsReset=设置已恢复默认值。\n原文件保留为 settings.backup.conf。\n请重启 Lönn 以应用。
 ui.notifications.languageChanged=语言将在重启 Lönn 后生效。

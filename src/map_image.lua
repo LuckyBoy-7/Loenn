@@ -46,26 +46,37 @@ function mapImageGenerator.getMapImageData(map)
     map = map or loadedState.map
 
     if not map then
-        return
+        return nil, "no map is loaded"
     end
 
     local tlx, tly, brx, bry = mapItemUtils.getMapBounds(map)
     local width, height = brx - tlx, bry - tly
+
+    if width <= 0 or height <= 0 then
+        return nil, "the map has no visible room bounds"
+    end
+
     local resolutionScale = celesteRender.getCanvasResolutionScale()
     local bounds = {x = tlx, y = tly, width = width, height = height}
 
-    local imageWidth, imageHeight = width * resolutionScale, height * resolutionScale
+    local imageWidth = math.max(1, math.floor(width * resolutionScale))
+    local imageHeight = math.max(1, math.floor(height * resolutionScale))
     local success, imageData = pcall(love.image.newImageData, imageWidth, imageHeight)
 
     if not success then
-        return
+        return nil, string.format("could not allocate a %dx%d image (%s)", imageWidth, imageHeight, tostring(imageData))
     end
 
     local imageState = getImageState(map, resolutionScale, bounds)
 
     -- Redraw all rooms with new state info
     for _, room in ipairs(map.rooms) do
-        celesteRender.forceRedrawRoom(room, imageState, true)
+        local redrawSuccess, redrawError = pcall(celesteRender.forceRedrawRoom, room, imageState, true)
+
+        if not redrawSuccess then
+            celesteRender.invalidateRoomCache()
+            return nil, "failed to redraw a room: " .. tostring(redrawError)
+        end
     end
 
     local viewport = imageState.viewport
@@ -80,13 +91,42 @@ function mapImageGenerator.getMapImageData(map)
             viewport.width = tileWidth * resolutionScale
             viewport.height = tileHeight * resolutionScale
 
-            local canvas = love.graphics.newCanvas(tileWidth * resolutionScale, tileHeight * resolutionScale)
+            local canvasSuccess, canvasOrError = pcall(love.graphics.newCanvas,
+                math.max(1, math.floor(tileWidth * resolutionScale)),
+                math.max(1, math.floor(tileHeight * resolutionScale)))
 
-            canvas:renderTo(function()
+            if not canvasSuccess then
+                celesteRender.invalidateRoomCache()
+                return nil, "could not create a map tile canvas: " .. tostring(canvasOrError)
+            end
+
+            local canvas = canvasOrError
+            local drawSuccess, drawError = pcall(canvas.renderTo, canvas, function()
                 celesteRender.drawMap(imageState)
             end)
 
-            imageData:paste(canvas:newImageData(), tileX * resolutionScale, tileY * resolutionScale)
+            if not drawSuccess then
+                canvas:release()
+                celesteRender.invalidateRoomCache()
+                return nil, "could not draw a map tile: " .. tostring(drawError)
+            end
+
+            local copySuccess, tileData = pcall(canvas.newImageData, canvas)
+
+            if not copySuccess or not tileData then
+                canvas:release()
+                celesteRender.invalidateRoomCache()
+                return nil, "could not copy a map tile: " .. tostring(tileData)
+            end
+
+            local pasteSuccess, pasteError = pcall(imageData.paste, imageData, tileData,
+                tileX * resolutionScale, tileY * resolutionScale)
+
+            if not pasteSuccess then
+                canvas:release()
+                celesteRender.invalidateRoomCache()
+                return nil, "could not compose the map image: " .. tostring(pasteError)
+            end
 
             canvas:release()
         end
@@ -98,36 +138,44 @@ function mapImageGenerator.getMapImageData(map)
 end
 
 function mapImageGenerator.saveMapImage(filename, map)
-    local imageData = mapImageGenerator.getMapImageData(map)
+    local imageData, imageError = mapImageGenerator.getMapImageData(map)
 
     if not imageData then
-        return false
+        return false, imageError or "could not generate the map image"
     end
 
-    local encoded = imageData:encode("png")
+    local encoded, encodeError = pcall(imageData.encode, imageData, "png")
 
     if not encoded then
-        return false
+        return false, "could not encode the image as PNG: " .. tostring(encodeError)
     end
 
-    local fh = io.open(filename, "wb")
+    local fh, openError = io.open(filename, "wb")
 
     if not fh then
-        return false
+        return false, "could not open the output file: " .. tostring(openError)
     end
 
     local data = encoded:getString()
+    local writeSuccess, writeError = pcall(fh.write, fh, data)
 
-    fh:write(data)
     fh:close()
+
+    if not writeSuccess then
+        return false, "could not write the output file: " .. tostring(writeError)
+    end
 
     -- Validate that the png is valid. LÖVE's filesystem only sees its own
     -- directories, so the written file is fed back as FileData instead
-    local success = pcall(function()
+    local success, validationError = pcall(function()
         return love.image.newImageData(love.filesystem.newFileData(data, "map_image.png"))
     end)
 
-    return success
+    if not success then
+        return false, "the generated PNG could not be read back: " .. tostring(validationError)
+    end
+
+    return true
 end
 
 return mapImageGenerator
