@@ -4182,6 +4182,16 @@ function toolWindow.getWindow()
             return
         end
 
+        -- Materialize and lay out the magic list before reading row positions. Without this the
+        -- first update runs while every recycled row still reports screenY = 0, so the width is
+        -- computed from all hidden rows and only becomes correct after the first scroll.
+        if materialList.updateView then
+            materialList:updateView()
+        end
+
+        materialList:layout()
+        materialList:layoutLate()
+
         local maxTextWidth = 0
         local visibleRect = materialList.__cached and materialList.__cached.visibleRect
         local visibleTop = visibleRect and visibleRect[2]
@@ -4209,6 +4219,17 @@ function toolWindow.getWindow()
         end
 
         if maxTextWidth <= 0 then
+            -- updateItems() can run before the magic list has materialized its rows. Retry once
+            -- after the layout pass instead of waiting for the user to scroll.
+            if not materialList._widthRetryScheduled then
+                materialList._widthRetryScheduled = true
+
+                ui.runLate(function()
+                    materialList._widthRetryScheduled = false
+                    updateMaterialListWidth()
+                end)
+            end
+
             return
         end
 
@@ -4306,6 +4327,7 @@ function toolWindow.getWindow()
             materialList.width = innerWidth
             materialList.maxWidth = innerWidth
             materialList.autoWidth = false
+            materialList._forcedWidth = innerWidth
 
             -- Synchronize the recycled rows before the normal magic-list grow pass runs. The grow
             -- pass takes max(innerWidth, row widths); if old rows keep their old width, shrinking
