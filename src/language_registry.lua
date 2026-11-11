@@ -37,6 +37,12 @@ end
 function languageRegistry.getLanguageDisplayName(name, data)
     data = data or languageRegistry.languages[name]
 
+    -- Keep the built-in English aliases presented as one language even if a settings reset or a
+    -- mod language file leaves one of them without language.name metadata.
+    if name == "en" or name == "en_gb" then
+        return "English"
+    end
+
     if data and data.language and data.language.name and data.language.name._exists then
         return tostring(data.language.name)
     end
@@ -48,17 +54,33 @@ function languageRegistry.getLanguageOptions()
     local options = {}
     local seenNames = {}
     local seenLabels = {}
+    local canonicalNames = {
+        en = "en_gb",
+        en_gb = "en_gb"
+    }
 
     for name, data in pairs(languageRegistry.languages or {}) do
+        local canonicalName = canonicalNames[name] or name
         local displayName = languageRegistry.getLanguageDisplayName(name, data)
 
-        if not seenNames[name] and not seenLabels[displayName] then
-            seenNames[name] = true
+        local skipEnglishAlias = displayName == "English"
+            and name ~= "en_gb"
+            and languageRegistry.languages.en_gb ~= nil
+
+        if not skipEnglishAlias and not seenNames[canonicalName] and not seenLabels[displayName] then
+            seenNames[canonicalName] = true
             seenLabels[displayName] = true
+
+            -- Prefer the complete en_gb language data when both en and en_gb are present.
+            local optionName = canonicalName == "en_gb" and "en_gb" or name
+
+            if optionName == "en_gb" and not languageRegistry.languages.en_gb then
+                optionName = name
+            end
 
             table.insert(options, {
                 displayName,
-                name
+                optionName
             })
         end
     end
