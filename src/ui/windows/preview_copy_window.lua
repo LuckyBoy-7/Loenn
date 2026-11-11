@@ -208,7 +208,7 @@ function previewCopyWindow.open(params)
                 if written > 0 then
                     local _, layerFolder = pathRoots(params.copyPath, params.layer)
 
-                    require("ui.windows.tools").reloadPreviewCopiedFiles(copied, layerFolder or "")
+                    require("ui/windows/tools").reloadPreviewCopiedFiles(copied, layerFolder or "")
 
                     finish(string.format(tostring(strings.copied_files), written, targetPath))
 

@@ -4345,8 +4345,33 @@ function toolWindow.getWindow()
         toolWindow.leftColumn,
         materialPanel
     }):with(uiUtils.fillHeight(true))
+    toolWindow.toolbarRow = row
 
     local window = uiElements.window(tostring(languageRegistry.getLanguage().ui.tools_window.window_title), row):with(uiUtils.fillHeight(false))
+
+    -- Explicit visibility state for the whole tool sidebar. The draw/update hooks are needed on
+    -- top of window.visible because the sidebar is laid out outside the normal window list and
+    -- must also stop running list preview/scroll work while hidden.
+    toolWindow.toolbarVisible = true
+    toolWindow.toolbarElement = window
+
+    window:hook({
+        draw = function(orig, self, ...)
+            if not toolWindow.toolbarVisible then
+                return
+            end
+
+            return orig(self, ...)
+        end,
+
+        update = function(orig, self, dt)
+            if not toolWindow.toolbarVisible then
+                return true
+            end
+
+            return orig(self, dt)
+        end
+    })
 
     -- Same reason as the material panel: don't cache the window which contains the live list
     window.cacheable = false
@@ -4379,7 +4404,35 @@ function toolWindow.getWindow()
 
     updateToolListWidth()
 
-    return simpleDocks.pinWidgetToEdge("right", window)
+    local docked = simpleDocks.pinWidgetToEdge("right", window)
+    toolWindow.toolbarWindow = docked
+
+    return docked
+end
+
+function toolWindow.toggleToolbar()
+    local window = toolWindow.toolbarElement or toolWindow.toolbarWindow
+
+    if not window then
+        return false
+    end
+
+    toolWindow.toolbarVisible = not toolWindow.toolbarVisible
+
+    window.visible = toolWindow.toolbarVisible
+    window.interactive = toolWindow.toolbarVisible and 0 or -1
+
+    if toolWindow.toolbarRow then
+        toolWindow.toolbarRow.visible = toolWindow.toolbarVisible
+    end
+
+    window:repaint()
+
+    if ui.root then
+        ui.root:recollect()
+    end
+
+    return toolWindow.toolbarVisible
 end
 
 -- Called after Preview's "Copy Path And File" wrote new images into the map mod. Invalidate only

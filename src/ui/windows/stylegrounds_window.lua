@@ -2374,7 +2374,7 @@ function stylegroundWindow.editStylegrounds(map)
             -- Use the normal tools-window selection path so the top list, eventStates and all
             -- dependent lists switch together. Calling toolHandler.selectTool directly leaves
             -- the tools window thinking Stylegrounds is still selected.
-            local success, toolsWindow = pcall(require, "ui.windows.tools")
+            local success, toolsWindow = pcall(require, "ui/windows/tools")
 
             if success and toolsWindow and toolsWindow.selectTool then
                 toolsWindow.selectTool("selection")

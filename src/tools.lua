@@ -13,6 +13,7 @@ local toolHandler = {}
 toolHandler.tools = {}
 toolHandler.currentTool = nil
 toolHandler.currentToolName = nil
+toolHandler.previousToolName = nil
 
 function toolHandler.addHotkeyScopes(scopes)
     table.insert(scopes, "tools")
@@ -28,6 +29,15 @@ local function selectToolHotkey(name)
     end
 end
 
+local function selectPreviousTool()
+    local current = toolHandler.currentToolName
+    local previous = toolHandler.previousToolName
+
+    if current and previous and previous ~= current and toolHandler.tools[previous] then
+        toolHandler.selectTool(previous)
+    end
+end
+
 function toolHandler.addHotkeys(hotkeyHandler)
     for name, _ in pairs(toolHandler.tools) do
         local nameHumanized = utils.humanizeVariableName(name)
@@ -35,6 +45,32 @@ function toolHandler.addHotkeys(hotkeyHandler)
 
         hotkeyHandler.addHotkey("tools", activator, selectToolHotkey(name))
     end
+
+    local previousHotkey = configs.hotkeys.togglePreviousTool
+
+    -- Existing settings may still contain the old duplicate Tab binding.
+    if previousHotkey == "tab" and configs.hotkeys.toggleToolbar == "tab" then
+        previousHotkey = "x"
+        configs.hotkeys.togglePreviousTool = "x"
+    end
+
+    hotkeyHandler.addHotkey("tools", previousHotkey or "x", selectPreviousTool)
+
+    local function toggleToolbarHotkey()
+        local success, toolsWindow = pcall(require, "ui/windows/tools")
+
+        if success and toolsWindow and toolsWindow.toggleToolbar then
+            toolsWindow.toggleToolbar()
+        end
+    end
+
+    local toolbarHotkey = configs.hotkeys.toggleToolbar or "tab"
+
+    hotkeyHandler.addHotkey("tools", toolbarHotkey, toggleToolbarHotkey)
+
+    -- Tab is also used by UI focus traversal. Keep a global copy so hiding the toolbar still works
+    -- when a tool list is focused.
+    hotkeyHandler.addHotkey("global", toolbarHotkey, toggleToolbarHotkey)
 end
 
 function toolHandler.selectTool(name)
@@ -42,12 +78,18 @@ function toolHandler.selectTool(name)
     local currentTool = toolHandler.currentTool
 
     if handler and currentTool ~= handler then
+        local previousName = toolHandler.currentToolName
+
         if currentTool and currentTool.unselected then
             currentTool.unselected(name)
         end
 
         toolHandler.currentTool = handler
         toolHandler.currentToolName = name
+
+        if previousName and previousName ~= name then
+            toolHandler.previousToolName = previousName
+        end
 
         if handler.selected then
             handler.selected()

@@ -1892,6 +1892,11 @@ settings.hotkeys.attribute.selectToolBucket=Select Bucket Tool
 settings.hotkeys.attribute.selectToolLine=Select Line Tool
 settings.hotkeys.attribute.selectToolCircle=Select Circle Tool
 settings.hotkeys.attribute.selectToolEllipse=Select Ellipse Tool
+settings.hotkeys.attribute.togglePreviousTool=Toggle Previous Tool
+settings.hotkeys.attribute.toggleToolbar=Toggle Toolbar
+
+settings.hotkeys.description.togglePreviousTool=Switch back to the previously used tool.
+settings.hotkeys.description.toggleToolbar=Show or hide the tool toolbar without closing editor windows.
 
 settings.hotkeys.description.selectToolRoom=Switch to the room tool.
 settings.hotkeys.description.selectToolPlacement=Switch to the placement tool.

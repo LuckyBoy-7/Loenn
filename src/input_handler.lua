@@ -30,6 +30,23 @@ function inputHandler.getMouseDragDelta(x, y, button, istouch)
 end
 
 function love.keypressed(key, scancode, isrepeat)
+    -- Tab is normally consumed by UI focus traversal before the scoped hotkey device sees it.
+    -- Toggle the toolbar here, before dispatching the key to the scene, so the configured key
+    -- always works in the editor.
+    if key == "tab" and not isrepeat then
+        local success, configs = pcall(require, "configs")
+
+        if success and configs.hotkeys and configs.hotkeys.toggleToolbar == "tab" then
+            local toolsSuccess, toolsWindow = pcall(require, "ui/windows/tools")
+
+            if toolsSuccess and toolsWindow and toolsWindow.toggleToolbar then
+                toolsWindow.toggleToolbar()
+
+                return
+            end
+        end
+    end
+
     sceneHandler.sendEvent("keypressed", key, scancode, isrepeat)
 end
 

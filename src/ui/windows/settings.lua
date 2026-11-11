@@ -175,6 +175,8 @@ local defaultTabForms = {
                     "hotkeys.selectToolLine",
                     "hotkeys.selectToolCircle",
                     "hotkeys.selectToolEllipse",
+                    "hotkeys.togglePreviousTool",
+                    "hotkeys.toggleToolbar",
                 }
             },
             {
@@ -392,6 +394,12 @@ local defaultFieldInformation = {
         fieldType = "keyboard_hotkey"
     },
     ["hotkeys.selectToolEllipse"] = {
+        fieldType = "keyboard_hotkey"
+    },
+    ["hotkeys.togglePreviousTool"] = {
+        fieldType = "keyboard_hotkey"
+    },
+    ["hotkeys.toggleToolbar"] = {
         fieldType = "keyboard_hotkey"
     },
     ["hotkeys.itemsCopy"] = {

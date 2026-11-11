@@ -10,6 +10,15 @@ local defaultConfigData = require("default_config")
 
 local mergedDefaults = utils.mergeTables(defaultConfigData, configs)
 
+-- The first version of the previous-tool hotkey used Tab, which also became the toolbar toggle
+-- default. Old settings files therefore contain the same key twice; split them once.
+if configs.hotkeys
+    and configs.hotkeys.togglePreviousTool == "tab"
+    and configs.hotkeys.toggleToolbar == "tab" then
+    configs.hotkeys.togglePreviousTool = "x"
+    mergedDefaults = true
+end
+
 if mergedDefaults then
     config.writeConfig(configs, true)
 end

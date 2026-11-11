@@ -73,6 +73,8 @@ local defaultHotkeys = {
     selectToolLine = "7",
     selectToolCircle = "8",
     selectToolEllipse = "9",
+    togglePreviousTool = "x",
+    toggleToolbar = "tab",
 }
 
 -- Use command instead of control on Mac
