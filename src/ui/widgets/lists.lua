@@ -18,6 +18,123 @@ local function calculateWidthScrollable(orig, element)
     return element.inner.width
 end
 
+local function getNaturalListWidth(element)
+    local width = 0
+
+    for _, child in ipairs(element.children or {}) do
+        local label = child.label
+        local labelWidth = 0
+
+        if label and label._text then
+            labelWidth = label._text:getWidth()
+        elseif label then
+            labelWidth = label.width or 0
+        end
+
+        -- A row whose text has not been laid out yet is not a real measurement. Its padding or
+        -- stretched width would otherwise collapse the new list to a few pixels on first layout.
+        if labelWidth <= 0 and not label then
+            labelWidth = child.width or 0
+        end
+
+        if label and labelWidth > 0 then
+            local style = child.style
+            local padding = style and style:getIndex("padding", 1) or 0
+            local labelX = label.realX or label.x or 0
+            local contentWidth = math.max(0, labelX) + labelWidth
+
+            for _, content in ipairs(child.children or {}) do
+                if content ~= label then
+                    local contentX = content.realX or content.x or 0
+                    contentWidth = math.max(contentWidth, math.max(0, contentX) + (content.width or 0))
+                end
+            end
+
+            width = math.max(width, contentWidth + padding * 2)
+        end
+    end
+
+    return width
+end
+
+local function calculateNaturalListWidth(orig, element)
+    if element._manualWidth then
+        return element._manualWidth
+    end
+
+    local width = getNaturalListWidth(element)
+
+    if width <= 0 then
+        return orig(element) or element.innerWidth or 0
+    end
+
+    return math.max(width, math.floor(16 * (configs.ui.theme.uiScale or 1)))
+end
+
+local function _oldCalculateWidthList(orig, element)
+    -- The width of a list follows its currently visible rows. The old implementation kept a
+    -- monotonically growing _largestWidth, so a list could expand once and never shrink again.
+    if element._manualWidth then
+        return element._manualWidth
+    end
+
+    local width = 0
+
+    for _, child in ipairs(element.children or {}) do
+        -- Use the label's intrinsic width. A row's own width is stretched to the list width by
+        -- the list layout, so reading child.width (or summing all child widths) feeds the old
+        -- width back into the next calculation and makes the list grow while scrolling.
+        local label = child.label
+        local contentWidth = 0
+
+        -- Prefer the text object's intrinsic width. label.width may already have been stretched
+        -- to the old list width by a previous layout pass.
+        if label and label._text then
+            contentWidth = label._text:getWidth()
+        elseif label then
+            contentWidth = label.width or 0
+        end
+
+        if contentWidth <= 0 then
+            contentWidth = child.width or 0
+        end
+
+        local style = child.style
+        local padding = style and style:getIndex("padding", 1) or 0
+        local spacing = style and style:getIndex("spacing", 1) or 0
+
+        contentWidth = contentWidth + padding * 2
+
+        -- Include non-label content such as eye/icon buttons, but never the list item's own
+        -- stretched width.
+        for _, content in ipairs(child.children or {}) do
+            if content ~= label then
+                contentWidth = contentWidth + (content.width or 0) + spacing
+            end
+        end
+
+        width = math.max(width, contentWidth)
+    end
+
+    if width <= 0 then
+        -- Do not add the margin to the fallback width. The fallback may be the list's current
+        -- width, and adding a margin on every layout pass would make empty/rebuilding lists grow
+        -- by one margin per frame.
+        local fallback = orig(element) or element.innerWidth or 0
+
+        -- Before the first rows exist there is nothing to measure. Use a readable initial width
+        -- instead of the small shrink floor.
+        return math.max(fallback, math.floor(128 * (configs.ui.theme.uiScale or 1)))
+    end
+
+    -- The right inset is applied to the list itself (see getListCommon) so the scrollbar does not
+    -- cover the last characters of a row. Do not clamp non-empty lists to the old 128px minimum:
+    -- that is what made short content lists unable to shrink.
+    -- Avoid a zero-width list when a row has no measurable label yet; still allow short content
+    -- to shrink well below the old 128px minimum.
+    return math.max(width, math.floor(16 * (configs.ui.theme.uiScale or 1)))
+end
+
 local function calculateWidthList(orig, element)
     local width = orig(element) or element.innerWidth
 
@@ -1148,8 +1265,30 @@ local function getListCommon(magicList, callback, items, options)
     end
 
     list:with(uiUtils.hook({
-        calcWidth = calculateWidthList
+        calcWidth = calculateNaturalListWidth
     }))
+
+    list.grow = false
+
+    list:hook({
+        calcSize = function(orig, self, ...)
+            if not self._manualWidth then
+                local width = getNaturalListWidth(self)
+
+                if width <= 0 and (self.width or -1) <= 0 then
+                    width = math.floor(128 * (configs.ui.theme.uiScale or 1))
+                end
+
+                if width > 0 then
+                    self.width = width
+                    self.maxWidth = width
+                    self.autoWidth = false
+                end
+            end
+
+            return orig(self, ...)
+        end
+    })
 
     ui.runLate(function()
         listWidgets.setSelection(list, list.options.initialItem)
@@ -1158,6 +1297,16 @@ local function getListCommon(magicList, callback, items, options)
     local scrolledList = uiElements.scrollbox(list):with(uiUtils.hook({
         calcWidth = calculateWidthScrollable
     })):with(uiUtils.fillHeight(true))
+
+    scrolledList:hook({
+        afterScroll = function(orig, self, ...)
+            orig(self, ...)
+
+            if not list._manualWidth then
+                list:reflow()
+            end
+        end
+    })
 
     local searchFieldCallback = getSearchFieldChanged(options.searchBarCallback)
     local searchField = uiElements.field(initialSearch, searchFieldCallback):with({

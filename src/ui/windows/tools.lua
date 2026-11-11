@@ -6,6 +6,7 @@ local uiUtils = require("ui.utils")
 
 local widgetUtils = require("ui.widgets.utils")
 local lists = require("ui.widgets.lists")
+local splitter = require("ui.widgets.splitter")
 local simpleDocks = require("ui.widgets.simple_docks")
 local contextMenu = require("ui.context_menu")
 local listItemUtils = require("ui.utils.list_item")
@@ -3791,6 +3792,27 @@ local function toolCallback(list, toolName)
 
     local sameTool = toolName == toolWindow.eventStates.tool
 
+    -- Stylegrounds owns a separate singleton window. Clicking its row while the tool is already
+    -- selected must still reopen the window after the close callback switched back to Selection.
+    if sameTool and toolName == "stylegrounds" then
+        local stylegroundTool = toolHandler.tools.stylegrounds
+
+        toolHandler.selectTool("stylegrounds")
+        updateLayerList(toolName, stylegroundTool)
+        updateToolModeList(toolName)
+        updateTileToolList(toolName)
+
+        if stylegroundTool and stylegroundTool.selected then
+            stylegroundTool.selected()
+        end
+
+        if toolWindow.materialList then
+            toolWindow.materialList:updateItems(getMaterialItems())
+        end
+
+        return
+    end
+
     if not sameTool then
         toolWindow.eventStates.tool = toolName
         toolWindow.eventStates.mode = nil
@@ -3925,6 +3947,7 @@ function toolWindow.getWindow()
         searchBarCallback = materialSearchFieldChanged,
         initialSearch = toolUtils.getPersistenceSearch(currentTool, currentLayer),
         initialItem = toolHandler.getMaterial(),
+        minimumWidth = 220,
         listItemDoubleClicked = materialFavoriteDoubleClickedCallback,
         dataToElement = materialDataToElement,
         sortingFunction = materialSortFunction,
@@ -3987,6 +4010,147 @@ function toolWindow.getWindow()
         toolWindow.layerPanel,
         toolWindow.modePanel
     })
+
+    local toolbarWidthUpdating = false
+
+    local function getToolbarNaturalWidth(list)
+        local width = 0
+
+        for _, item in ipairs(list.children or {}) do
+            local label = item.label
+            local labelWidth = label and label._text and label._text:getWidth() or 0
+
+            if label and labelWidth > 0 then
+                local labelX = label.realX or label.x or 0
+                local itemWidth = math.max(0, labelX) + labelWidth
+
+                for _, content in ipairs(item.children or {}) do
+                    if content ~= label then
+                        local contentX = content.realX or content.x or 0
+                        itemWidth = math.max(itemWidth, math.max(0, contentX) + (content.width or 0))
+                    end
+                end
+
+                width = math.max(width, itemWidth)
+            end
+        end
+
+        return width
+    end
+
+    local function updateToolListWidth()
+        if toolbarWidthUpdating then
+            return
+        end
+
+        toolbarWidthUpdating = true
+
+        local lists = {toolList, tileToolList, layerList, modeList}
+
+        -- Build all secondary lists first, then measure. Doing the width pass before the magic
+        -- lists have materialized their rows leaves deeper (sub-sub) rows at the previous width.
+        for _, list in ipairs(lists) do
+            if list.updateView then
+                list:updateView()
+            end
+
+            list:layout()
+            list:layoutLate()
+        end
+
+        local target = math.floor(128 * (configs.ui.theme.uiScale or 1))
+
+        for _, list in ipairs(lists) do
+            target = math.max(target, getToolbarNaturalWidth(list))
+        end
+
+        for _, list in ipairs(lists) do
+            list.width = target
+            list.minWidth = target
+            list.maxWidth = target
+            list.autoWidth = false
+            list._forcedWidth = target
+
+            if not list._toolbarWidthHooked then
+                list._toolbarWidthHooked = true
+
+                list:hook({
+                    layoutLate = function(orig, self, ...)
+                        orig(self, ...)
+
+                        local width = self._forcedWidth
+
+                        if width then
+                            self.width = width
+                            self.minWidth = width
+                            self.maxWidth = width
+                            self.autoWidth = false
+                        end
+                    end,
+
+                    layoutLateChildren = function(orig, self, ...)
+                        orig(self, ...)
+
+                        local width = self._forcedWidth
+
+                        if width then
+                            for _, item in ipairs(self.children or {}) do
+                                item.width = width
+                                item.maxWidth = width
+                                item.autoWidth = false
+                                item:layoutLate()
+                            end
+                        end
+                    end
+                })
+            end
+        end
+
+        local outerWidth = target
+        local panels = {toolWindow.toolPanel, toolWindow.tileToolPanel, toolWindow.layerPanel, toolWindow.modePanel}
+
+        for _, panel in ipairs(panels) do
+            local padding = panel.style:getIndex("padding", 1) or 0
+            local panelWidth = target + padding * 2
+            outerWidth = math.max(outerWidth, panelWidth)
+
+            panel.width = panelWidth
+            panel.minWidth = panelWidth
+            panel.maxWidth = panelWidth
+            panel.autoWidth = false
+        end
+
+        toolWindow.leftColumn.width = outerWidth
+        toolWindow.leftColumn.minWidth = outerWidth
+        toolWindow.leftColumn.maxWidth = outerWidth
+        toolWindow.leftColumn.autoWidth = false
+
+        for _, list in ipairs(lists) do
+            list:layout()
+            list:layoutLate()
+
+            for _, item in ipairs(list.children or {}) do
+                item.width = target
+                item.maxWidth = target
+                item.autoWidth = false
+                item:layoutLate()
+            end
+        end
+
+        toolbarWidthUpdating = false
+    end
+
+    for _, list in ipairs({tileToolList, layerList, modeList}) do
+        local updateItems = list.updateItems
+
+        list.updateItems = function(itemList, ...)
+            updateItems(itemList, ...)
+            updateToolListWidth()
+        end
+    end
+
+    updateToolListWidth()
+
     toolWindow.materialSearch = materialSearchField
 
     local materialPanel = uiElements.panel({scrolledMaterialList}):with(uiUtils.fillHeight(false))
@@ -3996,12 +4160,186 @@ function toolWindow.getWindow()
     materialPanel.style.bg = { 0.07, 0.07, 0.07, 1 }
     materialPanel.style.patch = false
     materialPanel.style.radius = 0
+    materialPanel.style.padding = math.floor(6 * (configs.ui.theme.uiScale or 1))
 
     -- The list area changes every frame while scrolling, so its containers must not be drawn
     -- into a cached canvas: a cache invalidated at the wrong moment shows up as a black frame
     -- when dragging the scrollbar quickly.
     materialPanel.cacheable = false
     scrolledMaterialList.cacheable = false
+
+    local uiScale = configs.ui.theme.uiScale or 1
+    local materialMinWidth = math.floor(160 * uiScale)
+    local materialMaxWidth = math.floor(720 * uiScale)
+    local materialListManualWidth = false
+
+    local function updateMaterialListWidth()
+        if materialListManualWidth then
+            return
+        end
+
+        local maxTextWidth = 0
+        local visibleRect = materialList.__cached and materialList.__cached.visibleRect
+        local visibleTop = visibleRect and visibleRect[2]
+        local visibleBottom = visibleRect and visibleRect[4]
+
+        for _, child in ipairs(materialList.children or {}) do
+            local childY = child.screenY
+
+            if visibleTop and childY and childY > 0 and child.height then
+                if childY + child.height < visibleTop or childY > visibleBottom then
+                    -- Row is materialized outside the current viewport; do not let a long
+                    -- off-screen material keep the whole list wide.
+                    goto continue
+                end
+            end
+
+            local label = child.label
+            local textWidth = label and label._text and label._text:getWidth() or 0
+
+            if textWidth > maxTextWidth then
+                maxTextWidth = textWidth
+            end
+
+            ::continue::
+        end
+
+        if maxTextWidth <= 0 then
+            return
+        end
+
+        local target = math.ceil(maxTextWidth + 20)
+        target = math.max(materialMinWidth, math.min(materialMaxWidth, target))
+
+        materialPanel.width = target
+        materialPanel.maxWidth = target
+        materialPanel.autoWidth = false
+        scrolledMaterialList.width = target
+        scrolledMaterialList.maxWidth = target
+        scrolledMaterialList.autoWidth = false
+        materialList._manualWidth = target
+        materialList.width = target
+        materialList.maxWidth = target
+        materialList.autoWidth = false
+        materialList._forcedWidth = target
+
+        for _, item in ipairs(materialList.children or {}) do
+            item.width = target
+            item.maxWidth = target
+            item.autoWidth = false
+            item:layoutLate()
+        end
+
+        if not materialList._materialWidthHooked then
+            materialList._materialWidthHooked = true
+
+            materialList:hook({
+                layoutLateChildren = function(orig, self, ...)
+                    orig(self, ...)
+
+                    local width = self._forcedWidth
+
+                    if width then
+                        for _, item in ipairs(self.children or {}) do
+                            item.width = width
+                            item.maxWidth = width
+                            item.autoWidth = false
+                            item:layoutLate()
+                        end
+                    end
+                end
+            })
+        end
+
+        if materialList.scrolledList then
+            materialList.scrolledList.width = target
+            materialList.scrolledList.maxWidth = target
+            materialList.scrolledList.autoWidth = false
+        end
+
+        materialPanel:reflow()
+        materialList:reflow()
+    end
+
+    local materialSplitter
+    materialSplitter = splitter.create({
+        minWidth = materialMinWidth,
+        maxWidth = materialMaxWidth,
+        -- The handle is on the left edge of the right-side list.
+        direction = -1,
+
+        getWidth = function()
+            return materialPanel.width
+        end,
+
+        setWidth = function(width)
+            materialListManualWidth = true
+            materialPanel.width = width
+            materialPanel.maxWidth = width
+            materialPanel.autoWidth = false
+
+            -- The column contains the search field and the scrolled list. Size it explicitly so
+            -- both the search field and the rows expand with the panel instead of keeping their
+            -- old content width.
+            local padding = materialPanel.style:getIndex("padding", 1) or 0
+            local innerWidth = math.max(1, width - padding * 2)
+
+            scrolledMaterialList.width = innerWidth
+            scrolledMaterialList.maxWidth = innerWidth
+            scrolledMaterialList.autoWidth = false
+
+            local scrolledList = materialList.scrolledList
+
+            if scrolledList then
+                scrolledList.width = innerWidth
+                scrolledList.maxWidth = innerWidth
+                scrolledList.autoWidth = false
+            end
+
+            materialList._manualWidth = innerWidth
+            materialList.grow = false
+            materialList.shrinkOnce = false
+            materialList.width = innerWidth
+            materialList.maxWidth = innerWidth
+            materialList.autoWidth = false
+
+            -- Synchronize the recycled rows before the normal magic-list grow pass runs. The grow
+            -- pass takes max(innerWidth, row widths); if old rows keep their old width, shrinking
+            -- makes it grow the list again and reflow forever.
+            for _, child in ipairs(materialList.children or {}) do
+                child.width = innerWidth
+                child.autoWidth = false
+                child:layoutLate()
+            end
+
+            materialPanel:reflow()
+            materialList:reflow()
+        end
+    })
+
+    -- Overlay the handle on the material panel instead of putting it in the row. As a row child
+    -- it consumed spacing and shifted the entire toolbar to the left.
+    local materialPadding = materialPanel.style:getIndex("padding", 1) or 0
+    materialSplitter.x = -materialPadding
+    materialPanel:addChild(materialSplitter)
+
+    local materialUpdateItems = materialList.updateItems
+
+    materialList.updateItems = function(list, ...)
+        materialUpdateItems(list, ...)
+        ui.runLate(updateMaterialListWidth)
+    end
+
+    if materialList.scrolledList then
+        materialList.scrolledList:hook({
+            afterScroll = function(orig, self, ...)
+                orig(self, ...)
+                ui.runLate(updateMaterialListWidth)
+            end
+        })
+    end
+
+    ui.runLate(updateMaterialListWidth)
 
     local row = uiElements.row({
         toolWindow.leftColumn,
@@ -4038,6 +4376,8 @@ function toolWindow.getWindow()
     window.style.padding = row.style.spacing
 
     widgetUtils.removeWindowTitlebar(window)
+
+    updateToolListWidth()
 
     return simpleDocks.pinWidgetToEdge("right", window)
 end
@@ -4094,6 +4434,17 @@ function toolWindow.reloadPreviewCopiedFiles(copied, copyPrefix)
     if toolHandler.currentToolName == "preview" and toolWindow.materialList then
         toolWindow.materialList:updateItems(getMaterialItems())
     end
+end
+
+function toolWindow.selectTool(name)
+    if not name or not toolWindow.toolList then
+        return false
+    end
+
+    toolWindow.toolList:setSelection(name, true)
+    toolCallback(toolWindow.toolList, name)
+
+    return true
 end
 
 return toolWindow

@@ -15,6 +15,7 @@ local stylegroundEditor = require("ui.styleground_editor")
 local history = require("history")
 local snapshotStruct = require("structs.snapshot")
 local listWidgets = require("ui.widgets.lists")
+local splitter = require("ui.widgets.splitter")
 local widgetUtils = require("ui.widgets.utils")
 local formHelper = require("ui.forms.form")
 local parallax = require("parallax")
@@ -44,6 +45,8 @@ local stylegroundWindowGroup = uiElements.group({})
 local PREVIEW_MAX_WIDTH = 320 * 3
 local PREVIEW_MAX_HEIGHT = 180 * 3
 local WINDOW_STATIC_HEIGHT = 640
+
+local updateStylegroundWindowHeight
 
 local function cacheParallaxTextureOptions()
     local options = parallax.getParallaxNames()
@@ -299,13 +302,16 @@ function stylegroundWindow.updateStylegroundPreview(interactionData)
                 end
 
                 local maxWidth = math.floor(math.min(availableWidth, 640))
-                local maxHeight = math.max(1, math.floor(availableHeight * 0.5))
+                local maxHeight = math.max(1, math.floor(math.min(availableHeight * 0.5,
+                    320 * (configs.ui.theme.uiScale or 1))))
 
                 local child = self.children and self.children[1]
                 local sprite = child and child._previewSprite
 
                 if not sprite then
-                    -- Placeholder text: keep a normal sized box so the layout stays stable
+                    -- No preview content: keep only a compact placeholder instead of taking half
+                    -- of the window away from the form.
+                    maxHeight = math.max(1, math.floor(math.min(48 * (configs.ui.theme.uiScale or 1), availableHeight)))
                     if self.width ~= maxWidth or self.height ~= maxHeight then
                         self.width = maxWidth
                         self.height = maxHeight
@@ -408,6 +414,10 @@ function stylegroundWindow.updateStylegroundPreview(interactionData)
 
     -- The container starts out empty: reflow so it picks up the size of the new content
     previewContainer:reflow()
+
+    if interactionData then
+        updateStylegroundWindowHeight(interactionData)
+    end
 end
 
 local function prepareFormData(interactionData)
@@ -860,8 +870,16 @@ local function selectStyleDeferred(interactionData, style, list)
             if item.data and item.data.style == style then
                 list:setSelection(index)
 
-                widgetUtils.focusElement(item)
-                listWidgets.scrollSelectionVisible(list)
+                -- Focus after the material row click has finished; focusing immediately here is
+                -- overwritten by the click's own focus handling.
+                ui.runLate(function()
+                    if currentInteractionData ~= interactionData or not item.parent then
+                        return
+                    end
+
+                    widgetUtils.focusElement(item)
+                    listWidgets.scrollSelectionVisible(list)
+                end)
 
                 return
             end
@@ -1302,6 +1320,72 @@ function stylegroundWindow.getStylegroundForm(interactionData)
     return uiElements.column({formBody, buttonRow})
 end
 
+updateStylegroundWindowHeight = function(interactionData)
+    local window = interactionData and interactionData.window
+
+    if not window or not window.parent then
+        return
+    end
+
+    local formContainer = interactionData.formContainerGroup
+    local preview = interactionData.stylegroundPreviewGroup
+
+    local function apply()
+        if not window.parent then
+            return
+        end
+
+        local form = formContainer and formContainer.children and formContainer.children[1]
+
+        -- Lay the new form out before measuring it. Otherwise the window is first drawn at the
+        -- previous height and grows afterwards, which looks like a one-frame flash/overlap.
+        if form and form.height <= 0 then
+            form:layout()
+            form:layoutLate()
+        end
+
+        local formHeight = form and form.height or 0
+
+        if preview and preview.height <= 0 then
+            preview:layout()
+            preview:layoutLate()
+        end
+
+        local previewHeight = preview and preview.height or 0
+        local previewChild = preview and preview.children and preview.children[1]
+
+        -- A placeholder/no-preview row does not need half the window. Keep only a compact area
+        -- for it so a short form does not get pushed down by empty preview space.
+        if not (previewChild and previewChild._previewSprite) then
+            previewHeight = math.min(previewHeight, 48)
+        end
+
+        if formHeight <= 0 then
+            if not interactionData._heightRetryPending then
+                interactionData._heightRetryPending = true
+                ui.runLate(function()
+                    interactionData._heightRetryPending = false
+                    apply()
+                end)
+            end
+            return
+        end
+
+        -- Height follows the currently selected form only. Do not keep the previous taller form's
+        -- height, otherwise short forms leave a huge empty window.
+        local desired = math.max(WINDOW_STATIC_HEIGHT, previewHeight + formHeight + 48)
+        local maxHeight = math.max(WINDOW_STATIC_HEIGHT, math.floor((love.graphics.getHeight() or 1080) - 64))
+        desired = math.min(desired, maxHeight)
+
+        if window.height ~= desired then
+            window.height = desired
+            window:reflow()
+        end
+    end
+
+    apply()
+end
+
 function stylegroundWindow.updateStylegroundForm(interactionData)
     local formContainer = interactionData.formContainerGroup
     local newForm = stylegroundWindow.getStylegroundForm(interactionData)
@@ -1312,6 +1396,8 @@ function stylegroundWindow.updateStylegroundForm(interactionData)
     end
 
     formContainer:addChild(newForm)
+
+    updateStylegroundWindowHeight(interactionData)
 end
 
 -- Check if movement is allowed and return prepared offset and interactionData
@@ -1865,7 +1951,10 @@ function stylegroundWindow.addStyle(name, foreground)
     table.insert(styles, style)
 
     if currentInteractionData and currentInteractionData.rebuildListItems then
-        currentInteractionData.rebuildListItems(nil, currentInteractionData.stylegroundListElement)
+        local list = currentInteractionData.stylegroundListElement
+
+        currentInteractionData.rebuildListItems(nil, list)
+        selectStyleDeferred(currentInteractionData, style, list)
     end
 
     addingStyle = false
@@ -2154,17 +2243,6 @@ function stylegroundWindow.getWindowContent(map)
     -- both lists are empty
     local measureLabel = uiElements.label("")
     local measureFont = measureLabel.style.font
-    local listTextWidth = 0
-
-    for _, list in ipairs({listForeground, listBackground}) do
-        for _, item in ipairs(list.children or {}) do
-            local text = item.label and item.label.text or ""
-
-            if type(text) == "string" then
-                listTextWidth = math.max(listTextWidth, measureFont:getWidth(text))
-            end
-        end
-    end
 
     local tabsWidth = 32
 
@@ -2176,12 +2254,59 @@ function stylegroundWindow.getWindowContent(map)
         tabsWidth = tabsWidth + measureFont:getWidth(tab.title)
     end
 
+    local uiScale = configs.ui.theme.uiScale or 1
     local tabbedWindowOptions = {
         respectSiblings = false,
         initialTab = initialTab,
-        minWidth = math.ceil(math.max(listTextWidth + 40, tabsWidth))
+        -- Let the layer list determine its own width from the currently visible rows. The old
+        -- value measured every row in both tabs and therefore could only ever grow.
+        minWidth = math.ceil(math.max(tabsWidth, 160 * uiScale))
     }
     local _, tabbedContent = tabbedWindow.createWindow("", tabs, tabbedWindowOptions)
+
+    interactionData.tabbedContent = tabbedContent
+
+    local function applyListPaneWidth(width)
+        width = width or tabbedContent.width or 0
+
+        if width <= 0 then
+            return
+        end
+
+        for _, list in ipairs({listForeground, listBackground}) do
+            list._manualWidth = width
+            list.width = width
+            list.maxWidth = width
+            list.autoWidth = false
+            list.grow = false
+            list:reflow()
+            list:layoutLateChildren()
+        end
+    end
+
+    interactionData.applyListPaneWidth = applyListPaneWidth
+
+    local stylegroundMinWidth = math.floor(160 * uiScale)
+    local stylegroundMaxWidth = math.floor(600 * uiScale)
+
+    local stylegroundSplitter
+    stylegroundSplitter = splitter.create({
+        minWidth = stylegroundMinWidth,
+        maxWidth = stylegroundMaxWidth,
+        line = true,
+
+        getWidth = function()
+            return tabbedContent.width
+        end,
+
+        setWidth = function(width)
+            tabbedContent.width = width
+            tabbedContent.maxWidth = width
+            tabbedContent.autoWidth = false
+            interactionData.applyListPaneWidth(width)
+            tabbedContent:reflow()
+        end
+    })
 
     stylegroundWindow.updateStylegroundForm(interactionData)
     stylegroundWindow.updateStylegroundPreview(interactionData)
@@ -2198,6 +2323,7 @@ function stylegroundWindow.getWindowContent(map)
 
     local layout = uiElements.row({
         tabbedContent,
+        stylegroundSplitter,
         rightColumn
     }):with(uiUtils.fillHeight(true))
 
@@ -2215,7 +2341,7 @@ function stylegroundWindow.editStylegrounds(map)
     end
 
     local window
-    local layout = stylegroundWindow.getWindowContent(map)
+    local layout, interactionData = stylegroundWindow.getWindowContent(map)
 
     local language = languageRegistry.getLanguage()
     local windowTitle = tostring(language.ui.styleground_window.window_title)
@@ -2225,6 +2351,7 @@ function stylegroundWindow.editStylegrounds(map)
     window = uiElements.window(windowTitle, layout):with({
         height = WINDOW_STATIC_HEIGHT
     })
+    interactionData.window = window
 
     local windowCloseCallback = windowPersister.getWindowCloseCallback(windowPersisterName)
 
@@ -2244,7 +2371,31 @@ function stylegroundWindow.editStylegrounds(map)
         local toolHandler = require("tools")
 
         if toolHandler.currentToolName == "stylegrounds" then
-            toolHandler.selectTool("selection")
+            -- Use the normal tools-window selection path so the top list, eventStates and all
+            -- dependent lists switch together. Calling toolHandler.selectTool directly leaves
+            -- the tools window thinking Stylegrounds is still selected.
+            local success, toolsWindow = pcall(require, "ui.windows.tools")
+
+            if success and toolsWindow and toolsWindow.selectTool then
+                toolsWindow.selectTool("selection")
+            end
+
+            if toolHandler.currentToolName ~= "selection" then
+                toolHandler.selectTool("selection")
+            end
+
+            local windowsOk, windowsHandler = pcall(require, "ui.windows")
+            local tools = windowsOk and windowsHandler.windows and windowsHandler.windows.tools
+
+            if tools then
+                if tools.toolList then
+                    tools.toolList:setSelection("selection", true)
+                end
+
+                if tools.eventStates then
+                    tools.eventStates.tool = "selection"
+                end
+            end
         end
 
         return windowCloseCallback(w)
@@ -2270,6 +2421,12 @@ function stylegroundWindow.editStylegrounds(map)
 
         window:layout()
         window:layoutLate()
+
+        if interactionData.applyListPaneWidth then
+            ui.runLate(function()
+                interactionData.applyListPaneWidth(interactionData.tabbedContent.width)
+            end)
+        end
 
         -- Center inside the area left of the right toolbar, clamped to the window
         local parentWidth = parentGroup.width or love.graphics.getWidth()
@@ -2334,6 +2491,21 @@ function stylegroundWindow.editStylegrounds(map)
     })
 
     currentWindow = window
+
+    updateStylegroundWindowHeight(interactionData)
+
+    ui.runLate(function()
+        if currentInteractionData ~= interactionData or not window.parent then
+            return
+        end
+
+        if interactionData.applyListPaneWidth then
+            interactionData.applyListPaneWidth(interactionData.tabbedContent.width)
+        end
+
+        stylegroundWindow.updateStylegroundForm(interactionData)
+        stylegroundWindow.updateStylegroundPreview(interactionData)
+    end)
 
     return window
 end
