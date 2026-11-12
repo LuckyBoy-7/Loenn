@@ -18,6 +18,7 @@ local defaultArea = 300 * 400 * 0.6 * 0.64
 local defaultMaxWidth = 360 * 0.8
 local defaultMaxHeight = 420 * 0.8
 local panelPadding = 10
+local minimumPreviewSide = 128
 
 -- Transparency checkerboard
 local checkerSize = 16
@@ -279,9 +280,18 @@ function hoverPreview.show(left, top, height, content)
     width = math.max(1, width)
     heightSource = math.max(1, heightSource)
 
-    -- Fixed area, keeping the aspect ratio: every preview covers about the same amount of screen
-    -- space, no matter if the sprite is wide, tall or square.
+    -- Large sprites still shrink to roughly the same preview area, but small sprites are never
+    -- blown up just to fill that area: keep them at their original size. Only sprites whose
+    -- smaller side is below 32px are enlarged, to keep tiny previews readable.
     local scale = math.sqrt(area / (width * heightSource))
+    scale = math.min(scale, maxWidth / width, maxHeight / heightSource, 1)
+
+    local smallerSide = math.min(width, heightSource)
+
+    if smallerSide < minimumPreviewSide then
+        scale = math.max(scale, minimumPreviewSide / smallerSide)
+    end
+
     scale = math.min(scale, maxWidth / width, maxHeight / heightSource)
 
     local imageElement = uiElements.image(content.image, content.quad, content.layer):with({
