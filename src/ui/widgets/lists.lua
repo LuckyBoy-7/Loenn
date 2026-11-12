@@ -812,7 +812,14 @@ function listWidgets.updateItems(list, items, target, fromFilter, preventCallbac
 
     else
         -- Check if list items are listItem or just data
-        if #processedItems > 0 and utils.typeof(processedItems[1]) ~= "listItem" then
+        if options.customRows and options.dataToElement then
+            for i, item in ipairs(processedItems) do
+                local listItem = options.dataToElement(list, item, nil)
+                addListItemData(listItem, item)
+                processedItems[i] = listItem
+            end
+
+        elseif #processedItems > 0 and utils.typeof(processedItems[1]) ~= "listItem" then
             for i, item in ipairs(processedItems) do
                 local listItem = uiElements.listItem(item)
 
@@ -960,11 +967,13 @@ function listWidgets.getMagicListHeight(list, itemCount)
         return 0
     end
 
-    local elementSize = list:getElementSize()
-    local spacing = list.style.spacing
-    local listHeight = elementSize * itemCount + spacing * (itemCount - 2)
+    local total = 0
 
-    return listHeight
+    for index = 1, itemCount do
+        total = total + list:getItemHeight(index) + list.style.spacing
+    end
+
+    return math.max(0, total - list.style.spacing)
 end
 
 local function handleListKeyboardNavigation(list, key, hookOptions)
@@ -1256,11 +1265,24 @@ local function getListCommon(magicList, callback, items, options)
     else
         list = uiElements.list(filteredItems, callback):with(listData)
 
-        -- Add extra data to all items
-        for i, listItem in ipairs(list.children) do
-            local item = filteredItems[i]
+        if options.customRows and options.dataToElement then
+            local rows = {}
 
-            addListItemData(listItem, item)
+            for i, item in ipairs(filteredItems) do
+                local listItem = options.dataToElement(list, item, nil)
+                addListItemData(listItem, item)
+                rows[i] = listItem
+            end
+
+            list.children = rows
+
+        else
+            -- Add extra data to all items
+            for i, listItem in ipairs(list.children) do
+                local item = filteredItems[i]
+
+                addListItemData(listItem, item)
+            end
         end
     end
 

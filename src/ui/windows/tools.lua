@@ -10,6 +10,7 @@ local splitter = require("ui.widgets.splitter")
 local simpleDocks = require("ui.widgets.simple_docks")
 local contextMenu = require("ui.context_menu")
 local listItemUtils = require("ui.utils.list_item")
+local iconUtils = require("ui.utils.icons")
 local notifications = require("ui.notification")
 local hoverPreview = require("ui.hover_preview")
 
@@ -104,22 +105,42 @@ local layersWithDecalPaths = {
 
 local decalPathIndent = "    "
 
--- Hierarchical material rows use a bullet for interactive entries. Headers keep the plain
--- indentation so the tree structure stays readable without every row looking like a list item.
-local function formatHierarchyText(text, indent, interactive)
-    if indent <= 0 or text:find(decalPathIndent, 1, true) then
-        return text
-    end
+-- Adjustable margins (in pixels) above/below top-level source rows.
+local materialSourceMarginTop = 10
+local materialSourceMarginBottom = 0
 
-    if interactive then
-        -- Keep the normal four-space indent for every ancestor level. Only the leaf level is
-        -- shortened to "  • ", replacing the last four spaces with two spaces + bullet + space.
-        return string.rep(decalPathIndent, indent - 1) .. "  • " .. text
+-- Special top margin for a source row directly below the Favorites group.
+local materialSourceMarginAfterFavorites = 18
+
+-- Distance (in pixels) from the bottom of the last Favorites row to its divider line.
+local favoriteDividerOffset = 8
+
+-- Debug switch: set to false to hide all top-level source icons.
+local materialSourceIconsEnabled = true
+
+local thumbnailSize
+local thumbnailPadding
+
+-- Hierarchy is conveyed by indentation only; entries have no bullet prefix.
+local function formatHierarchyText(text, indent, interactive, flat)
+    if flat or indent <= 0 or text:find(decalPathIndent, 1, true) then
+        return text
     end
 
     return string.rep(decalPathIndent, indent) .. text
 end
-local vanillaDecalSource = "[Celeste/Vanilla]"
+
+local function usesFlatIndentation(toolName, layer)
+    if layersWithDecalPaths[layer] then
+        return false
+    end
+
+    local name = string.lower(tostring(toolName or ""))
+
+    return name == "placement" or name == "entities" or name == "triggers"
+        or name == "stylegrounds"
+end
+local vanillaDecalSource = "Celeste"
 
 -- Cached entity previews (name -> preview content or false), rebuilt with the material list
 local entityPreviewCache = {}
@@ -141,7 +162,105 @@ local function splitDecalPath(path)
 end
 
 local function getDecalSourceLabel(language, associatedMods)
-    return modHandler.formatAssociatedMods(language, associatedMods) or vanillaDecalSource
+    local label = modHandler.formatAssociatedMods(language, associatedMods)
+
+    if label then
+        -- Top-level source rows no longer use the old bracketed format.
+        label = label:gsub("^%[(.*)%]$", "%1")
+
+        if label:lower() == "celeste/vanilla" then
+            label = vanillaDecalSource
+        end
+
+        return label
+    end
+
+    return vanillaDecalSource
+end
+
+local sourceIconCache = {}
+
+local function getSourceModInfo(key)
+    local loadedMods = modHandler.loadedMods
+    local lowerKey = string.lower(key or "")
+
+    if not loadedMods then
+        return nil
+    end
+
+    local direct = loadedMods[key]
+
+    if direct then
+        return direct
+    end
+
+    for folderName, info in pairs(loadedMods) do
+        if string.lower(folderName) == lowerKey then
+            return info
+        end
+
+        local metadata = info.metadata
+
+        if type(metadata) == "table" then
+            if metadata.Name and string.lower(tostring(metadata.Name)) == lowerKey then
+                return info
+            end
+
+            for _, entry in ipairs(metadata) do
+                if type(entry) == "table" and entry.Name
+                    and string.lower(tostring(entry.Name)) == lowerKey then
+                    return info
+                end
+            end
+        end
+    end
+end
+
+local function getSourceIcon(key, label)
+    local lowerKey = string.lower(key or "")
+    local lowerLabel = string.lower(label or "")
+
+    local iconName
+
+    if lowerKey == "favorites" or lowerLabel == "favorites" then
+        iconName = "favorites_icon"
+
+    elseif lowerKey == "" or lowerKey == "celeste" or lowerKey == "celeste/vanilla"
+        or lowerLabel == "celeste" then
+        iconName = "celeste_icon"
+
+    elseif lowerKey == "everest" or lowerLabel == "everest" or modHandler.isEverest(key) then
+        iconName = "everest_icon"
+
+    else
+        local info = getSourceModInfo(key)
+        iconName = info and info.zipFile and "zip_icon" or "folder_icon"
+    end
+
+    local cached = sourceIconCache[iconName]
+
+    if cached then
+        return cached
+    end
+
+    local image
+
+    if iconName == "favorite" then
+        image = iconUtils.getIcon("favorite", 16)
+
+    else
+        image = utils.newImage("assets/icons/" .. iconName .. ".png")
+
+        if image then
+            image:setFilter("nearest", "nearest")
+        end
+    end
+
+    if image then
+        sourceIconCache[iconName] = image
+
+        return image
+    end
 end
 
 -- Some mods ship no usable everest.yaml (or their metadata cannot be looked up), so their decals
@@ -252,29 +371,34 @@ local function compactPathTree(items)
     end
 end
 
--- Source groups are separated by one empty row. Intermediate directory headers do not get any
--- extra gap, so the hierarchy stays compact.
+-- Source margins are part of the source row's own real height. No empty rows are inserted.
 local function insertHierarchyGaps(items)
-    local index = 1
+end
 
-    while index <= #items do
-        local item = items[index]
-        local previous = items[index - 1]
+-- Source top margin depends on whether the final item order still has anything above it. This
+-- has to run after favorites/filtering, otherwise a removed favorite can leave a source row with
+-- a stale margin above it.
+local function normalizeSourceMargins(items)
+    local hasContentAbove = false
+    local aboveIsFavorites = false
 
-        if item.isHeader and item.isSource and not item.isFavoritesHeader
-            and previous and not previous.isGap then
-            table.insert(items, index, {
-                isGap = true,
-                text = "",
-                data = nil,
-                indent = 0,
-                ancestors = {}
-            })
+    for _, item in ipairs(items) do
+        if item.isSource then
+            if not hasContentAbove then
+                item.marginTop = 0
 
-            index = index + 1
+            elseif aboveIsFavorites then
+                item.marginTop = materialSourceMarginAfterFavorites
+
+            else
+                item.marginTop = materialSourceMarginTop
+            end
         end
 
-        index = index + 1
+        if not item.isGap then
+            hasContentAbove = true
+            aboveIsFavorites = item.isFavoritesGroup or item.isFavoritesHeader or false
+        end
     end
 end
 
@@ -348,22 +472,37 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
         end
     end
 
-    table.sort(entries, function(lhs, rhs)
-        local lhsPriority = options.sourcePriority and options.sourcePriority(lhs.sourceKey) or nil
-        local rhsPriority = options.sourcePriority and options.sourcePriority(rhs.sourceKey) or nil
+    local function sourcePriority(sourceKey, sourceLabel)
+        local key = string.lower(sourceKey or "")
+        local label = string.lower(sourceLabel or "")
 
-        if lhsPriority and rhsPriority and lhsPriority ~= rhsPriority then
+        if key == "" or key == "celeste/vanilla" or key == "celeste"
+            or label == "celeste" or label == "celeste/vanilla" then
+            return 0
+        end
+
+        if key == "everest" or label == "everest" or modHandler.isEverest(sourceKey) then
+            return 1
+        end
+
+        if key == "this mod" or label == "this mod" then
+            return 2
+        end
+
+        return 3
+    end
+
+    table.sort(entries, function(lhs, rhs)
+        local lhsPriority = options.sourcePriority and options.sourcePriority(lhs.sourceKey)
+            or sourcePriority(lhs.sourceKey, lhs.sourceLabel)
+        local rhsPriority = options.sourcePriority and options.sourcePriority(rhs.sourceKey)
+            or sourcePriority(rhs.sourceKey, rhs.sourceLabel)
+
+        if lhsPriority ~= rhsPriority then
             return lhsPriority < rhsPriority
         end
 
         if lhs.sourceKey ~= rhs.sourceKey then
-            -- Vanilla materials first
-            if lhs.sourceKey == "" then
-                return true
-            elseif rhs.sourceKey == "" then
-                return false
-            end
-
             return lhs.sourceKey < rhs.sourceKey
         end
 
@@ -403,6 +542,18 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
         item.currentToolName = currentTool.name
         item.currentLayer = currentLayer
 
+        local rowHeight = tiles.tileLayers[currentLayer]
+            and (thumbnailSize + thumbnailPadding * 2)
+            or math.floor(22 * (configs.ui.theme.uiScale or 1))
+
+        item.height = item.height or rowHeight
+        item.contentHeight = item.height
+
+        if item.isSource then
+            item.marginTop = #items > 0 and materialSourceMarginTop or 0
+            item.marginBottom = materialSourceMarginBottom
+        end
+
         table.insert(items, item)
     end
 
@@ -436,12 +587,14 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
 
     if #favorites > 0 then
         addItem({
-            text = "[Favorites]",
+            text = "Favorites",
             textNoMods = "",
             data = false,
             isHeader = true,
             isSource = true,
             isFavoritesHeader = true,
+            sourceKey = "Favorites",
+            sourceLabel = "Favorites",
             indent = 0,
             ancestors = {}
         })
@@ -477,13 +630,11 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
                 data = false,
                 isHeader = true,
                 isSource = true,
+                sourceKey = entry.sourceKey,
+                sourceLabel = entry.sourceLabel,
                 indent = 0,
                 ancestors = {}
             }
-
-            if #items > 0 then
-                addGap()
-            end
 
             addItem(sourceItem)
 
@@ -543,6 +694,7 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
 
     compactPathTree(items)
     insertHierarchyGaps(items)
+    normalizeSourceMargins(items)
 
     -- Keep the generated tree order and ignore the favorite-first sorting of the material list
     for i, item in ipairs(items) do
@@ -833,6 +985,7 @@ local function filterMaterialItems(items, search, options)
     end
 
     insertHierarchyGaps(filtered)
+    normalizeSourceMargins(filtered)
 
     for i, item in ipairs(filtered) do
         item.sortIndex = i
@@ -914,14 +1067,89 @@ end
 -- Forward declarations: the tile list is built further down, but the row code above uses these
 local getTilesetThumbnail
 local thumbnailCanvasSize = 40
-local thumbnailSize = 22
+thumbnailSize = 22
 local thumbnailInset = thumbnailSize + 2
-local thumbnailPadding = 2
+thumbnailPadding = 2
+
+local materialPanel
+
+local function shouldShowMaterialIcon(data)
+    if not materialSourceIconsEnabled or not data then
+        return false
+    end
+
+    if data.isSource then
+        local key = string.lower(tostring(data.sourceKey or ""))
+        local label = string.lower(tostring(data.sourceLabel or data.text or ""))
+
+        if key == "favorites" or label == "favorites" then
+            return true
+        end
+
+        local toolName = string.lower(tostring(data.currentToolName or ""))
+        local layer = string.lower(tostring(data.currentLayer or ""))
+
+        if toolName == "stylegrounds"
+            or (toolName == "placement" and (layer == "entities" or layer == "triggers")) then
+            return false
+        end
+
+        return true
+    end
+
+    if data.isHeader then
+        local toolName = string.lower(tostring(data.currentToolName or ""))
+        local layer = data.currentLayer
+
+        if toolName == "stylegrounds" then
+            return false
+        end
+
+        return toolName == "preview" or layersWithDecalPaths[layer] == true
+    end
+
+    return false
+end
+
+local function getFolderIcon()
+    local cached = sourceIconCache.folder_icon
+
+    if cached then
+        return cached
+    end
+
+    local image = utils.newImage("assets/icons/folder_icon.png")
+
+    if image then
+        image:setFilter("nearest", "nearest")
+        sourceIconCache.folder_icon = image
+    end
+
+    return image
+end
+
+local function updateMaterialSourceIcon(element, data)
+    element._sourceIconImage = nil
+
+    if not shouldShowMaterialIcon(data) then
+        return
+    end
+
+    if data.isSource then
+        element._sourceIconImage = getSourceIcon(data.sourceKey, data.sourceLabel or data.text)
+
+    else
+        element._sourceIconImage = getFolderIcon()
+    end
+end
 
 local function materialDataToElement(list, data, element)
     if not element then
         element = uiElements.listItem()
     end
+
+    -- Rows are recycled across lists; never keep a source icon from the previous binding.
+    element._sourceIconImage = nil
 
     if not element._thumbnailBasePadding then
         local basePadding = element.style.padding
@@ -936,22 +1164,67 @@ local function materialDataToElement(list, data, element)
         element._thumbnailBasePadding = basePadding
     end
 
+    local basePadding = element._thumbnailBasePadding or 4
+
+    -- Reset every mutable row property here. Branches below only set what is specific to their
+    -- data; keeping resets centralized prevents gap/button/header state leaking while scrolling.
+    element.text = ""
+    element.data = nil
+    element.itemData = data
+    element.visible = true
+    element.isGap = nil
+    element.isButton = nil
+    element.itemFavorited = false
+    element._selected = false
+    element._thumbnailCanvas = nil
+    element._sourceIconImage = nil
+    element._sourceIconOffsetX = 0
+    element.autoHeight = true
+    element.minHeight = -1
+    element.maxHeight = -1
+    element.height = -1
+    element.style.padding = basePadding
+    element.style.spacing = 4
+    element.style.normalBG = getThemeListColor()
+    element.style.disabledBG = getThemeListDisabledColor()
+
+    if element.label then
+        element.label._bold = false
+    end
+
+    if data and data.height then
+        element.autoHeight = false
+        element.minHeight = data.height
+        element.maxHeight = data.height
+        element.height = data.height
+    end
+
+    if element._thumbnailSpacer then
+        element._thumbnailSpacer:removeSelf()
+        element._thumbnailSpacer = nil
+    end
+
     if data and data.isGap then
         element.text = ""
         element.data = nil
         element.itemData = data
+        element.visible = false
         element.isGap = true
         element.isButton = nil
         element.interactive = -1
         element._selected = false
         element.itemFavorited = false
         element._thumbnailCanvas = nil
+        local halfHeight = math.max(1, data._listHeight
+            or math.floor((list:getElementSize() or 0) * 0.5))
+        data._listHeight = halfHeight
+
         element.style.padding = element._thumbnailBasePadding or 4
         element.style.spacing = 4
-        element.minHeight = -1
-        element.maxHeight = -1
-        element.autoHeight = true
-        element.height = -1
+        element.minHeight = halfHeight
+        element.maxHeight = halfHeight
+        element.autoHeight = false
+        element.height = halfHeight
 
         if element._thumbnailSpacer then
             element._thumbnailSpacer:removeSelf()
@@ -960,10 +1233,9 @@ local function materialDataToElement(list, data, element)
 
         listItemUtils.clearIcon(element)
 
-        local gapColor = getThemeListColor()
-
-        element.style.normalBG = gapColor
-        element.style.disabledBG = gapColor
+        -- Gap rows are purely structural; don't paint a list-row background for them.
+        element.style.normalBG = {0, 0, 0, 0}
+        element.style.disabledBG = {0, 0, 0, 0}
 
         return element
     end
@@ -972,6 +1244,7 @@ local function materialDataToElement(list, data, element)
         element.isGap = nil
         element.autoHeight = true
         element.maxHeight = -1
+        element.minHeight = -1
         element.height = -1
 
         -- Button rows are actions, not materials: they only run their onPress and never take a
@@ -997,8 +1270,9 @@ local function materialDataToElement(list, data, element)
             -- Button rows still take part in the hierarchy: keep the indentation below a header
             local indent = data.indent or 0
             local text = data.text or ""
+            local flatIndent = usesFlatIndentation(data.currentToolName, data.currentLayer)
 
-            text = formatHierarchyText(text, indent, true)
+            text = formatHierarchyText(text, indent, true, flatIndent)
 
             element.text = text
             element.data = data
@@ -1068,14 +1342,26 @@ local function materialDataToElement(list, data, element)
         local tileList = tiles.tileLayers[toolHandler.getLayer() or ""] ~= nil
         local indent = data.indent or 0
         local text = data.text or ""
+        local flatIndent = usesFlatIndentation(data.currentToolName, data.currentLayer)
 
         -- Tile lists are flat: the thumbnail already sits where the indent would be, so the
         -- text starts right after it
         if indent > 0 and not tileList then
-            text = formatHierarchyText(text, indent, not data.isHeader)
+            text = formatHierarchyText(text, indent, not data.isHeader, flatIndent)
         end
 
         element.text = text
+        element._sourceIconOffsetX = 0
+
+        if shouldShowMaterialIcon(data) and text ~= "" and element.label then
+            local font = element.label.style and element.label.style.font or love.graphics.getFont()
+            local spaceWidth = font and math.max(1, font:getWidth(" ")) or 4
+            local spaces = math.max(1, math.ceil(24 / spaceWidth))
+            local leading = text:match("^ *") or ""
+
+            element._sourceIconOffsetX = font:getWidth(leading)
+            element.text = leading .. string.rep(" ", spaces) .. text:sub(#leading + 1)
+        end
         element.data = data.data
         element.tooltipText = data.tooltip
         element.itemFavorited = data.itemFavorited
@@ -1152,6 +1438,35 @@ local function materialDataToElement(list, data, element)
         -- and may have carried one before.
         listItemUtils.clearIcon(element)
 
+        updateMaterialSourceIcon(element, data)
+
+        if data.isHeader and not element._sourceIconHooked then
+            element._sourceIconHooked = true
+
+            element:hook({
+                draw = function(orig, self, ...)
+                    orig(self, ...)
+
+                    local image = self._sourceIconImage
+
+                    if image then
+                        local imageWidth, imageHeight = image:getDimensions()
+                        local scale = 16 / math.max(1, imageWidth, imageHeight)
+                        local drawHeight = imageHeight * scale
+                        local padding = self.style.padding or 4
+                        local x = self.screenX + padding + (self._sourceIconOffsetX or 0)
+                        local y = self.screenY
+                            + math.floor(((self.height or 0) - drawHeight) * 0.5)
+
+                        local r, g, b, a = love.graphics.getColor()
+                        love.graphics.setColor(1, 1, 1, 1)
+                        love.graphics.draw(image, math.floor(x), math.floor(y), 0, scale, scale)
+                        love.graphics.setColor(r, g, b, a)
+                    end
+                end
+            })
+        end
+
         -- A fixed size spacer reserves the thumbnail space in the row flow. Every row of a tile
         -- list gets one, so rows keep the same height while they are recycled
         if element._thumbnailSpacer then
@@ -1203,13 +1518,27 @@ local function materialDataToElement(list, data, element)
                         love.graphics.draw(canvas, x, y, 0, size / thumbnailCanvasSize, size / thumbnailCanvasSize)
                         love.graphics.setColor(r, g, b, a)
                     end
+
+                    local item = self.itemData
+
+                    if item and item.isFavoritesGroup then
+                        local list = self.parent
+                        local index = self._magicIndex
+                        local nextItem = list and list.data and list.data[index + 1]
+
+                        if not nextItem or not nextItem.isFavoritesGroup then
+                            local r, g, b, a = love.graphics.getColor()
+
+                            uiUtils.setColor(0.36, 0.36, 0.36, 1)
+                            love.graphics.rectangle("fill", self.screenX,
+                                self.screenY + (self.height or 0) - 1 + favoriteDividerOffset,
+                                self.width or 0, 2)
+                            love.graphics.setColor(r, g, b, a)
+                        end
+                    end
                 end
             })
         end
-    end
-
-    if data and data.itemFavorited then
-        element.text = "★ " .. element.text
     end
 
     return element
@@ -2192,9 +2521,9 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
     -- Vanilla first, this mod second, then the preferred material packs and everything else
     local groupPriority = {
         ["celeste/vanilla"] = 0,
-        ["this mod"] = 1,
-        spoooky = 2,
-        underdragon = 3
+        ["celeste"] = 0,
+        everest = 1,
+        ["this mod"] = 2
     }
 
     local function entryGroup(entry)
@@ -2206,8 +2535,8 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
     table.sort(entries, function(lhs, rhs)
         local lhsGroup = entryGroup(lhs)
         local rhsGroup = entryGroup(rhs)
-        local lhsPriority = groupPriority[lhsGroup] or 100
-        local rhsPriority = groupPriority[rhsGroup] or 100
+        local lhsPriority = groupPriority[lhsGroup] or 3
+        local rhsPriority = groupPriority[rhsGroup] or 3
 
         if lhsPriority ~= rhsPriority then
             return lhsPriority < rhsPriority
@@ -2226,15 +2555,19 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
         sourcePriority = function(sourceKey)
             local lower = string.lower(sourceKey or "")
 
-            if lower == "" or lower == "celeste/vanilla" then
+            if lower == "" or lower == "celeste/vanilla" or lower == "celeste" then
                 return 0
             end
 
-            if lower == "this mod" then
+            if lower == "everest" or modHandler.isEverest(sourceKey) then
                 return 1
             end
 
-            return 100
+            if lower == "this mod" then
+                return 2
+            end
+
+            return 3
         end,
         leafText = function(entry)
             return entry.displayName or entry.name
@@ -3898,14 +4231,15 @@ local function styleToolSeparators(list)
             item._enabled = false
             item.isSeparator = true
 
-            -- Keep the regular row background. Disabled rows would be drawn darker, so the
-            -- state styles are all pointed at the normal one
-            local normalBG = item.style.normalBG
+            -- Separator rows are only there to create half-row spacing. Keep every state
+            -- background transparent so they never paint a fake list row.
+            local transparent = {0, 0, 0, 0}
 
-            item.style.disabledBG = normalBG
-            item.style.hoveredBG = normalBG
-            item.style.pressedBG = normalBG
-            item.style.selectedBG = normalBG
+            item.style.normalBG = transparent
+            item.style.disabledBG = transparent
+            item.style.hoveredBG = transparent
+            item.style.pressedBG = transparent
+            item.style.selectedBG = transparent
         end
     end
 end
@@ -4377,7 +4711,7 @@ function toolWindow.getWindow()
 
     toolWindow.materialSearch = materialSearchField
 
-    local materialPanel = uiElements.panel({scrolledMaterialList}):with(uiUtils.fillHeight(false))
+    materialPanel = uiElements.panel({scrolledMaterialList}):with(uiUtils.fillHeight(false))
 
     -- Solid background: while a virtualized list catches up with fast scrolling there can be a
     -- frame without rows, and the window background would otherwise show through as black.
