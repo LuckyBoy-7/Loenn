@@ -115,6 +115,34 @@ local materialSourceMarginAfterFavorites = 18
 -- Distance (in pixels) from the bottom of the last Favorites row to its divider line.
 local favoriteDividerOffset = 8
 
+local function installLayoutDebugBorder(element, color)
+    if not element or element._layoutDebugBorderHooked then
+        return
+    end
+
+    element._layoutDebugBorderHooked = true
+
+    element:hook({
+        draw = function(orig, self, ...)
+            local result = orig(self, ...)
+
+            if configs.debug.showLayoutBounds then
+                local previous = {love.graphics.getColor()}
+
+                love.graphics.setColor(color[1], color[2], color[3], color[4] or 1)
+                love.graphics.rectangle("line",
+                    (self.screenX or 0) + 0.5,
+                    (self.screenY or 0) + 0.5,
+                    math.max(0, (self.width or 0) - 1),
+                    math.max(0, (self.height or 0) - 1))
+                love.graphics.setColor(previous)
+            end
+
+            return result
+        end
+    })
+end
+
 -- Debug switch: set to false to hide all top-level source icons.
 local materialSourceIconsEnabled = true
 
@@ -4666,34 +4694,61 @@ function toolWindow.getWindow()
 
         local outerWidth = target
         local panels = {toolWindow.toolPanel, toolWindow.tileToolPanel, toolWindow.layerPanel, toolWindow.modePanel}
+        local columnRightGap = math.floor(4 * (configs.ui.theme.uiScale or 1))
 
         for _, panel in ipairs(panels) do
             local padding = panel.style:getIndex("padding", 1) or 0
             local panelWidth = target + padding * 2
             outerWidth = math.max(outerWidth, panelWidth)
 
-            panel.width = panelWidth
-            panel.minWidth = panelWidth
-            panel.maxWidth = panelWidth
+            -- calcSize treats this as content width and adds the panel padding on reflow.
+            panel.width = target
+            panel.minWidth = target
+            panel.maxWidth = target
             panel.autoWidth = false
+            panel:reflow()
         end
+
+        outerWidth = outerWidth + columnRightGap
 
         toolWindow.leftColumn.width = outerWidth
         toolWindow.leftColumn.minWidth = outerWidth
         toolWindow.leftColumn.maxWidth = outerWidth
         toolWindow.leftColumn.autoWidth = false
 
+        if toolWindow.toolbarRow then
+            toolWindow.toolbarRow:reflow()
+
+            -- The lists above can rebuild again in their own late layout pass; run the parent
+            -- reflow once more after that so the material panel's x follows the final column width.
+            local row = toolWindow.toolbarRow
+
+            ui.runLate(function()
+                if row then
+                    row:reflow()
+                end
+            end)
+        end
+
         for _, list in ipairs(lists) do
             list:layout()
             list:layoutLate()
 
+            local width = list._forcedWidth or 0
+
             for _, item in ipairs(list.children or {}) do
-                item.width = target
-                item.maxWidth = target
+                item.width = width
+                item.maxWidth = width
                 item.autoWidth = false
                 item:layoutLate()
             end
         end
+
+        installLayoutDebugBorder(toolWindow.toolPanel, {1, 1, 0, 1})
+        installLayoutDebugBorder(toolWindow.tileToolPanel, {0, 1, 1, 1})
+        installLayoutDebugBorder(toolWindow.layerPanel, {0, 1, 1, 1})
+        installLayoutDebugBorder(toolWindow.modePanel, {0, 1, 1, 1})
+        installLayoutDebugBorder(toolWindow.leftColumn, {1, 0.5, 0, 1})
 
         toolbarWidthUpdating = false
     end
@@ -4703,7 +4758,10 @@ function toolWindow.getWindow()
 
         list.updateItems = function(itemList, ...)
             updateItems(itemList, ...)
-            updateToolListWidth()
+
+            -- Re-measure after the new rows have gone through their late layout. Measuring
+            -- synchronously here can use the previous row widths and make a panel too wide.
+            ui.runLate(updateToolListWidth)
         end
     end
 
@@ -4935,6 +4993,9 @@ function toolWindow.getWindow()
         materialPanel
     }):with(uiUtils.fillHeight(true))
     toolWindow.toolbarRow = row
+
+    -- Keep a visible gap between the toolbar column background and the material list.
+    row.style.spacing = math.floor(4 * (configs.ui.theme.uiScale or 1))
 
     local window = uiElements.window(tostring(languageRegistry.getLanguage().ui.tools_window.window_title), row):with(uiUtils.fillHeight(false))
 
