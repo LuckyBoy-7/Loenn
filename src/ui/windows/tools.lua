@@ -4566,6 +4566,13 @@ function toolWindow.getWindow()
     if materialSearchCallback then
         materialSearchField.cb = function(field, new, old)
             materialSearchCallback(field, new, old)
+
+            -- Clearing the search restores the full path tree. Rebuild it explicitly so source
+            -- headers/gaps get fresh row data and cannot keep the filtered list's row styles.
+            if new == "" and old ~= "" then
+                materialList:updateItems(getMaterialItems(), toolHandler.getMaterial())
+            end
+
             ui.runLate(updateMaterialListWidth)
         end
     end
