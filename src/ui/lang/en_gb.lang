@@ -380,6 +380,7 @@ ui.menubar.reload_effects=Effects
 ui.menubar.reload_user_interface=User Interface
 ui.menubar.reload_language_files=Language Files
 ui.menubar.redraw_map=Redraw Map
+ui.menubar.show_layout_bounds=Show Layout Bounds
 ui.menubar.clear_cache=Clear Cache
 ui.menubar.reset_settings=Reset Settings
 ui.menubar.test_console=Test Console

@@ -21,6 +21,7 @@ local persistence = require("persistence")
 local modHandler = require("mods")
 local textSearching = require("utils.text_search")
 local utils = require("utils")
+local cursorUtils = require("utils.cursor")
 local hotkeyHandler = require("hotkey_handler")
 local loadedState = require("loaded_state")
 local subLayers = require("sub_layers")
@@ -4395,29 +4396,29 @@ function toolWindow.getWindow()
     local materialMinWidth = math.floor(160 * uiScale)
     local materialMaxWidth = math.floor(720 * uiScale)
     local materialListManualWidth = false
+    local materialTargetWidth = materialMinWidth
 
     -- Single place that applies a material-list width. Both the automatic content-based grow and
     -- the draggable splitter use this, so their layout/scrollbar calculations cannot drift apart.
     local function applyMaterialListWidth(target)
         target = math.max(materialMinWidth, math.min(materialMaxWidth, target))
-
-        local innerWidth = math.max(1, target)
+        materialTargetWidth = target
 
         materialPanel.width = target
         materialPanel.maxWidth = target
         materialPanel.autoWidth = false
-        scrolledMaterialList.width = innerWidth
-        scrolledMaterialList.maxWidth = innerWidth
+        scrolledMaterialList.width = target
+        scrolledMaterialList.maxWidth = target
         scrolledMaterialList.autoWidth = false
-        materialList._manualWidth = innerWidth
-        materialList.width = innerWidth
-        materialList.maxWidth = innerWidth
+        materialList._manualWidth = target
+        materialList.width = target
+        materialList.maxWidth = target
         materialList.autoWidth = false
-        materialList._forcedWidth = innerWidth
+        materialList._forcedWidth = target
 
         for _, item in ipairs(materialList.children or {}) do
-            item.width = innerWidth
-            item.maxWidth = innerWidth
+            item.width = target
+            item.maxWidth = target
             item.autoWidth = false
             item:layoutLate()
         end
@@ -4444,8 +4445,8 @@ function toolWindow.getWindow()
         end
 
         if materialList.scrolledList then
-            materialList.scrolledList.width = innerWidth
-            materialList.scrolledList.maxWidth = innerWidth
+            materialList.scrolledList.width = target
+            materialList.scrolledList.maxWidth = target
             materialList.scrolledList.autoWidth = false
         end
 
@@ -4516,31 +4517,47 @@ function toolWindow.getWindow()
         end
     end
 
-    local materialSplitter
-    materialSplitter = splitter.create({
-        minWidth = materialMinWidth,
-        maxWidth = materialMaxWidth,
-        -- The handle is on the left edge of the right-side list.
-        direction = -1,
+    -- Material-list resize is handled by a dedicated input device. Keeping it out of the UI
+    -- element tree avoids hit-testing/clipping problems for a handle outside the panel.
 
-        getWidth = function()
-            return materialPanel.width
-        end,
+    -- Temporary visual debug: red = magic list, green = panel, blue = splitter hit area.
+    materialList:hook({
+        draw = function(orig, self, ...)
+            orig(self, ...)
 
-        setWidth = function(width)
-            materialListManualWidth = true
-            applyMaterialListWidth(width)
+            if not configs.debug.showLayoutBounds then
+                return
+            end
+
+            local previous = {love.graphics.getColor()}
+            love.graphics.setColor(1, 0.2, 0.2, 1)
+            love.graphics.rectangle("line", (self.screenX or 0) + 0.5, (self.screenY or 0) + 0.5,
+                math.max(0, (self.width or 0) - 1), math.max(0, (self.height or 0) - 1))
+            love.graphics.setColor(previous)
         end
     })
 
-    -- Overlay the handle on the material panel instead of putting it in the row. As a row child
-    -- it consumed spacing and shifted the entire toolbar to the left.
-    materialPanel:addChild(materialSplitter)
+    materialPanel:hook({
+        draw = function(orig, self, ...)
+            orig(self, ...)
+
+            if not configs.debug.showLayoutBounds then
+                return
+            end
+
+            local previous = {love.graphics.getColor()}
+            love.graphics.setColor(0.2, 1, 0.2, 1)
+            love.graphics.rectangle("line", (self.screenX or 0) + 0.5, (self.screenY or 0) + 0.5,
+                math.max(0, (self.width or 0) - 1), math.max(0, (self.height or 0) - 1))
+            love.graphics.setColor(previous)
+        end
+    })
 
     local materialUpdateItems = materialList.updateItems
 
     materialList.updateItems = function(list, ...)
         materialUpdateItems(list, ...)
+        updateMaterialListWidth()
         ui.runLate(updateMaterialListWidth)
     end
 
@@ -4591,6 +4608,71 @@ function toolWindow.getWindow()
     -- must also stop running list preview/scroll work while hidden.
     toolWindow.toolbarVisible = true
     toolWindow.toolbarElement = window
+
+    local materialResizeActive = false
+    local materialResizeHover = false
+    local materialResizeStartX = 0
+    local materialResizeStartWidth = 0
+
+    local function updateMaterialResizeHover(x, y)
+        local nearEdge = false
+
+        if toolWindow.toolbarVisible and materialPanel.screenX then
+            local threshold = math.floor(4 * uiScale)
+            local localX = x - materialPanel.screenX
+            local localY = y - (materialPanel.screenY or 0)
+
+            nearEdge = localX >= -threshold and localX <= threshold
+                and localY >= 0 and localY <= (materialPanel.height or 0)
+        end
+
+        if nearEdge then
+            cursorUtils.useResizeCursor(-1, 0)
+            materialResizeHover = true
+
+        elseif materialResizeHover then
+            cursorUtils.useDefaultCursor()
+            materialResizeHover = false
+        end
+
+        return nearEdge
+    end
+
+    function toolWindow.materialResizePressed(x, y, button)
+        if button ~= 1 or not updateMaterialResizeHover(x, y) then
+            return false
+        end
+
+        materialResizeActive = true
+        materialResizeStartX = x
+        materialResizeStartWidth = materialTargetWidth
+        materialListManualWidth = true
+        cursorUtils.useResizeCursor(-1, 0)
+
+        return true
+    end
+
+    function toolWindow.materialResizeDragged(x, y)
+        if not materialResizeActive then
+            updateMaterialResizeHover(x, y)
+            return false
+        end
+
+        applyMaterialListWidth(materialResizeStartWidth + (materialResizeStartX - x))
+
+        return true
+    end
+
+    function toolWindow.materialResizeReleased(x, y)
+        local wasActive = materialResizeActive
+        materialResizeActive = false
+
+        if wasActive then
+            updateMaterialResizeHover(x or 0, y or 0)
+        end
+
+        return wasActive
+    end
 
     window:hook({
         draw = function(orig, self, ...)

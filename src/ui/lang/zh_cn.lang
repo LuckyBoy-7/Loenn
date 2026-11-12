@@ -482,6 +482,7 @@ ui.menubar.reload_effects=效果
 ui.menubar.reload_user_interface=用户界面
 ui.menubar.reload_language_files=语言文件
 ui.menubar.redraw_map=重绘地图
+ui.menubar.show_layout_bounds=显示布局边界
 ui.menubar.clear_cache=清除缓存
 ui.menubar.reset_settings=重置设置
 ui.menubar.test_console=测试控制台

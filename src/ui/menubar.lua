@@ -185,6 +185,14 @@ local function featureToggleWrapper(enabled, funcEnabled, funcDisabled, ...)
     end
 end
 
+local function toggleLayoutBounds()
+    configs.debug.showLayoutBounds = not configs.debug.showLayoutBounds
+end
+
+local function getLayoutBounds()
+    return configs.debug.showLayoutBounds
+end
+
 local addDebug = configs.debug.enableDebugOptions
 local debugMenu = {"debug", {
     {"reload", {
@@ -198,6 +206,7 @@ local debugMenu = {"debug", {
         {"reload_language_files", debugUtils.reloadLanguageFiles}
     }},
     {"redraw_map", debugUtils.redrawMap},
+    {"show_layout_bounds", toggleLayoutBounds, "checkbox", getLayoutBounds},
     {},
     {"clear_cache", clearCache},
     {"reset_settings", resetSettings},

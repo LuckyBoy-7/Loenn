@@ -21,6 +21,9 @@ return {
     -- Hotkeys / UI
     enableDebugOptions = true,
 
+    -- Draw layout bounds for the material list (Debug menu toggle)
+    showLayoutBounds = false,
+
     -- Logging
     loggingLevel = 1,
     loggingFlushImmediatelyLevel = 3,

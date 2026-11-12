@@ -75,7 +75,13 @@ function splitter.create(options)
 
             -- Use the drag start as the fixed origin. The splitter itself moves while resizing,
             -- so accumulating per-event deltas would drift.
-            local newWidth = self._dragStartWidth + (x - self._dragStartX) * direction
+            local newWidth
+
+            if options.getWidthFromMouse then
+                newWidth = options.getWidthFromMouse(x)
+            else
+                newWidth = self._dragStartWidth + (x - self._dragStartX) * direction
+            end
 
             self._targetWidth = clamp(newWidth, options.minWidth, options.maxWidth)
 
