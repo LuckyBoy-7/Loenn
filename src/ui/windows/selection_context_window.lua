@@ -58,10 +58,52 @@ local function getWindowTitle(language, selections, bestSelection)
     return table.concat(titleParts, " - ")
 end
 
-function contextWindow.saveChangesCallback(room, selections, dummyData, bestSelection)
+local function getIgnoredFieldSet(handler, multiple, layer, item)
+    local set = {}
+
+    if handler then
+        local ignored = utils.callIfFunction(handler.ignoredFields, layer, item) or {}
+
+        for _, name in ipairs(ignored) do
+            set[name] = true
+        end
+
+        if multiple then
+            local ignoredMultiple = utils.callIfFunction(handler.ignoredFieldsMultiple, layer, item) or {}
+
+            for _, name in ipairs(ignoredMultiple) do
+                set[name] = true
+            end
+        end
+    end
+
+    return set
+end
+
+local function ignoredFieldSetsEqual(lhs, rhs)
+    for name in pairs(lhs) do
+        if not rhs[name] then
+            return false
+        end
+    end
+
+    for name in pairs(rhs) do
+        if not lhs[name] then
+            return false
+        end
+    end
+
+    return true
+end
+
+function contextWindow.saveChangesCallback(room, selections, dummyData, bestSelection, windowState)
     return function(formFields)
         local newData = form.getFormData(formFields)
         local layers = selectionUtils.selectionTargetLayers(selections)
+        local handler = bestSelection and layerHandlers.getHandler(bestSelection.layer)
+        local multiple = #selections > 1
+        local ignoredBefore = handler and getIgnoredFieldSet(handler, multiple,
+            bestSelection.layer, bestSelection.item) or nil
 
         local snapshot = snapshotUtils.roomLayersSnapshot(function()
             for _, selection in ipairs(selections) do
@@ -90,12 +132,18 @@ function contextWindow.saveChangesCallback(room, selections, dummyData, bestSele
         history.addSnapshot(snapshot)
 
         -- Handlers can hide fields depending on the values that were just saved (ignoredFields).
-        -- The form has to be rebuilt to show the fields of the new state.
-        local handler = bestSelection and layerHandlers.getHandler(bestSelection.layer)
+        -- Only rebuild when the effective ignored set actually changed: every entity/trigger
+        -- handler exposes ignoredFields, even when it returns the same fields before and after.
+        local ignoredAfter = handler and getIgnoredFieldSet(handler, multiple,
+            bestSelection.layer, bestSelection.item) or nil
+        local needsRebuild = handler and ignoredBefore and ignoredAfter
+            and not ignoredFieldSetsEqual(ignoredBefore, ignoredAfter)
 
-        if handler and handler.ignoredFields then
+        if needsRebuild then
             ui.runLate(function()
-                local window = contextWindow.currentWindow
+                -- Rebuild the window that owns this form. contextWindow.currentWindow is whichever
+                -- property window was opened last, which may be a different object.
+                local window = windowState and windowState.window
 
                 if not window or not window.parent then
                     return
@@ -105,12 +153,11 @@ function contextWindow.saveChangesCallback(room, selections, dummyData, bestSele
 
                 widgetUtils.closeWindow(window)
 
-                local newWindow = contextWindow.createContextMenu(selections, bestSelection, room)
+                local newWindow = contextWindow.createContextMenu(selections, bestSelection, room, {x, y})
 
                 if newWindow then
-                    newWindow.x, newWindow.y = x, y
-
-                    widgetUtils.moveWindow(newWindow, x, y, 0, 0, 0)
+                    windowState.window = newWindow
+                    contextWindow.currentWindow = newWindow
                 end
             end)
         end
@@ -160,7 +207,7 @@ local function findCompatibleSelections(selections, targetSelection)
     return compatible
 end
 
-function contextWindow.createContextMenu(selections, bestSelection, room)
+function contextWindow.createContextMenu(selections, bestSelection, room, position)
     local language = languageRegistry.getLanguage()
 
     -- Filter out selections that would end up making a mess
@@ -177,11 +224,14 @@ function contextWindow.createContextMenu(selections, bestSelection, room)
         return
     end
 
+    local windowState = {}
+
     local buttons = {
         {
             text = tostring(language.ui.selection_context_window.save_changes),
             formMustBeValid = true,
-            callback = contextWindow.saveChangesCallback(room, selections, dummyData, bestSelection)
+            callback = contextWindow.saveChangesCallback(room, selections, dummyData, bestSelection,
+                windowState)
         }
     }
 
@@ -198,9 +248,10 @@ function contextWindow.createContextMenu(selections, bestSelection, room)
     local window = uiElements.window(windowTitle, selectionForm)
     local windowCloseCallback = windowPersister.getWindowCloseCallback(windowPersisterName)
 
+    windowState.window = window
     contextWindow.currentWindow = window
 
-    windowPersister.trackWindow(windowPersisterName, window)
+    windowPersister.trackWindow(windowPersisterName, window, position)
     contextGroup.parent:addChild(window)
     widgetUtils.addWindowCloseButton(window, windowCloseCallback)
     widgetUtils.preventOutOfBoundsMovement(window)

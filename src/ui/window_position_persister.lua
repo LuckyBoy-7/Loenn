@@ -37,10 +37,21 @@ function windowPersister.addActiveWindow(name, window)
     table.insert(activeWindows[name], window)
 end
 
-function windowPersister.trackWindow(name, window)
-    windowPersister.restorePosition(name, window)
-    windowPersister.addActiveWindow(name, window)
-    windowPersister.addPositionHook(name, window)
+function windowPersister.trackWindow(name, window, position)
+    if position then
+        -- Recreating a window in place (for example after a form rebuild) must not go through
+        -- restorePosition: that would stack it another 24px down/right every save.
+        previousPositions[name] = {position[1], position[2]}
+        window.x, window.y = position[1], position[2]
+        window.realX, window.realY = position[1], position[2]
+        windowPersister.addActiveWindow(name, window)
+        windowPersister.addPositionHook(name, window)
+
+    else
+        windowPersister.restorePosition(name, window)
+        windowPersister.addActiveWindow(name, window)
+        windowPersister.addPositionHook(name, window)
+    end
 end
 
 function windowPersister.persistPosition(name, x, y)

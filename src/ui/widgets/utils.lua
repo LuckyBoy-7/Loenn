@@ -153,7 +153,7 @@ function widgetUtils.moveWindow(window, newX, newY, threshold, clamp, padding)
             window.parent:reflow()
         end
 
-        ui.root:recollect(false, true)
+        ui.root:collect(false, true)
     end
 end
 

@@ -59,11 +59,25 @@ local function listUpdate(orig, self, dt)
     orig(self, dt)
 
     if self.dropdownMenuVisible and self.parent then
+        local spawnParent = self.options.spawnParent
         local target = ui.focusing
-        local focused = ui.focusing == self.options.spawnParent
+        local focused = ui.focusing == spawnParent
 
         while target and not focused do
             if target == self or target == self.column then
+                focused = true
+            end
+
+            target = target.parent
+        end
+
+        -- The focused element can also be the window containing the dropdown. That still means
+        -- the dropdown belongs to the focused window and must stay open; otherwise clicking the
+        -- enum field closes its own menu on the next update.
+        target = spawnParent
+
+        while target and not focused do
+            if ui.focusing == target then
                 focused = true
             end
 
@@ -194,11 +208,19 @@ function dropdowns.fromList(callback, stringOptions, options)
 
             spawnRoot:addChild(list.container)
 
-            list.container.realX = -4096
-            list.container.realY = -4096
+            -- Put the menu at the button immediately. Waiting for the nested runLate below means
+            -- the first frame leaves it at -4096,-4096 (invisible) until some later layout tick.
+            list.container.realX = spawnX
+            list.container.realY = spawnY
+            list.container.x = spawnX
+            list.container.y = spawnY
 
             list:layout()
             list.container:layout()
+
+            local initialHeight = math.min(lists.getMagicListHeight(list), spawnRoot.height)
+            list.container.height = initialHeight
+            list.container:repaint()
 
             -- Let layouting finish
             ui.runLate(function()
