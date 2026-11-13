@@ -1169,7 +1169,14 @@ local function getStylegroundFormButtons(interactionData, formFields, formOption
 
     local canForeground = handler and handler.canForeground(style)
     local canBackground = handler and handler.canBackground(style)
-    local canChangeForeground = canForeground and canBackground and not inGroup
+    local canStayInCurrentLayer = (foreground and canForeground) or (not foreground and canBackground)
+    local canMoveToOtherLayer = (foreground and canBackground) or (not foreground and canForeground)
+
+    -- When the current row is already in the wrong list (for example a background-only effect
+    -- that was added to the foreground before validation existed), show a one-way move button so
+    -- it can be corrected. Otherwise only truly bidirectional effects get the move button.
+    local canChangeForeground = not inGroup and canMoveToOtherLayer
+        and (not canStayInCurrentLayer or (canForeground and canBackground))
 
     local moveToForegroundText = tostring(language.ui.styleground_window.form.move_to_foreground)
     local moveToBackgroundText = tostring(language.ui.styleground_window.form.move_to_background)
@@ -2012,6 +2019,26 @@ function stylegroundWindow.addStyleOfType(kind, effectName, foreground)
         -- New parallax layers start with a valid texture, so the preview and the row name work
         -- right away instead of showing "Parallax - nil"
         style.texture = "bgs/00/bg0"
+    end
+
+    -- Effects declare which layer they support. Do not silently create an invalid style: the
+    -- player would get a broken/ignored styleground and the user would wonder why nothing renders.
+    if kind == "effect" and style then
+        local allowed = foreground and effects.canForeground(style)
+            or (not foreground and effects.canBackground(style))
+
+        if not allowed then
+            addingStyle = false
+
+            local language = languageRegistry.getLanguage()
+            local messageKey = foreground
+                and language.ui.styleground_window.notify.effect_not_foreground
+                or language.ui.styleground_window.notify.effect_not_background
+
+            notifications.notify(string.format(tostring(messageKey), effects.displayName(language, style)))
+
+            return false
+        end
     end
 
     table.insert(styles, style)
