@@ -1120,8 +1120,10 @@ end
 -- Defined further down, used by the row and preview code above it
 -- Forward declarations: the tile list is built further down, but the row code above uses these
 local getTilesetThumbnail
+-- Preview stays a 5x5 block; the list thumbnail is a smaller 3x3 block so rows can be flatter.
 local thumbnailCanvasSize = 40
-thumbnailSize = 22
+local thumbnailRowCanvasSize = 24
+thumbnailSize = 18
 local thumbnailInset = thumbnailSize + 2
 thumbnailPadding = 2
 
@@ -1645,7 +1647,8 @@ local function materialDataToElement(list, data, element)
                         local r, g, b, a = love.graphics.getColor()
 
                         love.graphics.setColor(1, 1, 1, 1)
-                        love.graphics.draw(canvas, x, y, 0, size / thumbnailCanvasSize, size / thumbnailCanvasSize)
+                        local scale = size / canvas:getWidth()
+                        love.graphics.draw(canvas, x, y, 0, scale, scale)
                         love.graphics.setColor(r, g, b, a)
                     end
 
@@ -2401,10 +2404,10 @@ updateHoverPreview = function(list)
     if thumbnail then
         content = {
             key = "tileset:" .. tostring(material),
-            image = thumbnail.canvas,
+            image = thumbnail.preview or thumbnail.canvas,
             width = thumbnailCanvasSize,
             height = thumbnailCanvasSize,
-            -- A 5x5 block stays small on purpose: it is only meant as a hint next to the list
+            -- The hover preview keeps the 5x5 block; only the list row thumbnail is 3x3.
             area = thumbnailCanvasSize * thumbnailCanvasSize * 22
         }
 
@@ -2459,6 +2462,51 @@ local function resetTilesetThumbnails()
     tilesetThumbnails = {}
 end
 
+-- Renders a small autotiled block of one tileset. The preview uses a 5x5 block; list thumbnails
+-- use a 3x3 block at a correspondingly smaller canvas size.
+local function renderTilesetBlock(layer, id, sprite, tileset, canvasSize, gridSize)
+    local image = sprite.image
+    local fg = layer ~= "tilesBg"
+
+    local blockMatrix = {
+        get = function(_, x, y)
+            if x >= 0 and x < gridSize and y >= 0 and y < gridSize then
+                return id
+            end
+
+            return "0"
+        end
+    }
+
+    local canvas = love.graphics.newCanvas(canvasSize, canvasSize)
+
+    canvas:renderTo(function()
+        love.graphics.clear(0, 0, 0, 0)
+        love.graphics.setColor(1, 1, 1, 1)
+
+        for y = 0, gridSize - 1 do
+            for x = 0, gridSize - 1 do
+                local quads = autotiler.getQuads(x, y, blockMatrix, tileset, "0", " ", "*",
+                    {{0, 0}}, nil, autotiler.checkTile)
+
+                if quads and quads[1] then
+                    local quad = celesteRender.getOrCacheTileSpriteQuad(celesteRender.tilesSpriteMetaCache,
+                        id, tileset.path, quads[1], fg)
+
+                    if sprite.layer then
+                        love.graphics.drawLayer(image, sprite.layer, quad, x * 8, y * 8)
+
+                    else
+                        love.graphics.draw(image, quad, x * 8, y * 8)
+                    end
+                end
+            end
+        end
+    end)
+
+    return canvas
+end
+
 getTilesetThumbnail = function(layer, id)
     local key = layer .. ":" .. tostring(id)
     local cached = tilesetThumbnails[key]
@@ -2476,15 +2524,19 @@ getTilesetThumbnail = function(layer, id)
         -- Air (and any tileset without an image) still gets an empty thumbnail, so its row is
         -- the same height as the others
         if id == "0" or not path then
-            local emptyCanvas = love.graphics.newCanvas(thumbnailCanvasSize, thumbnailCanvasSize)
+            local emptyCanvas = love.graphics.newCanvas(thumbnailRowCanvasSize, thumbnailRowCanvasSize)
+            local emptyPreview = love.graphics.newCanvas(thumbnailCanvasSize, thumbnailCanvasSize)
 
             -- Canvas contents are undefined until first rendered, which showed up as a white
             -- block while scrolling
             emptyCanvas:renderTo(function()
                 love.graphics.clear(0, 0, 0, 0)
             end)
+            emptyPreview:renderTo(function()
+                love.graphics.clear(0, 0, 0, 0)
+            end)
 
-            local emptyThumbnail = {canvas = emptyCanvas}
+            local emptyThumbnail = {canvas = emptyCanvas, preview = emptyPreview, image = emptyPreview}
 
             tilesetThumbnails[key] = emptyThumbnail
 
@@ -2496,46 +2548,10 @@ getTilesetThumbnail = function(layer, id)
         return nil
     end
 
-    local image = sprite.image
+    local thumbCanvas = renderTilesetBlock(layer, id, sprite, tileset, thumbnailRowCanvasSize, 3)
+    local previewCanvas = renderTilesetBlock(layer, id, sprite, tileset, thumbnailCanvasSize, 5)
 
-    -- Fake tile matrix: a 5x5 block surrounded by air, so the autotiler picks the corner, edge and
-    -- filled center quads for it instead of one repeated tile
-    local blockMatrix = {
-        get = function(_, x, y)
-            if x >= 0 and x <= 4 and y >= 0 and y <= 4 then
-                return id
-            end
-
-            return "0"
-        end
-    }
-
-    local fg = layer ~= "tilesBg"
-    local canvas = love.graphics.newCanvas(thumbnailCanvasSize, thumbnailCanvasSize)
-
-    canvas:renderTo(function()
-        love.graphics.clear(0, 0, 0, 0)
-        love.graphics.setColor(1, 1, 1, 1)
-
-        for y = 0, 4 do
-            for x = 0, 4 do
-                local quads = autotiler.getQuads(x, y, blockMatrix, tileset, "0", " ", "*", {{0, 0}}, nil, autotiler.checkTile)
-
-                if quads and quads[1] then
-                    local quad = celesteRender.getOrCacheTileSpriteQuad(celesteRender.tilesSpriteMetaCache, id, tileset.path, quads[1], fg)
-
-                    if sprite.layer then
-                        love.graphics.drawLayer(image, sprite.layer, quad, x * 8, y * 8)
-
-                    else
-                        love.graphics.draw(image, quad, x * 8, y * 8)
-                    end
-                end
-            end
-        end
-    end)
-
-    local thumbnail = {canvas = canvas, image = canvas}
+    local thumbnail = {canvas = thumbCanvas, preview = previewCanvas, image = previewCanvas}
 
     tilesetThumbnails[key] = thumbnail
 
