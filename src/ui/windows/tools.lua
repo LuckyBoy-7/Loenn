@@ -73,10 +73,11 @@ for _, name in ipairs(tileToolNames) do
     tileToolSet[name] = true
 end
 
--- Top-level tool order in the right toolbar. The Tile group sits after Selection, while the
--- individual tile tools are shown in the secondary toolbar below the layer entries.
+-- Top-level tool order in the right toolbar. The Tile group is the first row, followed by
+-- Placement, Selection and Rooms; the individual tile tools are shown in the secondary toolbar
+-- below the layer entries.
 local toolOrderOverrides = {
-    room = 1,
+    room = 4,
     placement = 2,
     selection = 3,
     stylegrounds = 5,
@@ -4518,7 +4519,7 @@ local function getToolItems(sortItems)
     })
 
     tileGroupItem.toolName = "tile"
-    tileGroupItem.toolOrder = 4
+    tileGroupItem.toolOrder = 1
     tileGroupItem.isTileGroup = true
 
     local tileGroupTooltip = getLanguageOrDefault(toolDescriptions.tile)
