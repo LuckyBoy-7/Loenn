@@ -236,6 +236,12 @@ function brushHelper.updateRender(room, x, y, material, layer, randomMatrix)
                             local quad = celesteRender.getOrCacheTileSpriteQuad(cache, tile, texture, randQuad, fg)
 
                             batch:set(x, y, spriteMeta, quad, x * 8 - 8, y * 8 - 8)
+
+                        else
+                            -- The tileset path is known but the atlas sprite is missing: mark it
+                            -- just like the full batch rebuild does, so the purple placeholder
+                            -- appears immediately when the tile is painted.
+                            table.insert(missingTiles, {x, y})
                         end
                     end
 
