@@ -2264,6 +2264,10 @@ function stylegroundWindow.getWindowContent(map)
     }
     local _, tabbedContent = tabbedWindow.createWindow("", tabs, tabbedWindowOptions)
 
+    -- Match the titlebar label: the panel padding inside the titlebar is 8px, so the tab strip
+    -- and the layer tree need the same left inset to line up with the "Stylegrounds" title.
+    tabbedContent.style.padding = {4, 0, 0, 0}
+
     interactionData.tabbedContent = tabbedContent
 
     local function applyListPaneWidth(width)
@@ -2272,6 +2276,11 @@ function stylegroundWindow.getWindowContent(map)
         if width <= 0 then
             return
         end
+
+        -- The pane width includes the new left inset; the list itself lives in the content area.
+        local paddingLeft = tabbedContent.style:getIndex("padding", 1) or 0
+        local paddingRight = tabbedContent.style:getIndex("padding", 3) or 0
+        width = math.max(0, width - paddingLeft - paddingRight)
 
         for _, list in ipairs({listForeground, listBackground}) do
             list._manualWidth = width
