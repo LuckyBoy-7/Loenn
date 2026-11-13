@@ -1645,8 +1645,141 @@ local function moveGroupToDropPosition(interactionData, fromData, toList, toList
     return true
 end
 
+-- Moves all selected styles from one parent to the drop position as one block. This only handles
+-- plain reorders within the same parent; group/cross-parent drops keep their special behavior.
+local function moveSelectedStylesBlock(interactionData, fromList, fromListItem, toList, toListItem, toIndex)
+    local fromData = fromListItem and fromListItem.data
+    local toData = toListItem and toListItem.data
+
+    if not fromData or not toData then
+        return false
+    end
+
+    -- Dropping onto a group row means "put into group", which is a separate operation
+    if toData.style and utils.typeof(toData.style) == "apply" then
+        return false
+    end
+
+    local map = interactionData.map
+    local sourceParent = fromData.parentStyle and fromData.parentStyle.children
+        or (fromData.foreground and map.stylesFg or map.stylesBg)
+    local targetParent = toData.parentStyle and toData.parentStyle.children
+        or (toData.foreground and map.stylesFg or map.stylesBg)
+
+    if not sourceParent or sourceParent ~= targetParent then
+        return false
+    end
+
+    -- The dragged row must be part of the selection; otherwise this is a normal single drag.
+    local selectedStyles = {}
+    local selectedSet = {}
+    local draggedSelected = false
+
+    for _, item in ipairs(fromList.children or {}) do
+        if item.data and item.data.style and fromList:getIsSelected(item) then
+            selectedStyles[#selectedStyles + 1] = item.data.style
+            selectedSet[item.data.style] = true
+
+            if item == fromListItem then
+                draggedSelected = true
+            end
+        end
+    end
+
+    if not draggedSelected then
+        return false
+    end
+
+    local block = {}
+
+    for _, style in ipairs(sourceParent) do
+        if selectedSet[style] then
+            block[#block + 1] = style
+        end
+    end
+
+    if #block < 2 then
+        return false
+    end
+
+    -- Dropping the block onto one of its own rows is a no-op.
+    if selectedSet[toData.style] then
+        return true
+    end
+
+    local targetRowIndex
+
+    for index, item in ipairs(toList.children or {}) do
+        if item == toListItem then
+            targetRowIndex = index
+
+            break
+        end
+    end
+
+    local after = targetRowIndex ~= nil and toIndex ~= nil and toIndex > targetRowIndex
+    local insertion = #sourceParent + 1
+
+    for index, style in ipairs(sourceParent) do
+        if style == toData.style then
+            insertion = index + (after and 1 or 0)
+
+            break
+        end
+    end
+
+    local remaining = {}
+    local insertAt = 1
+
+    for index, style in ipairs(sourceParent) do
+        if not selectedSet[style] then
+            remaining[#remaining + 1] = style
+
+            if index < insertion then
+                insertAt = insertAt + 1
+            end
+        end
+    end
+
+    local alreadyThere = true
+
+    for index, style in ipairs(block) do
+        if sourceParent[insertAt + index - 1] ~= style then
+            alreadyThere = false
+
+            break
+        end
+    end
+
+    if alreadyThere then
+        return true
+    end
+
+    -- Styleground drag/drop is intentionally not undoable: the panel's undo stack is about form
+    -- edits, and undoing a drag used to leave the multi selection/list state inconsistent.
+    for index = #sourceParent, 1, -1 do
+        sourceParent[index] = nil
+    end
+
+    for _, style in ipairs(remaining) do
+        sourceParent[#sourceParent + 1] = style
+    end
+
+    for index = #block, 1, -1 do
+        table.insert(sourceParent, insertAt, block[index])
+    end
+
+    interactionData.rebuildListItems()
+
+    return true
+end
+
 local function listItemDraggedHandler(interactionData)
     return function(fromList, fromListItem, toList, toListItem, fromIndex, toIndex)
+        if moveSelectedStylesBlock(interactionData, fromList, fromListItem, toList, toListItem, toIndex) then
+            return false
+        end
+
         local fromData = fromListItem and fromListItem.data
         local fromIsGroup = fromData ~= nil and utils.typeof(fromData.style) == "apply"
         local groupData = getGroupDropData(toList, toListItem, toIndex, fromListItem)
@@ -1683,6 +1816,21 @@ end
 
 local function listItemCanInsertHandler(interactionData)
     return function(fromList, fromListItem, toList, toListItem, fromIndex, toIndex)
+        -- Multi drags move as a block, so the single-row offset check would often reject a valid
+        -- insertion (especially when dragging upwards). The block handler performs the real
+        -- validation after the drop.
+        local selectedCount = 0
+
+        for _, item in ipairs(fromList.children or {}) do
+            if item.data and fromList:getIsSelected(item) then
+                selectedCount = selectedCount + 1
+            end
+        end
+
+        if selectedCount > 1 then
+            return true
+        end
+
         local from = fromListItem and fromListItem.data
         local groupData = getGroupDropData(toList, toListItem, toIndex, fromListItem)
         local fromIsGroup = from ~= nil and utils.typeof(from.style) == "apply"
@@ -1830,6 +1978,28 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
     -- selection is kept by style, so it survives the list being rebuilt.
     local selectionStyles = {}
     local anchorStyle
+
+    -- While a layer is being dragged, do not highlight whatever row happens to be under the
+    -- cursor: the ghost already represents the dragged rows and the hover flicker looks wrong.
+    list:hook({
+        update = function(orig, self, dt)
+            local dragging = ui.dragging
+
+            while dragging do
+                if dragging == self then
+                    ui.hovering = false
+
+                    break
+                end
+
+                dragging = dragging.parent
+            end
+
+            if orig then
+                return orig(self, dt)
+            end
+        end
+    })
 
     local function clearSelection()
         for k in pairs(selectionStyles) do
@@ -2366,6 +2536,137 @@ function stylegroundWindow.getWindowContent(map)
     return layout, interactionData
 end
 
+-- Photoshop-like drag ghost for the layer rows. It is drawn by the window after its normal
+-- contents, so it stays above the list and follows the cursor while a layer (or a multi
+-- selection) is being dragged.
+local function drawStylegroundDragGhost(interactionData, state)
+    local dragging = ui.dragging
+    local list = interactionData and interactionData.stylegroundListElement
+
+    if not dragging or not list then
+        state.active = false
+
+        return
+    end
+
+    local target = dragging
+    local belongsToActiveList = false
+
+    while target do
+        if target == list then
+            belongsToActiveList = true
+
+            break
+        end
+
+        target = target.parent
+    end
+
+    if not belongsToActiveList then
+        state.active = false
+
+        return
+    end
+
+    local mouseX, mouseY = ui.mouseX, ui.mouseY
+
+    if not mouseX or not mouseY then
+        return
+    end
+
+    -- Do not flash the ghost for a plain click: wait for a real drag distance.
+    if not state.active then
+        state.active = true
+        state.startX, state.startY = mouseX, mouseY
+
+        return
+    end
+
+    if math.abs(mouseX - state.startX) < 4 and math.abs(mouseY - state.startY) < 4 then
+        return
+    end
+
+    local rows = {}
+    local draggedIsSelected = false
+
+    for _, child in ipairs(list.children or {}) do
+        if child.data and list:getIsSelected(child) then
+            table.insert(rows, child)
+
+            if child == dragging then
+                draggedIsSelected = true
+            end
+        end
+    end
+
+    -- Dragging an unselected row should not show the previously selected layers instead.
+    if dragging.data and not draggedIsSelected then
+        rows = {dragging}
+    end
+
+    if #rows == 0 then
+        return
+    end
+
+    local screenWidth = love.graphics.getWidth()
+    local barWidth = math.max(120, math.floor(list.width or 200))
+    local x = math.max(4, math.min(mouseX + 12, screenWidth - barWidth - 4))
+    local spacing = 1
+    local y = mouseY
+    local previousFont = love.graphics.getFont()
+    local firstLabel = rows[1].label
+    local firstFont = firstLabel and firstLabel.style and firstLabel.style.font or previousFont
+    local barHeight = math.max(16, math.floor(firstFont:getHeight() + 4))
+    local totalHeight = #rows * barHeight + (#rows - 1) * spacing
+
+    for i, row in ipairs(rows) do
+        local barY = math.floor(y + (i - 1) * (barHeight + spacing))
+        local style = row.style
+        local bg = style and style.bg
+
+        if not bg or not bg[1] then
+            bg = style and style.normalBG or {0.13, 0.13, 0.13, 0.9}
+        end
+
+        -- Semi-transparent copy of the row: same bar shape/background, just floating above the
+        -- list and stacked downwards for a multi selection.
+        love.graphics.setColor(bg[1], bg[2], bg[3], (bg[4] or 1) * 0.85)
+        love.graphics.rectangle("fill", x, barY, barWidth, barHeight)
+
+        local label = row.label
+
+        if label then
+            local labelStyle = label.style
+            local font = labelStyle and labelStyle.font or previousFont
+            local color = labelStyle and labelStyle.color
+            local text = label.text or ""
+
+            love.graphics.setFont(font)
+
+            if color and color[1] then
+                love.graphics.setColor(color[1], color[2], color[3], (color[4] or 1) * 0.95)
+
+            else
+                love.graphics.setColor(1, 1, 1, 0.95)
+            end
+
+            local textX = x + (label.realX or label.x or 8)
+            local textY = barY + math.floor((barHeight - font:getHeight()) * 0.5)
+
+            love.graphics.print(text, math.floor(textX), math.floor(textY))
+        end
+    end
+
+    -- One outline around the whole ghost stack (not one per bar).
+    love.graphics.setColor(0.7, 0.75, 0.85, 0.65)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", x - 0.5, y - 0.5, barWidth + 1, totalHeight + 1)
+
+    love.graphics.setLineWidth(1)
+    love.graphics.setFont(previousFont)
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 function stylegroundWindow.editStylegrounds(map)
     if not map then
         return
@@ -2388,6 +2689,19 @@ function stylegroundWindow.editStylegrounds(map)
         height = WINDOW_STATIC_HEIGHT
     })
     interactionData.window = window
+
+    -- The drag ghost is drawn after the window's contents and must not end up inside a cached
+    -- window canvas, otherwise it would be clipped to the window/old cursor position.
+    window.cacheable = false
+
+    local dragGhostState = {active = false}
+
+    window:hook({
+        draw = function(orig, self, ...)
+            orig(self, ...)
+            drawStylegroundDragGhost(interactionData, dragGhostState)
+        end
+    })
 
     local windowCloseCallback = windowPersister.getWindowCloseCallback(windowPersisterName)
 
