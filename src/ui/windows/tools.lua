@@ -4719,8 +4719,24 @@ local function toolCallback(list, toolName)
     end
 end
 
+local function applyToolSearch(tool)
+    if not toolWindow.materialList or not toolWindow.materialSearch then
+        return
+    end
+
+    local layer = toolHandler.getLayer(tool)
+    local searchText = toolUtils.getPersistenceSearch(tool, layer) or ""
+
+    toolWindow.eventStates.searchTerm = searchText
+    toolWindow.materialList:setFilterText(searchText, true)
+end
+
 local function toolChangedCallback(self, tool)
     local isTileTool = tileToolSet[tool.name]
+
+    -- Restore the per-tool search text. Tools without layers (Rooms) never emit a layer change,
+    -- so without this the field kept the previous tool's search text.
+    applyToolSearch(tool)
 
     -- Never run the tool callback from an externally-triggered selection change: selecting the
     -- virtual Tile row would invoke its default Rectangle action and overwrite a subtool selected
