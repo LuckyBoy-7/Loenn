@@ -1099,6 +1099,58 @@ thumbnailSize = 22
 local thumbnailInset = thumbnailSize + 2
 thumbnailPadding = 2
 
+-- Fallback icon for tile rows whose tileset has no drawable image (for example a mod shipped
+-- without the PNG). A small transparency checkerboard with a red cross keeps the row readable
+-- while making it obvious that the tile cannot be rendered.
+local fallbackThumbnailCanvas
+local function getFallbackThumbnailCanvas()
+    if fallbackThumbnailCanvas then
+        return fallbackThumbnailCanvas
+    end
+
+    local size = thumbnailCanvasSize
+    -- A 2x2 checkerboard is enough at this display size and reads as a transparency grid.
+    local cell = math.floor(size / 2)
+    local canvas = love.graphics.newCanvas(size, size)
+
+    canvas:renderTo(function()
+        love.graphics.clear(0, 0, 0, 0)
+
+        -- Gray/white transparency checkerboard
+        for y = 0, size - cell, cell do
+            for x = 0, size - cell, cell do
+                if (math.floor(x / cell) + math.floor(y / cell)) % 2 == 0 then
+                    love.graphics.setColor(1, 1, 1, 0.6)
+
+                else
+                    love.graphics.setColor(0.45, 0.45, 0.45, 0.6)
+                end
+
+                love.graphics.rectangle("fill", x, y, cell, cell)
+            end
+        end
+
+        -- Outline so the fallback stays visible on dark row backgrounds
+        love.graphics.setColor(0.75, 0.75, 0.75, 0.55)
+        love.graphics.setLineWidth(2)
+        love.graphics.rectangle("line", 1, 1, size - 2, size - 2)
+
+        -- Red cross
+        local inset = 8
+        love.graphics.setColor(0.95, 0.25, 0.25, 1)
+        love.graphics.setLineWidth(3)
+        love.graphics.line(inset, inset, size - inset, size - inset)
+        love.graphics.line(size - inset, inset, inset, size - inset)
+
+        love.graphics.setLineWidth(1)
+        love.graphics.setColor(1, 1, 1, 1)
+    end)
+
+    fallbackThumbnailCanvas = canvas
+
+    return canvas
+end
+
 local materialPanel
 
 local function shouldShowMaterialIcon(data)
@@ -1457,6 +1509,14 @@ local function materialDataToElement(list, data, element)
 
         if tileList then
             element._thumbnailCanvas = thumbnail and thumbnail.canvas or nil
+
+            -- Air intentionally has no image and is left blank; any other tile without a drawable
+            -- sprite gets the missing-image fallback so the row still has a thumbnail.
+            if not element._thumbnailCanvas and not data.isHeader and not data.isButton
+                and not (data.data == "0" or data.data == 0) then
+                element._thumbnailCanvas = getFallbackThumbnailCanvas()
+            end
+
             element.style.padding = thumbnailPadding
             element.style.spacing = 6
 
@@ -1512,7 +1572,7 @@ local function materialDataToElement(list, data, element)
             element._thumbnailSpacer = nil
         end
 
-        if tileList and thumbnail then
+        if tileList and element._thumbnailCanvas then
             local spacer = uiElements.new({width = thumbnailInset + 4, height = thumbnailSize})
 
             spacer.interactive = 0
