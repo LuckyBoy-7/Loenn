@@ -1216,6 +1216,16 @@ local function materialDataToElement(list, data, element)
     element.style.normalBG = getThemeListColor()
     element.style.disabledBG = getThemeListDisabledColor()
 
+    -- Material rows switch hover/pressed/selected colours immediately: a fade makes the list
+    -- feel like it lags behind the pointer while it is being scrolled.
+    element.style.fadeDuration = 0
+
+    -- A recycled row must start from its new colors immediately. A non-zero _fadeTime would
+    -- skip the fade assignment when the target color equals the previous one (all normal rows
+    -- share the same background), leaving style.bg empty and the row invisible until the next
+    -- real update. Zero keeps the assignment but still applies the target in one step.
+    element._fadeTime = 0
+
     if element.label then
         element.label._bold = false
     end
@@ -2152,6 +2162,34 @@ updateHoverPreview = function(list)
     end
 
     local item = hovered.itemData
+
+    -- Fast scrolling can leave ui.hovering pointing at a recycled row for one frame. Its old
+    -- screen coordinates then place the preview at the window edge. Ignore such stale rows.
+    local index = hovered._magicIndex
+    local rowX, rowY = hovered.screenX, hovered.screenY
+    local rowHeight = hovered.height or 0
+
+    if hovered.parent ~= list or not hovered.visible or not hovered.onscreen
+        or not rowX or not rowY or rowX <= 0 or rowY <= 0 or rowHeight <= 0
+        or (index and list.data[index] ~= item) then
+        hoverPreview.hide()
+        updateColorGradingHover(nil)
+        previewHoverList = nil
+        previewHoverItem = nil
+
+        return
+    end
+
+    local visibleRect = list.__cached and list.__cached.visibleRect
+
+    if visibleRect and (rowY + rowHeight < visibleRect[2] or rowY > visibleRect[4]) then
+        hoverPreview.hide()
+        updateColorGradingHover(nil)
+        previewHoverList = nil
+        previewHoverItem = nil
+
+        return
+    end
 
     previewHoverList = list
     previewHoverItem = item
@@ -4578,12 +4616,39 @@ function toolWindow.getWindow()
     toolWindow.layerList = layerList
     toolWindow.materialList = materialList
 
+    -- Scroll/layout must finish before the hovered row is recomputed. Otherwise the preview keeps
+    -- pointing at the row that was under the mouse before the wheel event.
+    local hoverUpdateQueued = false
+
+    local function queueHoverPreview(list)
+        if hoverUpdateQueued then
+            return
+        end
+
+        hoverUpdateQueued = true
+
+        ui.runLate(function()
+            hoverUpdateQueued = false
+            updateHoverPreview(list)
+        end)
+    end
+
     -- Drive the decal hover preview from the list itself (rows are recycled, so enter/leave
     -- events alone are not reliable)
     materialList:with(uiUtils.hook({
         update = function(orig, self)
+            -- Scroll first: materialize the visible rows and lay them out. Only then can the
+            -- hovered row and its screen rectangle be correct for this frame.
             orig(self)
+            self:layout()
+            self:layoutLate()
+
+            if ui.refreshHovering then
+                ui.refreshHovering()
+            end
+
             updateHoverPreview(self)
+            queueHoverPreview(self)
         end
     }))
     toolWindow.modeList = modeList
@@ -4783,6 +4848,7 @@ function toolWindow.getWindow()
     -- when dragging the scrollbar quickly.
     materialPanel.cacheable = false
     scrolledMaterialList.cacheable = false
+    materialList.cacheable = false
 
     local uiScale = configs.ui.theme.uiScale or 1
     local materialMinWidth = math.floor(160 * uiScale)
@@ -4972,8 +5038,12 @@ function toolWindow.getWindow()
     if materialList.scrolledList then
         materialList.scrolledList:hook({
             afterScroll = function(orig, self, ...)
+                -- The scrollbox rebuilds the virtualized rows and recollects hit/cull rectangles
+                -- before this hook runs, so the new visible range is already applied here.
                 orig(self, ...)
+
                 ui.runLate(updateMaterialListWidth)
+                queueHoverPreview(materialList)
             end
         })
     end
