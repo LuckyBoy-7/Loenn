@@ -3692,6 +3692,12 @@ local function materialCallback(list, material)
     local sameMaterial = material == toolWindow.eventStates.material
     local currentTool = toolHandler.currentTool
 
+    -- Rebuilding the room list selects the current room without any user click. Keep the selection
+    -- (handled by updateItems) but never move/focus the viewport for it.
+    if list._updatingItems and currentTool and currentTool.name == "room" then
+        return
+    end
+
     -- The Debug tool's selection is not persisted like a paint brush material. Always apply the
     -- clicked row, including when the list restored the same value while switching tools.
     if not sameMaterial or (currentTool and currentTool.name == "debug") then
@@ -4506,7 +4512,12 @@ local function toolCallback(list, toolName)
         updateTileToolList(toolName)
 
         if toolWindow.materialList then
-            toolWindow.materialList:updateItems(getMaterialItems(), toolHandler.getMaterial())
+            -- Activating the Rooms tool only fills/selects the room list. Focusing the current
+            -- room and changing the viewport zoom must wait for an actual click on a room row.
+            local preventMaterialCallback = toolName == "room"
+
+            toolWindow.materialList:updateItems(getMaterialItems(), toolHandler.getMaterial(),
+                nil, preventMaterialCallback)
         end
     end
 end

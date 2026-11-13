@@ -836,7 +836,12 @@ function listWidgets.updateItems(list, items, target, fromFilter, preventCallbac
     list:layout()
 
     ui.runLate(function()
+        -- Rebuilding a list selects an item to keep the UI in sync with the editor. That is not a
+        -- user click: callbacks that move the viewport (the room list) must be able to tell the
+        -- difference and stay put.
+        list._updatingItems = true
         listWidgets.setSelection(list, target or newSelection, preventCallback, callbackRequiresChange)
+        list._updatingItems = false
 
         -- Rebuilding/reflowing a list can leave ui.hovering pointing at an old row. The layout pass
         -- itself is deferred, so wait one more tick before recalculating the hover target; doing it
