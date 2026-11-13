@@ -10,6 +10,18 @@ local toolUtils = {}
 
 local fallbackLayer = "noLayer"
 
+-- Search terms only live for this Loenn session. They are intentionally not written to
+-- persistence.conf: reopening the editor should not start with a filter that hides the list.
+local sessionSearches = {}
+
+local function getSearchKey(tool, layer)
+    if not tool then
+        return nil
+    end
+
+    return toolUtils.getToolPersistenceIdentifier(tool) .. "|" .. tostring(layer or fallbackLayer)
+end
+
 function toolUtils.getCursorPositionInRoom(x, y)
     local room = state.getSelectedRoom()
     local px, py = nil, nil
@@ -81,7 +93,9 @@ function toolUtils.getPersistenceMaterial(tool, layer)
 end
 
 function toolUtils.getPersistenceSearch(tool, layer)
-    return toolUtils.getPersistenceValue(toolUtils.getToolPersistenceIdentifier(tool), layer or fallbackLayer, "search")
+    local key = getSearchKey(tool, layer)
+
+    return key and sessionSearches[key] or ""
 end
 
 function toolUtils.getPersistenceFavorites(tool, layer)
@@ -101,7 +115,11 @@ function toolUtils.setPersistenceMaterial(tool, layer, material)
 end
 
 function toolUtils.setPersistenceSearch(tool, layer, search)
-    return toolUtils.setPersistenceValue(search, toolUtils.getToolPersistenceIdentifier(tool), layer or fallbackLayer, "search")
+    local key = getSearchKey(tool, layer)
+
+    if key then
+        sessionSearches[key] = search or ""
+    end
 end
 
 function toolUtils.setPersistenceFavorites(tool, layer, favorites)
