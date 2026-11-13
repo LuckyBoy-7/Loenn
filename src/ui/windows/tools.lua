@@ -3698,6 +3698,15 @@ local function materialCallback(list, material)
         return
     end
 
+    -- Clicking a room row is an explicit selection: collapse a multi selection to that room and
+    -- focus it, even when the same room was already the stored material.
+    if currentTool and currentTool.name == "room" then
+        toolWindow.eventStates.material = material
+        toolHandler.setMaterial(material)
+
+        return
+    end
+
     -- The Debug tool's selection is not persisted like a paint brush material. Always apply the
     -- clicked row, including when the list restored the same value while switching tools.
     if not sameMaterial or (currentTool and currentTool.name == "debug") then
@@ -4464,6 +4473,71 @@ local function getToolItems(sortItems)
     return toolItems
 end
 
+-- Keep the room list scrolled to the room selected on the canvas. Multi selection uses the most
+-- recently added room when possible, otherwise the first selected room in list order.
+local function scrollRoomListToSelection()
+    if toolHandler.currentToolName ~= "room" then
+        return
+    end
+
+    local list = toolWindow.materialList
+
+    if not list or not list.data then
+        return
+    end
+
+    local selected, selectedType = loadedState.getSelectedItem()
+    local targetName
+
+    if selectedType == "room" then
+        targetName = selected.name
+
+    elseif selectedType == "table" then
+        local selectedNames = {}
+
+        for item in pairs(selected) do
+            if type(item) == "table" and item.name then
+                selectedNames[item.name] = true
+            end
+        end
+
+        targetName = persistence.lastSelectedRoomName
+
+        if not targetName or not selectedNames[targetName] then
+            targetName = nil
+
+            for _, item in ipairs(list.data) do
+                if selectedNames[item.data] then
+                    targetName = item.data
+
+                    break
+                end
+            end
+        end
+    end
+
+    if not targetName then
+        return
+    end
+
+    local index
+
+    for i, item in ipairs(list.data) do
+        if item.data == targetName then
+            index = i
+
+            break
+        end
+    end
+
+    if not index then
+        return
+    end
+
+    list._selectedIndex = index
+    lists.scrollSelectionVisible(list)
+end
+
 local function toolCallback(list, toolName)
     -- Blank separator rows have no tool behind them
     if not toolName then
@@ -4518,6 +4592,10 @@ local function toolCallback(list, toolName)
 
             toolWindow.materialList:updateItems(getMaterialItems(), toolHandler.getMaterial(),
                 nil, preventMaterialCallback)
+
+            if toolName == "room" then
+                ui.runLate(scrollRoomListToSelection)
+            end
         end
     end
 end
@@ -4686,6 +4764,35 @@ function toolWindow.getWindow()
     toolWindow.tileToolList = tileToolList
     toolWindow.layerList = layerList
     toolWindow.materialList = materialList
+
+    -- The room tool supports multi selection on the canvas. The generic magic list only knows a
+    -- single selected index, so derive row highlighting from the editor selection instead. This
+    -- also keeps the list in sync when rooms are selected/deselected by clicking the map.
+    local defaultMaterialGetIsSelected = materialList.getIsSelected
+
+    materialList.getIsSelected = function(self, element)
+        if toolHandler.currentToolName == "room" and element.itemData then
+            local selected, selectedType = loadedState.getSelectedItem()
+            local roomName = element.itemData.data
+
+            if selectedType == "room" then
+                return roomName ~= nil and selected.name == roomName
+
+            elseif selectedType == "table" then
+                for item in pairs(selected) do
+                    if item.name == roomName then
+                        return true
+                    end
+                end
+
+                return false
+            end
+
+            return false
+        end
+
+        return defaultMaterialGetIsSelected(self, element)
+    end
 
     -- Scroll/layout must finish before the hovered row is recomputed. Otherwise the preview keeps
     -- pointing at the row that was under the mouse before the wheel event.
@@ -5250,6 +5357,9 @@ function toolWindow.getWindow()
         editorToolModeChanged = toolModeChangedCallback,
         editorMapLoaded = mapLoadedCallback,
         editorMapNew = mapLoadedCallback,
+        editorMapTargetChanged = function()
+            scrollRoomListToSelection()
+        end,
         editorShownDependenciesChanged = updateLayerAndPlacementsCallback,
         editorLayerInformationChanged = layerInformationChangedCallback,
         editorLayerAdded = layerAddedCallback,
