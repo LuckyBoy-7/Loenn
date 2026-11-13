@@ -81,7 +81,7 @@ function sliders.new(options)
             love.graphics.rectangle("fill", x, trackY, w * ratio, 6, 3, 3)
 
             uiu.setColor(0.95, 0.95, 0.95, 1)
-            love.graphics.circle("fill", x + w * ratio, y + h / 2, 6)
+            love.graphics.circle("fill", x + w * ratio, y + h / 2, 4)
 
             uiu.setColor(1, 1, 1, 1)
         end,

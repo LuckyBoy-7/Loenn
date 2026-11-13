@@ -420,7 +420,9 @@ function colorPicker.getColorPicker(hexColor, options)
     end
 
     local formOptions = {
-        columns = 2,
+        -- A single column of fields, but each field row needs room for label, input and the
+        -- integer slider. With only 2 columns the slider wrapped onto its own row.
+        columns = 3,
         fieldOrder = fieldOrder,
         hideUnordered = true,
         fields = {}
