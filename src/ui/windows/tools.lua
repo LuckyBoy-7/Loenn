@@ -766,6 +766,31 @@ local function layerItemToggleVisibilityHandler(listItem, button)
 end
 
 local function materialSortFunction(lhs, rhs)
+    -- Favorites always form one block at the top, including the generic (non path-tree) lists.
+    local lhsFavoriteSection = lhs.isFavoritesHeader or lhs.isFavoritesGroup
+    local rhsFavoriteSection = rhs.isFavoritesHeader or rhs.isFavoritesGroup
+
+    if lhsFavoriteSection ~= rhsFavoriteSection then
+        return lhsFavoriteSection
+    end
+
+    if lhsFavoriteSection then
+        local lhsOrder = lhs.favoriteOrder or 0
+        local rhsOrder = rhs.favoriteOrder or 0
+
+        if lhsOrder ~= rhsOrder then
+            return lhsOrder < rhsOrder
+        end
+    end
+
+    -- The room list groups all non-favorite rooms under its "All Rooms" header.
+    local lhsRoomGroup = lhs.isRoomGroupHeader
+    local rhsRoomGroup = rhs.isRoomGroupHeader
+
+    if lhsRoomGroup ~= rhsRoomGroup then
+        return lhsRoomGroup
+    end
+
     -- Items which already come in a meaningful order (the decal path tree)
     if lhs.sortIndex and rhs.sortIndex then
         return lhs.sortIndex < rhs.sortIndex
@@ -1159,6 +1184,12 @@ local function shouldShowMaterialIcon(data)
     end
 
     if data.isSource then
+        -- The synthetic room group header has no mod/source behind it: keep the source styling
+        -- but do not draw a folder icon next to it.
+        if data.isRoomGroupHeader then
+            return false
+        end
+
         local key = string.lower(tostring(data.sourceKey or ""))
         local label = string.lower(tostring(data.sourceLabel or data.text or ""))
 
@@ -3638,7 +3669,7 @@ getMaterialItems = function(layer)
         })
     end
 
-    for i, material in ipairs(materials or {}) do
+    local function createGenericMaterialItem(material)
         local materialTooltip
         local materialText = material
         local materialTextNoMods = material
@@ -3653,7 +3684,8 @@ getMaterialItems = function(layer)
         end
 
         local itemFavorited = not not favoritesLookup[materialData]
-        local item = {
+
+        return {
             text = materialText,
             textNoMods = materialTextNoMods,
             alternativeNames = material.alternativeDisplayNames,
@@ -3668,8 +3700,95 @@ getMaterialItems = function(layer)
             isButton = materialType == "table" and material.isButton or nil,
             onPress = materialType == "table" and material.onPress or nil
         }
+    end
 
-        table.insert(materialItems, item)
+    -- Plain material lists (rooms, scripts, ...) have no path tree to attach favorites to, so
+    -- build the same Favorites header/group the tree lists get. The header and rows use the same
+    -- flags as getPathTreeItems, which also gives them the divider after the last favorite.
+    local favoriteMaterials = {}
+    local regularMaterials = {}
+
+    for _, material in ipairs(materials or {}) do
+        local materialData = type(material) == "table" and material.name or material
+
+        if favoritesLookup[materialData] then
+            table.insert(favoriteMaterials, material)
+
+        else
+            table.insert(regularMaterials, material)
+        end
+    end
+
+    if #favoriteMaterials > 0 then
+        table.insert(materialItems, {
+            text = "Favorites",
+            textNoMods = "",
+            data = false,
+            isHeader = true,
+            isSource = true,
+            isFavoritesHeader = true,
+            sourceKey = "Favorites",
+            sourceLabel = "Favorites",
+            indent = 0,
+            ancestors = {},
+            currentTool = currentTool,
+            currentToolName = currentTool.name,
+            currentLayer = currentLayer,
+            favoriteOrder = -1
+        })
+
+        for index, material in ipairs(favoriteMaterials) do
+            local item = createGenericMaterialItem(material)
+
+            item.itemFavorited = true
+            item.isFavoritesGroup = true
+            item.favoriteOrder = index
+            item.indent = 0
+            item.ancestors = {}
+
+            table.insert(materialItems, item)
+        end
+    end
+
+    -- Rooms have no real source mod grouping, but putting the non-favorite rooms under one header
+    -- keeps them visually separate from the Favorites group above.
+    if currentTool and currentTool.name == "room" and #regularMaterials > 0 then
+        local allRoomsHeader = {
+            text = "All Rooms",
+            textNoMods = "",
+            data = false,
+            isHeader = true,
+            isSource = true,
+            isRoomGroupHeader = true,
+            sourceKey = "All Rooms",
+            sourceLabel = "All Rooms",
+            indent = 0,
+            ancestors = {},
+            currentTool = currentTool,
+            currentToolName = currentTool.name,
+            currentLayer = currentLayer
+        }
+
+        table.insert(materialItems, allRoomsHeader)
+
+        for _, material in ipairs(regularMaterials) do
+            local item = createGenericMaterialItem(material)
+            item.ancestors = {allRoomsHeader}
+
+            table.insert(materialItems, item)
+        end
+
+    else
+        for _, material in ipairs(regularMaterials) do
+            table.insert(materialItems, createGenericMaterialItem(material))
+        end
+    end
+
+    -- Give the All Rooms source header the same breathing room as Placement/Entities headers.
+    -- This also leaves space for the Favorites divider, which is drawn inside the gap below the
+    -- last favorite row.
+    if currentTool and currentTool.name == "room" then
+        normalizeSourceMargins(materialItems)
     end
 
     -- The magic list scrolls by a fixed element size. Tile lists have taller rows (thumbnail),
