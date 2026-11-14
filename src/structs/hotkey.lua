@@ -4,10 +4,20 @@ local defaultScope = "global"
 local defaultScopes = {defaultScope}
 
 local specialKeyAliases = {
-    plus = "+",
+    -- "+" is not a LÖVE key name: on the main keyboard it is "=" with shift, on the keypad it
+    -- is "kp+". Accept both and make shift optional so Ctrl + Plus works as expected.
+    plus = function()
+        return love.keyboard.isDown("=") or love.keyboard.isDown("kp+")
+    end,
     minus = "-",
     kpplus = "kp+",
     kpminus = "kp-",
+}
+
+-- Modifiers that must not be rejected by the exact-match check when this alias is used, but
+-- are also not required to be held.
+local optionalAliasModifiers = {
+    plus = {"shift"}
 }
 
 local modifierKeyFunctions = keyboardHelper.nameToModifierFunction
@@ -39,6 +49,18 @@ function hotkeyStruct.sanitize(activator, exactMatch)
 
         if specialKeyAliases[part] then
             table.insert(activators, specialKeyAliases[part])
+
+            local optionalModifiers = optionalAliasModifiers[part]
+
+            if optionalModifiers then
+                for _, name in ipairs(optionalModifiers) do
+                    local func = modifierKeyFunctions[name]
+
+                    if func then
+                        usedModifiers[func] = true
+                    end
+                end
+            end
 
         elseif modifierKeyFunctions[part] then
             local func = modifierKeyFunctions[part]
