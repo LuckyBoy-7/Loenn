@@ -37,6 +37,11 @@ local windowPersisterName = "stylegrounds_window"
 
 local stylegroundWindow = {}
 
+-- Runtime-only memory of the last selected style per tab. This intentionally stays in memory so
+-- reopening the panel can restore the row without writing anything to disk.
+local lastSelectedStylegrounds = {}
+local restoringStylegroundSelection = false
+
 local parallaxTextureOptions
 
 local stylegroundWindowGroup = uiElements.group({})
@@ -1957,11 +1962,47 @@ local function textInputFocused()
     return false
 end
 
+local function getStylegroundTabKey(fg)
+    return fg and "foreground" or "background"
+end
+
+local function getRememberedStyleground(fg)
+    return lastSelectedStylegrounds[getStylegroundTabKey(fg)]
+end
+
+local function rememberStylegroundSelection(fg, style)
+    if style then
+        lastSelectedStylegrounds[getStylegroundTabKey(fg)] = style
+    end
+end
+
+local function findStylegroundItemIndex(items, style)
+    if not style then
+        return nil
+    end
+
+    for index, item in ipairs(items or {}) do
+        if item.data and item.data.style == style then
+            return index
+        end
+    end
+end
+
+local function findStylegroundListItem(list, style)
+    local children = list.children or {}
+    local index = findStylegroundItemIndex(children, style)
+
+    if index then
+        return children[index]
+    end
+end
+
 function stylegroundWindow.getStylegroundList(map, interactionData, fg)
     local items = stylegroundWindow.getStylegroundListItems(map, fg)
+    local initialItem = findStylegroundItemIndex(items, getRememberedStyleground(fg)) or 1
 
     local listOptions = {
-        initialItem = 1,
+        initialItem = initialItem,
         draggable = true,
         listItemDragged = listItemDraggedHandler(interactionData),
         listItemCanInsert = listItemCanInsertHandler(interactionData),
@@ -1975,6 +2016,12 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
         interactionData.listTarget = listItem
         interactionData.selectedTargets = getSelectedTargets(interactionData, element)
         interactionData.formData = prepareFormData(interactionData)
+
+        -- Programmatic selections (initial opening and tab switching) must not replace the
+        -- remembered row with a fallback. The callback receives the row data, not the UI item.
+        if not restoringStylegroundSelection and interactionData.stylegroundListElement == element then
+            rememberStylegroundSelection(fg, listItem and listItem.style)
+        end
 
         stylegroundWindow.updateStylegroundForm(interactionData)
         stylegroundWindow.updateStylegroundPreview(interactionData)
@@ -2550,8 +2597,17 @@ function stylegroundWindow.getWindowContent(map)
 
             ui.runLate(function()
                 if #currentList.children > 0 then
-                    widgetUtils.focusElement(currentList.children[1])
-                    currentList:setSelection(currentList:getSelectedData(), false, false)
+                    local selectedStyle = currentList.selected
+                        and currentList.selected.data
+                        and currentList.selected.data.style
+                    local targetItem = findStylegroundListItem(currentList, getRememberedStyleground(fg))
+                        or findStylegroundListItem(currentList, selectedStyle)
+                        or currentList.children[1]
+
+                    restoringStylegroundSelection = true
+                    widgetUtils.focusElement(targetItem)
+                    currentList:setSelection(targetItem.data or targetItem, false, false)
+                    restoringStylegroundSelection = false
 
                 else
                     interactionData.listTarget = getDefaultListTarget()
