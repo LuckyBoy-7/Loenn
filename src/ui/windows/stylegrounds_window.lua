@@ -1972,6 +1972,10 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
         stylegroundWindow.updateStylegroundPreview(interactionData)
     end, items, listOptions)
 
+    -- Keep a little empty scroll space below the last row. The drag insertion line is drawn just
+    -- below the last row; without this padding the scrollbox scissor clips it when dropping at
+    -- the very end of a long list.
+    list.style.padding = {0, 0, 0, 6}
     list:layout()
 
     -- Multi selection, like a file list: shift extends a range, ctrl toggles single rows. The
