@@ -1,10 +1,15 @@
 -- Reusable horizontal resize handle for side-by-side panels. The owner supplies the current width
 -- and a setter; the handle itself only handles the cursor and drag distance.
+local ui = require("ui")
 local uiElements = require("ui.elements")
 local uiUtils = require("ui.utils")
 local cursorUtils = require("utils.cursor")
 
 local splitter = {}
+
+local function otherDragActive(self)
+    return ui.dragging ~= nil and ui.dragging ~= self
+end
 
 local function clamp(value, minimum, maximum)
     if minimum and value < minimum then
@@ -39,6 +44,11 @@ function splitter.create(options)
 
     element:with({
         onEnter = function(self)
+            -- Do not react to hover while something else is being dragged (layers, effects...).
+            if otherDragActive(self) then
+                return
+            end
+
             cursorUtils.useResizeCursor(-1, 0)
         end,
 
@@ -49,7 +59,7 @@ function splitter.create(options)
         end,
 
         onPress = function(self, x, y, button)
-            if button ~= 1 then
+            if button ~= 1 or otherDragActive(self) then
                 return false
             end
 

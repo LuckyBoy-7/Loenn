@@ -58,6 +58,92 @@ toolWindow.modePanelVisible = true
 
 toolWindow.materialList = false
 toolWindow.materialSearch = false
+
+-- Styleground effects can be dragged from the tools list into the stylegrounds list. Clicking
+-- still inserts at the end of the active list; dragging inserts at the hovered position.
+local stylegroundsWindowModule
+local stylegroundDragState
+
+local function getStylegroundsWindowModule()
+    -- Keep using the module instance the tools list already uses. Resolving it through another
+    -- require/registry can return a different UI copy, which updates the map but not the open
+    -- stylegrounds list.
+    if not stylegroundsWindowModule then
+        stylegroundsWindowModule = require("ui.windows.stylegrounds_window")
+    end
+
+    return stylegroundsWindowModule
+end
+
+local function beginStylegroundDrag(itemData, x, y)
+    stylegroundDragState = {
+        itemData = itemData,
+        kind = itemData.stylegroundKind,
+        effectName = itemData.stylegroundEffectName,
+        label = itemData.stylegroundLabel,
+        startX = x or ui.mouseX,
+        startY = y or ui.mouseY,
+        active = false
+    }
+end
+
+local function updateStylegroundDrag(x, y)
+    local state = stylegroundDragState
+
+    if not state then
+        return false
+    end
+
+    x = x or ui.mouseX
+    y = y or ui.mouseY
+
+    if not state.active and math.abs(x - state.startX) < 4 and math.abs(y - state.startY) < 4 then
+        return false
+    end
+
+    state.active = true
+
+    if ui.clearHovering then
+        ui.clearHovering()
+
+    else
+        ui.hovering = false
+    end
+
+    local module = getStylegroundsWindowModule()
+    local target = module.getDropTargetAt(x, y)
+    module.setExternalDrag(true, state.label, x, y, target)
+
+    return true
+end
+
+local function finishStylegroundDrag(x, y)
+    local state = stylegroundDragState
+
+    stylegroundDragState = nil
+
+    if not state then
+        return
+    end
+
+    local module = getStylegroundsWindowModule()
+    module.setExternalDrag(false)
+
+    if not state.active then
+        -- A normal click keeps the old behavior: add to the active stylegrounds list.
+        module.addStyleOfType(state.kind, state.effectName)
+
+        return
+    end
+
+    local target = module.getDropTargetAt(x or ui.mouseX, y or ui.mouseY)
+
+    if target then
+        module.addStyleOfType(state.kind, state.effectName, target.foreground, target.parent,
+            target.index)
+    end
+end
+
 toolWindow.materialPanel = false
 
 toolWindow.subLayers = {}
@@ -1449,7 +1535,39 @@ local function materialDataToElement(list, data, element)
 
                     onPress = function(orig, self, x, y, button, ...)
                         if button == 1 and self.itemData and self.itemData.onPress then
-                            self.itemData.onPress()
+                            self.itemData.onPress(x, y)
+
+                            return true
+                        end
+
+                        return orig(self, x, y, button, ...)
+                    end
+                })
+            end
+
+            if not element._stylegroundDragHooked then
+                element._stylegroundDragHooked = true
+
+                element:hook({
+                    onDrag = function(orig, self, x, y, dx, dy)
+                        local data = self.itemData
+
+                        if data and data.stylegroundDrag and stylegroundDragState
+                            and stylegroundDragState.itemData == data then
+                            updateStylegroundDrag(x, y)
+
+                            return true
+                        end
+
+                        return orig(self, x, y, dx, dy)
+                    end,
+
+                    onRelease = function(orig, self, x, y, button, ...)
+                        local data = self.itemData
+
+                        if data and data.stylegroundDrag and stylegroundDragState
+                            and stylegroundDragState.itemData == data then
+                            finishStylegroundDrag(x, y)
 
                             return true
                         end
@@ -2815,7 +2933,6 @@ end
 -- Building the stylegrounds entries resolves display names and source mods, which is expensive:
 -- keep them around so list rebuilds stay cheap
 local stylegroundsMaterialsCache
-local stylegroundsWindowModule
 
 -- Files of every Preview tool folder, keyed by the copied path prefix. Building one of these lists
 -- is expensive (each installed mod is walked), so it is cached and warmed up in the background.
@@ -3129,8 +3246,12 @@ getMaterialItems = function(layer)
                 local kind = effectName and "effect" or key
 
                 item.isButton = true
-                item.onPress = function()
-                    stylegroundsWindowModule.addStyleOfType(kind, effectName)
+                item.stylegroundDrag = true
+                item.stylegroundKind = kind
+                item.stylegroundEffectName = effectName
+                item.stylegroundLabel = tostring(item.text or item.displayName or effectName or kind)
+                item.onPress = function(x, y)
+                    beginStylegroundDrag(item, x, y)
                 end
             end
         end

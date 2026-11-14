@@ -868,7 +868,15 @@ local function selectStyleDeferred(interactionData, style, list)
     ui.runLate(function()
         for index, item in ipairs(list.children or {}) do
             if item.data and item.data.style == style then
+                -- The list keeps its multi-selection in a separate style set. Clear it before
+                -- selecting the new row, otherwise the old selection wins and the new row never
+                -- appears focused even though the form switched to it.
+                if list.clearStyleSelection then
+                    list.clearStyleSelection(list)
+                end
+
                 list:setSelection(index)
+                widgetUtils.focusElement(item)
 
                 -- Focus after the material row click has finished; focusing immediately here is
                 -- overwritten by the click's own focus handling.
@@ -1988,15 +1996,29 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
     list:hook({
         update = function(orig, self, dt)
             local dragging = ui.dragging
+            local suppressHover = stylegroundWindow.isExternalDragActive
+                and stylegroundWindow.isExternalDragActive()
 
-            while dragging do
+            while dragging and not suppressHover do
                 if dragging == self then
-                    ui.hovering = false
+                    suppressHover = true
 
                     break
                 end
 
                 dragging = dragging.parent
+            end
+
+            -- While a layer is being dragged, do not highlight whatever row happens to be under
+            -- the cursor: the ghost already represents the dragged rows and the hover flicker
+            -- looks wrong. This also covers effects dragged in from the tools list.
+            if suppressHover then
+                if ui.clearHovering then
+                    ui.clearHovering()
+
+                else
+                    ui.hovering = false
+                end
             end
 
             if orig then
@@ -2033,8 +2055,7 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
             return
         end
 
-        if ctrlHeld() then
-            if selectionStyles[style] then
+        if ctrlHeld() then            if selectionStyles[style] then
                 selectionStyles[style] = nil
                 anchorStyle = nil
 
@@ -2089,6 +2110,11 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
         selectionStyles[style] = true
         anchorStyle = style
         self.selected = item
+    end
+
+    list.clearStyleSelection = function(self)
+        clearSelection()
+        self.selected = false
     end
 
     return column, list, items
@@ -2165,7 +2191,7 @@ end
 
 -- Adds one style of a given kind to the foreground or background list: "parallax" (empty
 -- texture), "group" or "effect" with the effect name
-function stylegroundWindow.addStyleOfType(kind, effectName, foreground)
+function stylegroundWindow.addStyleOfType(kind, effectName, foreground, targetParent, targetIndex)
     -- Prefer the map the open window works on: after a reload loadedState.map may be a new object
     local map = (currentInteractionData and currentInteractionData.map) or loadedState.map
 
@@ -2180,6 +2206,9 @@ function stylegroundWindow.addStyleOfType(kind, effectName, foreground)
     end
 
     local styles = foreground and map.stylesFg or map.stylesBg
+    local parent = targetParent or styles
+    local insertIndex = targetIndex or (#parent + 1)
+    insertIndex = math.max(1, math.min(insertIndex, #parent + 1))
     local style
 
     if kind == "group" then
@@ -2215,12 +2244,12 @@ function stylegroundWindow.addStyleOfType(kind, effectName, foreground)
         end
     end
 
-    table.insert(styles, style)
+    table.insert(parent, insertIndex, style)
 
     history.addSnapshot(snapshotStruct.create("Add styleground", {}, function()
-        for i, s in ipairs(styles) do
+        for i, s in ipairs(parent) do
             if s == style then
-                table.remove(styles, i)
+                table.remove(parent, i)
 
                 break
             end
@@ -2230,7 +2259,7 @@ function stylegroundWindow.addStyleOfType(kind, effectName, foreground)
             currentInteractionData.rebuildListItems(nil, currentInteractionData.stylegroundListElement)
         end
     end, function()
-        table.insert(styles, style)
+        table.insert(parent, math.min(insertIndex, #parent + 1), style)
 
         if currentInteractionData and currentInteractionData.rebuildListItems then
             currentInteractionData.rebuildListItems(nil, currentInteractionData.stylegroundListElement)
@@ -2247,6 +2276,114 @@ function stylegroundWindow.addStyleOfType(kind, effectName, foreground)
     addingStyle = false
 
     return true
+end
+
+-- Resolves the stylegrounds list position under the cursor for effects dragged from the tools
+-- window. Returns nil when the cursor is not over the active stylegrounds list.
+function stylegroundWindow.getDropTargetAt(x, y)
+    local interactionData = currentInteractionData
+
+    if not interactionData or not ui.root then
+        return nil
+    end
+
+    local list = interactionData.stylegroundListElement
+    local scroll = list and list.scrolledList
+
+    if not list or not scroll then
+        return nil
+    end
+
+    local function findList(element)
+        while element and element.__type ~= "list" do
+            element = element.parent
+        end
+
+        return element
+    end
+
+    local hovered = ui.root:getChildAt(x, y)
+    local hoveredList = findList(hovered)
+
+    if hoveredList and hoveredList ~= list then
+        return nil
+    end
+
+    local insideScroll = x >= scroll.screenX and x <= scroll.screenX + scroll.width
+        and y >= scroll.screenY and y <= scroll.screenY + scroll.height
+
+    if not hoveredList and not insideScroll then
+        return nil
+    end
+
+    local row = hovered
+
+    while row and row.parent ~= list do
+        row = row.parent
+    end
+
+    if row and row.parent ~= list then
+        row = nil
+    end
+
+    local children = list.children or {}
+    local rowIndex
+
+    if row then
+        for index, child in ipairs(children) do
+            if child == row then
+                rowIndex = index
+
+                break
+            end
+        end
+    end
+
+    local after = false
+    local lineY
+
+    if row and rowIndex then
+        after = y >= row.screenY + row.height * 0.5
+        lineY = row.screenY + (after and row.height or 0)
+    else
+        local last = children[#children]
+        lineY = last and (last.screenY + last.height) or list.screenY
+    end
+
+    local foreground = list == interactionData.stylegroundListElementFg
+    local styles = foreground and interactionData.map.stylesFg or interactionData.map.stylesBg
+    local data = row and row.data
+    local targetParent = styles
+    local targetStyle
+
+    if data and data.parentStyle then
+        targetParent = data.parentStyle.children or {}
+        targetStyle = data.style
+    elseif data and data.style then
+        targetStyle = data.style
+    end
+
+    local targetIndex = #targetParent + 1
+
+    if targetStyle then
+        for index, style in ipairs(targetParent) do
+            if style == targetStyle then
+                targetIndex = index + (after and 1 or 0)
+
+                break
+            end
+        end
+    end
+
+    return {
+        foreground = foreground,
+        parent = targetParent,
+        index = targetIndex,
+        list = list,
+        lineX = list.screenX,
+        lineY = lineY,
+        lineWidth = list.width or list.innerWidth or 0
+    }
 end
 
 -- Same list the texture dropdown of the window uses, so the tools window can show the very same
@@ -2671,6 +2808,60 @@ local function drawStylegroundDragGhost(interactionData, state)
     love.graphics.setColor(1, 1, 1, 1)
 end
 
+-- Ghost/insertion line for effects dragged from the tools window. It is kept separate from the
+-- normal row drag ghost because there is no existing list item on the stylegrounds list yet.
+local externalDragState = {active = false}
+
+function stylegroundWindow.isExternalDragActive()
+    return externalDragState.active
+end
+
+function stylegroundWindow.setExternalDrag(active, label, x, y, target)
+    externalDragState.active = active
+    externalDragState.label = label
+    externalDragState.x = x
+    externalDragState.y = y
+    externalDragState.target = target
+end
+
+local function drawExternalDragGhost(interactionData)
+    if not externalDragState.active then
+        return
+    end
+
+    local list = interactionData and interactionData.stylegroundListElement
+    local x = (externalDragState.x or ui.mouseX or 0) + 12
+    local y = externalDragState.y or ui.mouseY or 0
+    local width = math.max(120, math.floor(list and list.width or 200))
+    local height = 18
+    local previousFont = love.graphics.getFont()
+    local firstRow = list and list.children and list.children[1]
+    local font = firstRow and firstRow.label and firstRow.label.style and firstRow.label.style.font
+        or previousFont
+
+    love.graphics.setFont(font)
+    love.graphics.setColor(0.13, 0.13, 0.13, 0.85)
+    love.graphics.rectangle("fill", x, y, width, height)
+
+    love.graphics.setColor(0.7, 0.75, 0.85, 0.65)
+    love.graphics.setLineWidth(1)
+    love.graphics.rectangle("line", x - 0.5, y - 0.5, width + 1, height + 1)
+
+    love.graphics.setColor(1, 1, 1, 0.95)
+    love.graphics.print(tostring(externalDragState.label or ""),
+        math.floor(x + 8), math.floor(y + (height - font:getHeight()) * 0.5))
+
+    local target = externalDragState.target
+
+    if target then
+        love.graphics.setColor(1, 1, 1, 0.9)
+        love.graphics.rectangle("fill", target.lineX, target.lineY, target.lineWidth, 1)
+    end
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(previousFont)
+end
+
 function stylegroundWindow.editStylegrounds(map)
     if not map then
         return
@@ -2704,6 +2895,7 @@ function stylegroundWindow.editStylegrounds(map)
         draw = function(orig, self, ...)
             orig(self, ...)
             drawStylegroundDragGhost(interactionData, dragGhostState)
+            drawExternalDragGhost(interactionData)
         end
     })
 
