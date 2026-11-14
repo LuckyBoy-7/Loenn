@@ -307,8 +307,11 @@ function stylegroundWindow.updateStylegroundPreview(interactionData)
                 end
 
                 local maxWidth = math.floor(math.min(availableWidth, 640))
-                local maxHeight = math.max(1, math.floor(math.min(availableHeight * 0.5,
-                    320 * (configs.ui.theme.uiScale or 1))))
+                -- Keep this independent of the current window height: a height-dependent preview
+                -- fed its own measurement back into updateStylegroundWindowHeight, so rebuilding
+                -- the form made the window grow in several steps.
+                local previewMaxHeight = 320 * (configs.ui.theme.uiScale or 1)
+                local maxHeight = math.max(1, math.floor(math.min(previewMaxHeight, availableHeight)))
 
                 local child = self.children and self.children[1]
                 local sprite = child and child._previewSprite
@@ -1357,16 +1360,16 @@ updateStylegroundWindowHeight = function(interactionData)
 
         local form = formContainer and formContainer.children and formContainer.children[1]
 
-        -- Lay the new form out before measuring it. Otherwise the window is first drawn at the
-        -- previous height and grows afterwards, which looks like a one-frame flash/overlap.
-        if form and form.height <= 0 then
+        -- Lay out the new form and preview before measuring them. Measuring an element that still
+        -- carries the previous selection's size makes the window grow in steps on every rebuild.
+        if form then
             form:layout()
             form:layoutLate()
         end
 
         local formHeight = form and form.height or 0
 
-        if preview and preview.height <= 0 then
+        if preview then
             preview:layout()
             preview:layoutLate()
         end
