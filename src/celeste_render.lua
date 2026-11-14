@@ -12,6 +12,7 @@ local matrix = require("utils.matrix")
 local configs = require("configs")
 local bit = require("bit")
 local modHandler = require("mods")
+local virtualFs = require("virtual_fs")
 local depths = require("consts.object_depths")
 local logging = require("logging")
 local modificationWarner = require("modification_warner")
@@ -38,6 +39,106 @@ celesteRender.tilesSceneryMetaCache = {}
 local tilesFgDepth = depths.fgTerrain
 local tilesBgDepth = depths.bgTerrain
 
+local tilesetState = {
+    pathFg = nil,
+    pathBg = nil,
+    signatureFg = nil,
+    signatureBg = nil,
+    sources = nil,
+    imageSignatures = {}
+}
+
+local function getTilesetXMLSignature(filename)
+    if not filename or filename == "" then
+        return nil
+    end
+
+    local commonFilename = modHandler.commonModContent .. "/" .. utils.convertToUnixPath(filename)
+    local info = love.filesystem.getInfo(commonFilename)
+
+    if not info then
+        return commonFilename .. ":missing"
+    end
+
+    return string.format("%s:%s:%s", commonFilename, tostring(info.modtime), tostring(info.size))
+end
+
+local function getTilesetImageFilename(source, tileset)
+    local path = tileset.path
+
+    if not path then
+        return nil
+    end
+
+    local relative = "Graphics/Atlases/Gameplay/" .. path .. ".png"
+
+    if source.modFolder then
+        return "$" .. source.modFolder .. "$/" .. relative
+    end
+
+    return modHandler.commonModContent .. "/" .. relative
+end
+
+local function getTilesetImageSignature(filename)
+    if not filename then
+        return "missing"
+    end
+
+    local info = love.filesystem.getInfo(filename)
+
+    if not info then
+        return "missing"
+    end
+
+    return string.format("%s:%s", tostring(info.modtime), tostring(info.size))
+end
+
+local function hasChangedTilesetImages(tilesetSources)
+    local gameplay = atlases.gameplay
+
+    for _, source in ipairs(tilesetSources or {}) do
+        for _, tileset in pairs(source.tiles or {}) do
+            local path = tileset.path
+
+            if path then
+                local filename = getTilesetImageFilename(source, tileset)
+                local signature = getTilesetImageSignature(filename)
+
+                if not gameplay or not rawget(gameplay, path)
+                    or signature ~= tilesetState.imageSignatures[path] then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+-- True when the Metadata form should reload the tile XML/atlases. Unchanged saves skip the
+-- expensive room cache invalidation and visible-room redraw entirely.
+function celesteRender.tilesetXMLChanged(state)
+    local meta = state and state.side and state.side.meta
+
+    if not meta then
+        return false
+    end
+
+    local pathFg = meta.ForegroundTiles
+    local pathBg = meta.BackgroundTiles
+
+    if pathFg ~= tilesetState.pathFg or pathBg ~= tilesetState.pathBg then
+        return true
+    end
+
+    return getTilesetXMLSignature(pathFg) ~= tilesetState.signatureFg
+        or getTilesetXMLSignature(pathBg) ~= tilesetState.signatureBg
+end
+
+function celesteRender.customTilesetChanged(state)
+    return celesteRender.tilesetXMLChanged(state) or hasChangedTilesetImages(tilesetState.sources)
+end
+
 local decalsFgDepth = depths.fgDecals
 local decalsBgDepth = depths.bgDecals
 
@@ -60,24 +161,65 @@ local function loadCustomAutotiler(filename)
     if filename and filename ~= ""  then
         local commonFilename = modHandler.commonModContent .. "/" .. utils.convertToUnixPath(filename)
         local loaded, tilesMeta = pcall(autotiler.loadTilesetXML, commonFilename)
+        local modFolderName = virtualFs.getOwner(commonFilename)
 
-        return loaded, tilesMeta
+        return loaded, tilesMeta, modFolderName
     end
+end
+
+-- Reloads every image referenced by the custom tileset XML. Only the paths listed in the XML are
+-- touched, so a changed PNG does not require walking the whole mod folder again.
+function celesteRender.loadTilesetImages(tilesetSources)
+    if not tilesetSources or #tilesetSources == 0 then
+        return 0
+    end
+
+    local loaded = 0
+    local seen = {}
+
+    for _, source in ipairs(tilesetSources) do
+        for _, tileset in pairs(source.tiles or {}) do
+            local path = tileset.path
+
+            if path and not seen[path] then
+                seen[path] = true
+
+                local filename = getTilesetImageFilename(source, tileset)
+                local sprite = filename and atlases.reloadResourceFromFile(path, filename, "Gameplay")
+
+                tilesetState.imageSignatures[path] = getTilesetImageSignature(filename)
+
+                if sprite then
+                    loaded = loaded + 1
+                end
+            end
+        end
+    end
+
+    if loaded > 0 then
+        celesteRender.clearTileSpriteQuadCache()
+        logging.info(string.format("[tileset] Reloaded %d tileset image(s)", loaded))
+    end
+
+    return loaded
 end
 
 function celesteRender.loadCustomTilesetAutotiler(state)
     celesteRender.tilesMetaFg = celesteRender.tilesMetaFgVanilla
     celesteRender.tilesMetaBg = celesteRender.tilesMetaBgVanilla
 
+    local tilesetSources = {}
+
     if state and state.side and state.side.meta then
         local pathFg = state.side.meta.ForegroundTiles
         local pathBg = state.side.meta.BackgroundTiles
 
-        local loadedFg, tilesMetaFg = loadCustomAutotiler(pathFg)
-        local loadedBg, tilesMetaBg = loadCustomAutotiler(pathBg)
+        local loadedFg, tilesMetaFg, modFolderNameFg = loadCustomAutotiler(pathFg)
+        local loadedBg, tilesMetaBg, modFolderNameBg = loadCustomAutotiler(pathBg)
 
         if loadedFg then
             celesteRender.tilesMetaFg = tilesMetaFg
+            table.insert(tilesetSources, {tiles = tilesMetaFg, modFolder = modFolderNameFg})
 
         else
             if tilesMetaFg then
@@ -87,6 +229,7 @@ function celesteRender.loadCustomTilesetAutotiler(state)
 
         if loadedBg then
             celesteRender.tilesMetaBg = tilesMetaBg
+            table.insert(tilesetSources, {tiles = tilesMetaBg, modFolder = modFolderNameBg})
 
         else
             if tilesMetaBg then
@@ -97,6 +240,29 @@ function celesteRender.loadCustomTilesetAutotiler(state)
 
     celesteRender.clearTileSpriteQuadCache()
     celesteRender.clearScenerySpriteQuadCache()
+
+    local meta = state and state.side and state.side.meta
+
+    tilesetState.pathFg = meta and meta.ForegroundTiles or nil
+    tilesetState.pathBg = meta and meta.BackgroundTiles or nil
+    tilesetState.signatureFg = getTilesetXMLSignature(tilesetState.pathFg)
+    tilesetState.signatureBg = getTilesetXMLSignature(tilesetState.pathBg)
+    tilesetState.sources = tilesetSources
+    tilesetState.imageSignatures = {}
+
+    for _, source in ipairs(tilesetSources) do
+        for _, tileset in pairs(source.tiles or {}) do
+            local path = tileset.path
+
+            if path then
+                tilesetState.imageSignatures[path] = getTilesetImageSignature(
+                    getTilesetImageFilename(source, tileset)
+                )
+            end
+        end
+    end
+
+    return tilesetSources
 end
 
 local function getOrCreateSmartBatch(batches, key)

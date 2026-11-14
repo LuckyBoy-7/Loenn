@@ -162,6 +162,32 @@ function atlases.getResource(resource, name, atlas)
     return targetResource
 end
 
+-- Reloads (or adds) one atlas resource from a concrete mounted file. Used for custom tileset images
+-- that changed on disk without reloading every filename of the mod.
+function atlases.reloadResourceFromFile(resource, filename, name)
+    name = name or "Gameplay"
+
+    if not atlases[name] then
+        atlases.createAtlas(name)
+    end
+
+    local atlas = atlases[name]
+    local previous = rawget(atlas, resource)
+    local sprite = spriteLoader.loadExternalSprite(filename)
+
+    if sprite then
+        if previous and previous.loadedAt then
+            spriteLoader.removeExternalSprite(previous)
+        end
+
+        rawset(atlas, resource, sprite)
+
+        return sprite
+    end
+
+    return nil
+end
+
 function atlases.loadExternalAtlases()
     atlases.loadExternalAtlas("Gameplay")
 end

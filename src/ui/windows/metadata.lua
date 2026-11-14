@@ -264,16 +264,23 @@ local function saveMetadataCallback(formFields, side)
 
     side.meta = newMetadata
 
-    celesteRender.loadCustomTilesetAutotiler(loadedState)
+    -- Unchanged tile XML/images do not need a full tileset reload and visible-room redraw.
+    if celesteRender.customTilesetChanged(loadedState) then
+        local xmlChanged = celesteRender.tilesetXMLChanged(loadedState)
+        local tilesetSources = celesteRender.loadCustomTilesetAutotiler(loadedState)
+        local loadedImages = celesteRender.loadTilesetImages(tilesetSources)
 
-    -- Invalidate all tile renders
-    celesteRender.invalidateRoomCache(nil, {"tilesFg", "tilesBg", "canvas", "complete"})
+        if xmlChanged or loadedImages > 0 then
+            -- Invalidate all tile renders
+            celesteRender.invalidateRoomCache(nil, {"tilesFg", "tilesBg", "canvas", "complete"})
 
-    -- Redraw any visible rooms
-    local selectedItem, selectedItemType = loadedState.getSelectedItem()
+            -- Redraw any visible rooms
+            local selectedItem, selectedItemType = loadedState.getSelectedItem()
 
-    celesteRender.clearBatchingTasks()
-    celesteRender.forceRedrawVisibleRooms(loadedState.map.rooms, loadedState, selectedItem, selectedItemType)
+            celesteRender.clearBatchingTasks()
+            celesteRender.forceRedrawVisibleRooms(loadedState.map.rooms, loadedState, selectedItem, selectedItemType)
+        end
+    end
 
     -- TODO - History
 end
