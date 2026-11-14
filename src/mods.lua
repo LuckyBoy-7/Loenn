@@ -267,6 +267,36 @@ function modHandler.findPlugins(pluginType)
     return modHandler.findPluginFiletype(pluginType, "lua")
 end
 
+-- Custom wipes are added to the metadata form by small libraries that inject into
+-- celesteEnums.wipe_names. The established location is "Loenn/libraries/wipeDropdown.lua";
+-- plugin isolation otherwise stops that file from loading, so collect it explicitly.
+modHandler.wipeDropdownFilename = "wipeDropdown.lua"
+
+function modHandler.findWipeDropdownLibraries()
+    local filenames = {}
+
+    for modFolderName in pairs(modHandler.loadedMods) do
+        local modFilenames = modHandler.filenamesCache[modFolderName]
+
+        if modFilenames then
+            local prefix = utils.convertToUnixPath(utils.joinpath(
+                string.format(modHandler.specificModContent, modFolderName),
+                fileLocations.loennSimpleFolderName,
+                "libraries"
+            )) .. "/"
+
+            for _, filename in ipairs(modFilenames) do
+                if utils.startsWith(filename, prefix)
+                    and utils.filename(filename, "/") == modHandler.wipeDropdownFilename then
+                    table.insert(filenames, filename)
+                end
+            end
+        end
+    end
+
+    return filenames
+end
+
 function modHandler.findLanguageFiles(startPath)
     startPath = startPath or "lang"
 

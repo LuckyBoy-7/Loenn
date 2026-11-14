@@ -47,6 +47,20 @@ end
 
 function libraries.loadExternalLibraries(registerAt)
     local filenames = modHandler.findPlugins("libraries")
+    local registered = {}
+
+    for _, filename in ipairs(filenames) do
+        registered[filename] = true
+    end
+
+    -- Custom wipe dropdown registrations live in the legacy "Loenn/libraries" folder and are
+    -- explicitly loaded even when editor plugins are isolated.
+    for _, filename in ipairs(modHandler.findWipeDropdownLibraries()) do
+        if not registered[filename] then
+            table.insert(filenames, filename)
+            registered[filename] = true
+        end
+    end
 
     return libraries.loadLibraries(filenames, registerAt)
 end
