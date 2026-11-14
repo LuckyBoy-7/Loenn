@@ -866,41 +866,50 @@ end
 -- Selects and focuses a style in the active list. Deferred on purpose: list:updateItems()
 -- restores the previous selection in a ui.runLate callback, which would overwrite an immediate
 -- selection change.
-local function selectStyleDeferred(interactionData, style, list)
+local function selectStylesDeferred(interactionData, styles, list, primaryStyle)
     list = list or (interactionData and interactionData.stylegroundListElement)
 
-    if not list or not style then
+    if not list or not styles or #styles == 0 then
         return
     end
 
     ui.runLate(function()
-        for index, item in ipairs(list.children or {}) do
-            if item.data and item.data.style == style then
-                -- The list keeps its multi-selection in a separate style set. Clear it before
-                -- selecting the new row, otherwise the old selection wins and the new row never
-                -- appears focused even though the form switched to it.
-                if list.clearStyleSelection then
-                    list.clearStyleSelection(list)
-                end
+        if not stylegroundWindow.isOpen() or not list.parent then
+            return
+        end
 
-                list:setSelection(index)
-                widgetUtils.focusElement(item)
+        local styleSet = {}
 
-                -- Focus after the material row click has finished; focusing immediately here is
-                -- overwritten by the click's own focus handling.
-                ui.runLate(function()
-                    if currentInteractionData ~= interactionData or not item.parent then
-                        return
-                    end
+        for _, style in ipairs(styles) do
+            styleSet[style] = true
+        end
 
-                    widgetUtils.focusElement(item)
-                    listWidgets.scrollSelectionVisible(list)
-                end)
+        local primaryItem = list.setStyleSelection
+            and list:setStyleSelection(styleSet, primaryStyle or styles[#styles])
 
+        if not primaryItem then
+            return
+        end
+
+        widgetUtils.focusElement(primaryItem)
+
+        -- Focus after the material row click has finished; focusing immediately here is
+        -- overwritten by the click's own focus handling.
+        ui.runLate(function()
+            if not stylegroundWindow.isOpen() or not primaryItem.parent then
                 return
             end
-        end
+
+            widgetUtils.focusElement(primaryItem)
+            listWidgets.scrollSelectionVisible(list)
+        end)
     end)
+end
+
+local function selectStyleDeferred(interactionData, style, list)
+    if style then
+        selectStylesDeferred(interactionData, {style}, list, style)
+    end
 end
 
 local function removeStyle(interactionData)
@@ -2167,6 +2176,54 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
         self.selected = false
     end
 
+    -- Selects a set of styles at once, for example after pasting a multi selection. The primary
+    -- style drives the form and receives focus; the rest stay highlighted as a multi selection.
+    list.setStyleSelection = function(self, styles, primaryStyle)
+        if not styles then
+            return nil
+        end
+
+        clearSelection()
+
+        local primaryItem
+
+        for _, item in ipairs(self.children or {}) do
+            local style = item.data and item.data.style
+
+            if style and styles[style] then
+                selectionStyles[style] = true
+
+                if style == primaryStyle then
+                    primaryItem = item
+                end
+            end
+        end
+
+        -- The requested row can be hidden (for example inside a collapsed group). Fall back to
+        -- the first visible selected row so the form still switches to the pasted styles.
+        if not primaryItem then
+            for _, item in ipairs(self.children or {}) do
+                local style = item.data and item.data.style
+
+                if style and styles[style] then
+                    primaryItem = item
+                    primaryStyle = style
+
+                    break
+                end
+            end
+        end
+
+        if not primaryItem then
+            return nil
+        end
+
+        anchorStyle = primaryStyle
+        self:setSelection(primaryItem.data, false, false)
+
+        return primaryItem
+    end
+
     return column, list, items
 end
 
@@ -2592,9 +2649,14 @@ function stylegroundWindow.pasteSelection(interactionData)
     end
 
     local commit = beginStyleEdit(map)
+    local pastedStyles = {}
 
     for _, style in ipairs(stylegroundClipboard.styles) do
-        table.insert(parent, index + 1, utils.deepcopy(style))
+        local pastedStyle = utils.deepcopy(style)
+
+        table.insert(parent, index + 1, pastedStyle)
+        table.insert(pastedStyles, pastedStyle)
+
         index = index + 1
     end
 
@@ -2604,6 +2666,10 @@ function stylegroundWindow.pasteSelection(interactionData)
         local list = interactionData.stylegroundListElement
 
         interactionData.rebuildListItems(nil, list)
+
+        -- Move the focus/selection to the pasted rows. For a multi selection the last pasted
+        -- style is the primary row, the rest stay selected together with it.
+        selectStylesDeferred(interactionData, pastedStyles, list, pastedStyles[#pastedStyles])
     end
 end
 
