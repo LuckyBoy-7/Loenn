@@ -1,5 +1,10 @@
 require("lua_setup")
 
+-- Must run before the window/IME is initialized so SDL uses the native candidate window.
+pcall(function()
+    require("ime").enableNativeCandidateWindow()
+end)
+
 local launchArguments = require("launch_arguments")
 
 -- Set up launch argument parsing

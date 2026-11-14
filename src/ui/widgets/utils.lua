@@ -4,6 +4,7 @@ local uiUtils = require("ui.utils")
 
 local utf8 = require("utf8")
 local utils = require("utils")
+local ime = require("ime")
 
 local widgetUtils = {}
 
@@ -245,6 +246,7 @@ end
 function widgetUtils.focusMainEditor()
     ui.interactiveIterate(ui.focusing, "onUnfocus")
     ui.focusing = false
+    ime.disableTextInput()
 end
 
 function widgetUtils.consumeKeyboardEvents(window, shouldConsume)
@@ -303,9 +305,22 @@ function widgetUtils.focusElement(element)
         element.__wasKeyRepeat = love.keyboard.hasKeyRepeat()
         element.index = utf8.len(element.text or "")
 
+        -- Position the native IME candidate window at this field. The late call catches the
+        -- layout position when the field was focused before its first layout pass.
+        ime.updateTextInputRect(element)
+
+        ui.runLate(function()
+            if ui.focusing == element then
+                ime.updateTextInputRect(element)
+            end
+        end)
+
     elseif elementType == "checkbox" then
         -- Focus the button part of the checkbox instead
         ui.focusing = element.checkbox
+
+    else
+        ime.disableTextInput()
     end
 end
 

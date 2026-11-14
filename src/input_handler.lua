@@ -18,6 +18,53 @@ local function isStylegroundsShortcutKey(key)
         and (love.keyboard.isDown("lctrl", "rctrl"))
 end
 
+-- Keep the Windows IME candidate window aligned with whatever text field the UI focused after a
+-- mouse press. This lives here so the OlympUI submodule stays untouched.
+local function updateImeFocus()
+    local imeLoaded, ime = pcall(require, "ime")
+
+    if not imeLoaded then
+        return
+    end
+
+    local uiLoaded, ui = pcall(require, "ui")
+
+    if not uiLoaded or not ui then
+        return
+    end
+
+    local focusing = ui.focusing
+
+    if focusing and focusing.__type == "field" then
+        ime.updateTextInputRect(focusing)
+
+    else
+        ime.disableTextInput()
+    end
+end
+
+-- Keeps the candidate window next to the caret while typing. This does not restart text input,
+-- so an active composition is not disturbed.
+local function moveImeFocus()
+    local imeLoaded, ime = pcall(require, "ime")
+
+    if not imeLoaded then
+        return
+    end
+
+    local uiLoaded, ui = pcall(require, "ui")
+
+    if not uiLoaded or not ui then
+        return
+    end
+
+    local focusing = ui.focusing
+
+    if focusing and focusing.__type == "field" then
+        ime.moveTextInputRect(focusing)
+    end
+end
+
 -- The stylegrounds panel is a floating panel, so its keyboard shortcuts are routed by cursor
 -- position instead of focus: when the cursor is over the panel, the workspace tool must not also
 -- handle the same key (for example pasting a room and a styleground at the same time).
@@ -81,6 +128,7 @@ function love.keypressed(key, scancode, isrepeat)
     end
 
     sceneHandler.sendEvent("keypressed", key, scancode, isrepeat)
+    moveImeFocus()
 end
 
 function love.keyreleased(key, scancode)
@@ -89,6 +137,7 @@ end
 
 function love.textinput(text)
     sceneHandler.sendEvent("textinput", text)
+    moveImeFocus()
 end
 
 function love.mousemoved(x, y, dx, dy, istouch)
@@ -113,6 +162,7 @@ function love.mousepressed(x, y, button, istouch, presses)
     mouseButtonsPressed[button] = {x, y, x, y}
 
     sceneHandler.sendEvent("mousepressed", x, y, button, istouch, presses)
+    updateImeFocus()
 end
 
 function love.mousereleased(x, y, button, istouch, presses)
