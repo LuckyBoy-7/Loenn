@@ -140,6 +140,26 @@ function love.textinput(text)
     moveImeFocus()
 end
 
+-- LÖVE exposes SDL_TEXTEDITING through this optional callback. It is not dispatched through the
+-- editor scene, so forward the composition text directly to the focused text field.
+function love.textedited(text, start, length)
+    local ui = package.loaded["ui"]
+    local field = ui and ui.focusing
+
+    if field and field.__type == "field" and field.setPreedit then
+        local direction = 0
+
+        if love.keyboard.isDown("left") then
+            direction = -1
+
+        elseif love.keyboard.isDown("right") then
+            direction = 1
+        end
+
+        field:setPreedit(text, start, length, direction)
+    end
+end
+
 function love.mousemoved(x, y, dx, dy, istouch)
     -- Mouse events on Mac should only be handled if window is focused
     if not windowFocused and usingMacOS then

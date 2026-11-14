@@ -66,6 +66,14 @@ function ime.updateTextInputRect(element)
         return
     end
 
+    -- Do not restart text input when it is already active: doing that resets an in-progress
+    -- composition and makes the preedit text disappear on every click.
+    if love.keyboard.hasTextInput and love.keyboard.hasTextInput() then
+        ime.moveTextInputRect(element)
+
+        return
+    end
+
     love.keyboard.setTextInput(true, x, y, element.width or 1, element.height or 1)
 end
 
