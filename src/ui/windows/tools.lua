@@ -4777,21 +4777,27 @@ local function scrollRoomListToSelection()
         return
     end
 
-    local index
+    local target
 
-    for i, item in ipairs(list.data) do
+    for _, item in ipairs(list.data) do
         if item.data == targetName then
-            index = i
+            target = item
 
             break
         end
     end
 
-    if not index then
+    if not target then
         return
     end
 
-    list._selectedIndex = index
+    -- setSelection updates the magic list's selection index and scrolls the list. _updatingItems
+    -- suppresses the material callback so this does not also move the viewport.
+    local wasUpdatingItems = list._updatingItems
+    list._updatingItems = true
+    list:setSelection(targetName)
+    list._updatingItems = wasUpdatingItems
+
     lists.scrollSelectionVisible(list)
 end
 
@@ -5638,7 +5644,13 @@ function toolWindow.getWindow()
         editorLayerAdded = layerAddedCallback,
         editorLayerDeleted = layerDeletedCallback,
         editorRoomAdded = refreshRoomMaterialList,
-        editorRoomDeleted = refreshRoomMaterialList,
+        editorRoomDeleted = function()
+            refreshRoomMaterialList()
+
+            -- Specific to deletions: the newly focused room can be anywhere in the list, so make
+            -- sure its row is visible after updateItems restored its own selection.
+            ui.runLate(scrollRoomListToSelection)
+        end,
         editorRoomChanged = refreshRoomMaterialList,
         editorRoomOrderChanged = refreshRoomMaterialList,
 

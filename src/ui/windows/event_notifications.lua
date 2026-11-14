@@ -257,7 +257,6 @@ function notificationHandlers:editorRoomDelete(map, item)
             uiElements.row({
                 uiElements.button(tostring(language.ui.button.confirm), function()
                     mapItemUtils.deleteItem(map, item)
-                    loadedState.selectItem(nil)
 
                     popup:close()
                 end),

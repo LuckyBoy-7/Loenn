@@ -74,12 +74,64 @@ function mapItemUtils.getMapBounds(map)
     return utils.rectangleBounds(rectangles)
 end
 
+local function roomGapSquared(a, b)
+    -- Distance between the two room rectangles. Adjacent rooms have a gap of zero, which makes
+    -- this a better "nearest room" metric than the room list order.
+    local dx = math.max(b.x - (a.x + a.width), a.x - (b.x + b.width), 0)
+    local dy = math.max(b.y - (a.y + a.height), a.y - (b.y + b.height), 0)
+
+    return dx * dx + dy * dy
+end
+
+local function roomCenterDistanceSquared(a, b)
+    local ax, ay = a.x + a.width * 0.5, a.y + a.height * 0.5
+    local bx, by = b.x + b.width * 0.5, b.y + b.height * 0.5
+    local dx, dy = ax - bx, ay - by
+
+    return dx * dx + dy * dy
+end
+
+local function findNearestRoom(map, deletedRooms)
+    local nearest, nearestGap, nearestCenter
+
+    for _, room in ipairs(map.rooms) do
+        local gap = math.huge
+        local center = math.huge
+
+        for _, deleted in ipairs(deletedRooms) do
+            gap = math.min(gap, roomGapSquared(room, deleted))
+            center = math.min(center, roomCenterDistanceSquared(room, deleted))
+        end
+
+        -- Prefer touching/adjacent rooms, then the closest center.
+        if not nearest or gap < nearestGap or (gap == nearestGap and center < nearestCenter) then
+            nearest, nearestGap, nearestCenter = room, gap, center
+        end
+    end
+
+    return nearest
+end
+
+local function selectNearestRoom(map, deletedRooms)
+    -- The viewport is not touched here: only the selection and the room list follow the deletion.
+    loadedState.selectItem(findNearestRoom(map, deletedRooms))
+end
+
 function mapItemUtils.deleteRoom(map, room)
     for i, r in ipairs(map.rooms) do
         if r.name == room.name then
+            local selected, selectedType = loadedState.getSelectedItem()
+            local wasSelected = selected == r
+                or (selectedType == "table" and selected and selected[r] ~= nil)
+
             celesteRender.invalidateRoomCache(r)
             table.remove(map.rooms, i)
             sceneHandler.sendEvent("editorRoomDeleted", r)
+
+            -- A multi selection is resolved by deleteItem after every selected room is gone.
+            if wasSelected and selectedType ~= "table" then
+                selectNearestRoom(map, {r})
+            end
 
             return true
         end
@@ -130,9 +182,28 @@ function mapItemUtils.deleteItem(map, item, useHistory)
 
     elseif itemType == "table" then
         local result = false
+        local selected, selectedType = loadedState.getSelectedItem()
+        local updateSelection = selectedType == "table" and selected == item
+        local deletedRooms
+
+        -- Resolve the selection after the whole batch is gone, so deleting several rooms does
+        -- not select a room that is still waiting to be deleted.
+        if updateSelection then
+            deletedRooms = {}
+
+            for _, room in ipairs(map.rooms) do
+                if item[room] then
+                    table.insert(deletedRooms, room)
+                end
+            end
+        end
 
         for subItem, _ in pairs(item) do
             result = mapItemUtils.deleteItem(map, subItem, useHistory) or result
+        end
+
+        if deletedRooms and #deletedRooms > 0 then
+            selectNearestRoom(map, deletedRooms)
         end
 
         return result
