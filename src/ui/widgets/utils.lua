@@ -247,15 +247,23 @@ function widgetUtils.focusMainEditor()
     ui.focusing = false
 end
 
-function widgetUtils.consumeKeyboardEvents(window)
+function widgetUtils.consumeKeyboardEvents(window, shouldConsume)
     if not window._consumingKeyboardEvents then
         window.interactive = 1
 
         window:hook({
             onKeyPress = function()
+                if shouldConsume and not shouldConsume() then
+                    return false
+                end
+
                 return true
             end,
             onKeyRelease = function()
+                if shouldConsume and not shouldConsume() then
+                    return false
+                end
+
                 return true
             end
         })

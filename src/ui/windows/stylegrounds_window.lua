@@ -2175,6 +2175,75 @@ local currentWindow
 local currentInteractionData
 local addingStyle = false
 
+-- Keyboard shortcuts belong to the stylegrounds panel only while the cursor is over it. This
+-- keeps Ctrl+C/X/V and Delete from also reaching the active workspace tool (for example the rooms
+-- tool) when the panel is open.
+function stylegroundWindow.isMouseInside()
+    local window = currentWindow
+
+    if not window or not window.parent then
+        return false
+    end
+
+    local x, y = ui.mouseX, ui.mouseY
+
+    if not x or not y or not window.screenX or not window.screenY then
+        return false
+    end
+
+    return x >= window.screenX and x <= window.screenX + (window.width or 0)
+        and y >= window.screenY and y <= window.screenY + (window.height or 0)
+end
+
+function stylegroundWindow.shouldCaptureShortcut(key)
+    if not currentInteractionData or not stylegroundWindow.isMouseInside() then
+        return false
+    end
+
+    if ctrlHeld() then
+        return key == "c" or key == "x" or key == "v"
+    end
+
+    return key == "delete"
+end
+
+-- The panel only owns the keyboard while the cursor is over it (or while a form field is being
+-- edited). This lets the active workspace tool receive shortcuts when the cursor is elsewhere.
+function stylegroundWindow.shouldConsumeKeyboardEvents()
+    return stylegroundWindow.isMouseInside() or textInputFocused()
+end
+
+function stylegroundWindow.handleKeyboardShortcut(key)
+    if not currentInteractionData or textInputFocused() then
+        return false
+    end
+
+    if ctrlHeld() then
+        if key == "c" then
+            stylegroundWindow.copySelection(currentInteractionData)
+
+            return true
+
+        elseif key == "x" then
+            stylegroundWindow.cutSelection(currentInteractionData)
+
+            return true
+
+        elseif key == "v" then
+            stylegroundWindow.pasteSelection(currentInteractionData)
+
+            return true
+        end
+
+    elseif key == "delete" then
+        removeStyle(currentInteractionData)
+
+        return true
+    end
+
+    return false
+end
+
 -- Which list a new style goes to: the one currently shown in the window, foreground by default
 local function getActiveForeground(interactionData)
     local activeList = interactionData and interactionData.stylegroundListElement
@@ -3056,35 +3125,16 @@ function stylegroundWindow.editStylegrounds(map)
     end
 
     widgetUtils.preventOutOfBoundsMovement(window)
-    widgetUtils.consumeKeyboardEvents(window)
+    widgetUtils.consumeKeyboardEvents(window, stylegroundWindow.shouldConsumeKeyboardEvents)
 
     -- Install after consumeKeyboardEvents, so this hook is the outer one and sees the keys first.
     -- While a form field is focused its own handling wins: the list shortcuts are isolated.
     window:hook({
         onKeyPress = function(orig, self, key, scancode, isrepeat)
-            if currentInteractionData and not textInputFocused() then
-                if ctrlHeld() then
-                    if key == "c" then
-                        stylegroundWindow.copySelection(currentInteractionData)
+            if stylegroundWindow.shouldCaptureShortcut(key) then
+                stylegroundWindow.handleKeyboardShortcut(key)
 
-                        return true
-
-                    elseif key == "x" then
-                        stylegroundWindow.cutSelection(currentInteractionData)
-
-                        return true
-
-                    elseif key == "v" then
-                        stylegroundWindow.pasteSelection(currentInteractionData)
-
-                        return true
-                    end
-
-                elseif key == "delete" then
-                    removeStyle(currentInteractionData)
-
-                    return true
-                end
+                return true
             end
 
             if orig then

@@ -9,6 +9,35 @@ local dragTreshold = 2
 local windowFocused = true
 local usingMacOS = love.system.getOS() == "OS X"
 
+local function isStylegroundsShortcutKey(key)
+    if key == "delete" then
+        return true
+    end
+
+    return (key == "c" or key == "x" or key == "v")
+        and (love.keyboard.isDown("lctrl", "rctrl"))
+end
+
+-- The stylegrounds panel is a floating panel, so its keyboard shortcuts are routed by cursor
+-- position instead of focus: when the cursor is over the panel, the workspace tool must not also
+-- handle the same key (for example pasting a room and a styleground at the same time).
+local function routeStylegroundsShortcut(key)
+    if not isStylegroundsShortcutKey(key) then
+        return false
+    end
+
+    local loaded, stylegrounds = pcall(require, "ui.windows.stylegrounds_window")
+
+    if not loaded or not stylegrounds.shouldCaptureShortcut or not stylegrounds.shouldCaptureShortcut(key) then
+        return false
+    end
+
+    -- The UI device runs after this handler, so the panel shortcut has to be executed here.
+    -- Form/text fields report false from handleKeyboardShortcut and keep their normal text
+    -- editing shortcuts.
+    return stylegrounds.handleKeyboardShortcut(key)
+end
+
 function inputHandler.getMouseDrag(x, y, button)
     local from = mouseButtonsPressed[button]
     local startX, startY = from[1], from[2]
@@ -45,6 +74,10 @@ function love.keypressed(key, scancode, isrepeat)
                 return
             end
         end
+    end
+
+    if routeStylegroundsShortcut(key) then
+        return
     end
 
     sceneHandler.sendEvent("keypressed", key, scancode, isrepeat)
