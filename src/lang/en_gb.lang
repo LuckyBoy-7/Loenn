@@ -35,6 +35,7 @@ layers.name.bg=BG
 layers.name.collectables=Collectables
 layers.name.danger=Danger
 layers.name.objects=Objects
+layers.name.name=Name
 
 
 # -- Tools --

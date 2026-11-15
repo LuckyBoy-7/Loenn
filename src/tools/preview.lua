@@ -11,8 +11,9 @@ tool.group = "preview"
 -- Right below Stylegrounds
 tool.order = 9.6
 
--- Secondary entries: asset folders whose images are listed on the right
-tool.validLayers = {"bg", "collectables", "danger", "objects", "colorGrading"}
+-- Secondary entries: asset folders whose images are listed on the right, plus the raw entity and
+-- trigger names used by scripts. The Name entry has no images, it lists names instead.
+tool.validLayers = {"bg", "collectables", "danger", "objects", "name", "colorGrading"}
 
 tool.layer = "bg"
 tool.subLayer = -1

@@ -27,6 +27,7 @@ layers.name.bg=背景
 layers.name.collectables=收集品
 layers.name.danger=危险物
 layers.name.objects=对象
+layers.name.name=名称
 
 # Tools
 tools.name.tile=图块

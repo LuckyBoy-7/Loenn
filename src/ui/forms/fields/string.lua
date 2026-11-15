@@ -326,6 +326,32 @@ function stringField.getElement(name, value, options)
 
     formField = setmetatable(formField, stringField._MT)
 
+    -- Optional focus callbacks for fields that open an auxiliary picker.
+    if options.onFocus or options.onBlur then
+        local wasFocused = false
+
+        field:hook({
+            update = function(orig, self, dt)
+                orig(self, dt)
+
+                local focused = self.focused and true or false
+
+                if focused ~= wasFocused then
+                    wasFocused = focused
+
+                    if focused then
+                        if options.onFocus then
+                            options.onFocus(formField)
+                        end
+
+                    elseif options.onBlur then
+                        options.onBlur(formField)
+                    end
+                end
+            end
+        })
+    end
+
     local valid = validator(value, displayTransformer(value))
     local warningValid = warningValidator(value, displayTransformer(value))
 

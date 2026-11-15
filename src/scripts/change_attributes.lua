@@ -9,6 +9,9 @@
 
 local entities = require("entities")
 local utils = require("utils")
+local ui = require("ui")
+local utf8 = require("utf8")
+local subLayers = require("sub_layers")
 
 local script = {}
 
@@ -28,11 +31,155 @@ script.defaultData = {
     allowPreserving = false
 }
 
+local focusedFormField
+local previousToolName
+local previousLayerName
+local namePreviewActive = false
+
+local function getToolsWindow()
+    local success, toolsWindow = pcall(require, "ui/windows/tools")
+
+    return success and toolsWindow or nil
+end
+
+local function switchToNamePreview()
+    local toolHandler = require("tools")
+    local currentTool = toolHandler.currentTool
+    local currentName = toolHandler.currentToolName
+
+    if not currentName then
+        return
+    end
+
+    previousToolName = currentName
+
+    local previousLayer = toolHandler.getLayer(currentName)
+    local previousSubLayer = currentTool and currentTool.subLayer
+    previousLayerName = type(previousLayer) == "string" and subLayers.formatLayerName(
+        previousLayer,
+        type(previousSubLayer) == "number" and previousSubLayer or -1
+    ) or nil
+
+    local toolsWindow = getToolsWindow()
+
+    if toolsWindow and toolsWindow.selectTool and toolsWindow.selectLayer then
+        toolsWindow.selectTool("preview")
+
+        -- selectTool restores the preview tool's persisted layer. Switch to Name after that has
+        -- finished, otherwise the restore overwrites the layer again.
+        ui.runLate(function()
+            if namePreviewActive and toolHandler.currentToolName == "preview" then
+                toolsWindow.selectLayer("name", true)
+            end
+        end)
+
+    else
+        toolHandler.selectTool("preview")
+        toolHandler.setLayer("name")
+    end
+
+    namePreviewActive = true
+end
+
+local function restorePreviousTool()
+    if not namePreviewActive then
+        return
+    end
+
+    namePreviewActive = false
+
+    local toolHandler = require("tools")
+    local toolName = previousToolName
+    local layerName = previousLayerName
+    local toolsWindow = getToolsWindow()
+
+    previousToolName = nil
+    previousLayerName = nil
+
+    if not toolName then
+        return
+    end
+
+    if toolsWindow and toolsWindow.selectTool then
+        toolsWindow.selectTool(toolName)
+
+        if layerName and toolsWindow.selectLayer then
+            ui.runLate(function()
+                if not namePreviewActive and toolHandler.currentToolName == toolName then
+                    toolsWindow.selectLayer(layerName)
+                end
+            end)
+        end
+
+    else
+        toolHandler.selectTool(toolName)
+
+        if layerName then
+            local layer, subLayer = subLayers.parseLayerName(layerName)
+
+            toolHandler.setLayer(layer, subLayer)
+        end
+    end
+end
+
+local function onNameFieldFocus(formField)
+    focusedFormField = formField
+
+    if not namePreviewActive then
+        switchToNamePreview()
+    end
+end
+
+local function onNameFieldBlur(formField)
+    if focusedFormField ~= formField then
+        return
+    end
+
+    -- Clicking an entry in Preview -> Name also blurs the field. Wait for the click to run first;
+    -- if focus moved to another Change Attributes field, that field's onFocus replaces the target.
+    ui.runLate(function()
+        if focusedFormField == formField and not formField.field.focused then
+            focusedFormField = nil
+
+            restorePreviousTool()
+        end
+    end)
+end
+
+-- Called by Preview -> Name when an entry is clicked. It only replaces a form field that was
+-- focused before the picker took over.
+function script.replaceFocusedField(name)
+    if not focusedFormField then
+        return false
+    end
+
+    focusedFormField:setValue(name)
+
+    local field = focusedFormField.field
+
+    if field then
+        field.index = utf8.len(name) or #name
+        field.blinkTime = 0
+        field:repaint()
+    end
+
+    if focusedFormField.notifyFieldChanged then
+        focusedFormField:notifyFieldChanged()
+    end
+
+    return true
+end
+
+-- Restores the original tool if the picker has to be closed programmatically.
+function script.finishNamePreview()
+    focusedFormField = nil
+
+    restorePreviousTool()
+end
+
 script.fieldInformation = {
-    -- Plain editable text: there are thousands of registered entities, a dropdown of all of
-    -- them makes the panel layout very heavy
-    type = {editable = true},
-    replaceWith = {editable = true}
+    type = {editable = true, onFocus = onNameFieldFocus, onBlur = onNameFieldBlur},
+    replaceWith = {editable = true, onFocus = onNameFieldFocus, onBlur = onNameFieldBlur}
 }
 
 script.tooltips = {

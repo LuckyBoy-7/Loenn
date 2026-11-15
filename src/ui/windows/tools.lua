@@ -31,6 +31,7 @@ local selectionUtils = require("selections")
 local celesteRender = require("celeste_render")
 local atlases = require("atlases")
 local entities = require("entities")
+local triggers = require("triggers")
 local tiles = require("tiles")
 local brushHelper = require("brushes")
 local autotiler = require("autotiler")
@@ -181,6 +182,7 @@ local layersWithSubLayers = {
 
 local layersWithBlankIcon = {
     allLayers = true,
+    name = true,
 }
 
 -- Layers whose materials are decal paths. Those are shown as a path hierarchy instead of a flat
@@ -1269,6 +1271,11 @@ local materialPanel
 
 local function shouldShowMaterialIcon(data)
     if not materialSourceIconsEnabled or not data then
+        return false
+    end
+
+    -- The Name list groups by source for navigation only; no folder/source icons are wanted there.
+    if data.currentToolName == "preview" and data.currentLayer == "name" then
         return false
     end
 
@@ -2410,8 +2417,9 @@ updateHoverPreview = function(list)
     local content
 
     -- Preview tool: load the image of the hovered row directly, showing a checkerboard placeholder
-    -- when it is empty or can not be loaded
-    if toolHandler.currentToolName == "preview" then
+    -- when it is empty or can not be loaded. Entity rows in the Name list keep their normal entity
+    -- preview, so they fall through to the entity branch below.
+    if toolHandler.currentToolName == "preview" and item.currentLayer ~= "entities" then
         local entry = item.previewEntry
 
         updateColorGradingHover(entry)
@@ -3125,6 +3133,115 @@ local function ensurePreviewFiles(copyPrefix, folderPath, deferLoading)
     return files
 end
 
+-- Raw entity/trigger names used by the current map. Unlike Placements, the rows copy the internal
+-- name instead of placing an object, and entity rows still use the normal entity preview.
+local function getNamePreviewItems(language)
+    local groups = {entities = {}, triggers = {}}
+    local seen = {entities = {}, triggers = {}}
+
+    for _, room in ipairs(loadedState.map and loadedState.map.rooms or {}) do
+        for _, layerName in ipairs({"entities", "triggers"}) do
+            for _, item in ipairs(room[layerName] or {}) do
+                local name = item._name
+
+                if name and not seen[layerName][name] then
+                    seen[layerName][name] = true
+
+                    table.insert(groups[layerName], {
+                        name = name,
+                        layerName = layerName
+                    })
+                end
+            end
+        end
+    end
+
+    local entityPlacements = {}
+
+    for _, placement in ipairs(placementUtils.getPlacements("entities")) do
+        local name = placement.itemTemplate and placement.itemTemplate._name
+
+        if name and not entityPlacements[name] then
+            entityPlacements[name] = placement
+        end
+    end
+
+    local function normalizeMods(mods)
+        if type(mods) == "string" then
+            return {mods}
+        end
+
+        if type(mods) == "table" and #mods > 0 then
+            return mods
+        end
+    end
+
+    local materials = {}
+    local layerByName = {}
+
+    for _, group in ipairs({groups.entities, groups.triggers}) do
+        for _, entry in ipairs(group) do
+            local name = entry.name
+            local associatedMods
+
+            if entry.layerName == "entities" then
+                associatedMods = normalizeMods(entities.associatedMods({_name = name}, "entities"))
+
+            else
+                associatedMods = normalizeMods(triggers.associatedMods({_name = name}, "triggers"))
+            end
+
+            layerByName[name] = entry.layerName
+
+            table.insert(materials, {
+                name = name,
+                displayNameNoMods = name,
+                associatedMods = associatedMods,
+                tooltipText = name
+            })
+        end
+    end
+
+    local items = getPathTreeItems(materials, {name = "preview"}, "name", {}, language, {
+        flat = true,
+        leafText = function(entry)
+            return entry.displayName
+        end
+    })
+
+    local function selectName(name)
+        love.system.setClipboardText(name)
+
+        local changeAttributes = package.loaded["scripts/change_attributes"]
+
+        if changeAttributes and changeAttributes.replaceFocusedField then
+            changeAttributes.replaceFocusedField(name)
+        end
+    end
+
+    for _, item in ipairs(items) do
+        -- Clicking the right panel must not blur the form field that triggered the Name view.
+        item.keepInputFocus = true
+
+        if item.data and not item.isHeader then
+            local layerName = layerByName[item.data]
+
+            item.currentLayer = layerName
+            item.tooltip = item.data
+            item.isButton = true
+            item.onPress = function()
+                selectName(item.data)
+            end
+
+            if layerName == "entities" then
+                item.placement = entityPlacements[item.data]
+            end
+        end
+    end
+
+    return items
+end
+
 getMaterialItems = function(layer)
     -- A rebuilt list invalidates whatever row was hovered before
     hoverPreview.hide()
@@ -3147,6 +3264,10 @@ getMaterialItems = function(layer)
     local favorites = toolUtils.getPersistenceFavorites(currentTool, currentLayer) or {}
     local favoritesLookup = table.flip(favorites)
     local language = languageRegistry.getLanguage()
+
+    if currentTool and currentTool.name == "preview" and currentLayer == "name" then
+        return getNamePreviewItems(language)
+    end
 
     -- Stylegrounds: one entry per style kind (Parallax, Group and every registered effect), grouped
     -- by the mod they come from exactly like the trigger list.
@@ -3626,6 +3747,7 @@ getMaterialItems = function(layer)
                 local entry = previewFiles[item.data]
 
                 item.isButton = true
+                item.keepInputFocus = true
                 item.tooltip = item.data
                 item.previewEntry = entry
                 item.previewIndex = index
@@ -4319,6 +4441,7 @@ local function layerDataToElement(list, data, element)
         element.itemData = data
         element.baseLayer = data.baseLayer
         element.subLayer = data.subLayer
+        element.keepInputFocus = toolHandler.currentToolName == "preview"
     end
 
     return element
@@ -4359,6 +4482,28 @@ local function layerCallback(list, layerName)
             toolWindow.materialList:updateItems(getMaterialItems(layer), targetMaterial)
         end
     end
+end
+
+-- Switch to a layer from code (used by Change Attributes to temporarily show the Name list).
+function toolWindow.selectLayer(layerName, clearSearch)
+    if not layerName or not toolWindow.layerList or not toolWindow.materialList then
+        return false
+    end
+
+    if clearSearch then
+        if toolWindow.materialList.searchField then
+            toolWindow.materialList.searchField:setText("")
+        end
+
+        if toolWindow.materialList.setFilterText then
+            toolWindow.materialList:setFilterText("", true)
+        end
+    end
+
+    toolWindow.layerList:setSelection(layerName, true)
+    layerCallback(toolWindow.layerList, layerName)
+
+    return true
 end
 
 local function toolLayerChangedCallback(self, tool, layer, subLayer)
@@ -5026,6 +5171,9 @@ function toolWindow.getWindow()
 
     local materialItems = getMaterialItems()
     local scrolledMaterialList, materialList, materialSearchField = lists.getMagicList(materialCallback, materialItems, materialListOptions)
+
+    -- Dragging the material list scrollbar must not blur a form field on the left.
+    scrolledMaterialList.keepInputFocus = true
 
     -- The magic list scrolls by a fixed element size, which getMaterialItems keeps in sync with
     -- the current layer

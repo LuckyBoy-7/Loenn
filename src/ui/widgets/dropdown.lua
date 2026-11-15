@@ -8,8 +8,16 @@ local uiUtils = require("ui.utils")
 local lists = require("ui.widgets.lists")
 local utils = require("utils")
 local widgetUtils = require("ui.widgets.utils")
+local configs = require("configs")
 
 local dropdowns = {}
+
+local function getMaxDropdownHeight(root, options)
+    local uiScale = configs.ui.theme.uiScale or 1
+    local maxHeight = options.maxHeight or 320 * uiScale
+
+    return math.min(root.height or maxHeight, maxHeight)
+end
 
 -- For styling
 uiElements.add("magicDropdown", {
@@ -60,6 +68,16 @@ local function listUpdate(orig, self, dt)
 
     if self.dropdownMenuVisible and self.parent then
         local spawnParent = self.options.spawnParent
+
+        -- The panel owning the dropdown may have been closed while the menu was open. The menu is
+        -- parented to the root instead of the window, so close it explicitly instead of leaving an
+        -- invisible/interactive overlay behind.
+        if not spawnParent or not spawnParent.parent then
+            closeDropdown(self, false)
+
+            return
+        end
+
         local target = ui.focusing
         local focused = ui.focusing == spawnParent
 
@@ -218,7 +236,8 @@ function dropdowns.fromList(callback, stringOptions, options)
             list:layout()
             list.container:layout()
 
-            local initialHeight = math.min(lists.getMagicListHeight(list), spawnRoot.height)
+            local maxHeight = getMaxDropdownHeight(spawnRoot, options)
+            local initialHeight = math.min(lists.getMagicListHeight(list), maxHeight)
             list.container.height = initialHeight
             list.container:repaint()
 
@@ -226,16 +245,18 @@ function dropdowns.fromList(callback, stringOptions, options)
             ui.runLate(function()
                 ui.runLate(function()
                     -- List height didn't seem to make sense after two layout calls, this is good enough
-                    local listHeight = lists.getMagicListHeight(list)
+                    local listHeight = math.min(lists.getMagicListHeight(list), maxHeight)
                     local listBottom = spawnY + listHeight
                     local rootBottom = spawnRoot.realY + spawnRoot.height - dropdownStyle.margin
 
-                    list.container.height = math.min(listHeight, spawnRoot.height)
+                    list.container.height = listHeight
 
                     if listBottom > rootBottom then
                         if fromSearchFilter then
-                            list.height = rootBottom - spawnY
-                            list.container.height = rootBottom - spawnY - 2 * dropdownStyle.padding
+                            local available = math.max(1, rootBottom - spawnY)
+
+                            list.height = available
+                            list.container.height = math.max(1, available - 2 * dropdownStyle.padding)
 
                         else
                             local offsetY = listBottom - rootBottom
@@ -286,9 +307,11 @@ function dropdowns.fromList(callback, stringOptions, options)
 
         local spawnY = spawnParent.screenY + spawnParent.height + dropdownStyle.margin
         local rootBottom = spawnRoot.realY + spawnRoot.height - dropdownStyle.margin
+        local maxHeight = getMaxDropdownHeight(spawnRoot, options)
+        local height = math.max(1, math.min(maxHeight, rootBottom - spawnY))
 
-        list.height = rootBottom - spawnY
-        list.container.height = rootBottom - spawnY - 2 * dropdownStyle.padding
+        list.height = height
+        list.container.height = math.max(1, height - 2 * dropdownStyle.padding)
 
         list:filter(text, preventCallback)
     end
