@@ -1,4 +1,4 @@
--- Minimal ZIP writer (stored / uncompressed entries). Used by the Export To Zip script so the
+-- Minimal ZIP writer (stored / uncompressed entries). Used by the Export to Zip script so the
 -- editor does not depend on external zip tools.
 
 local bit = require("bit")

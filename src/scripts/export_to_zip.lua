@@ -1,4 +1,4 @@
--- Export To Zip: updates the version in the current map mod's everest.yaml and writes the whole mod
+-- Export to Zip: updates the version in the current map mod's everest.yaml and writes the whole mod
 -- folder into a zip file on the desktop.
 
 local utils = require("utils")
@@ -9,7 +9,7 @@ local zipWriter = require("utils.zip_writer")
 local script = {}
 
 script.name = "exportToZip"
-script.title = "Export To Zip"
+script.title = "Export to Zip"
 script.description = "Updates the mod version and exports the whole mod folder to a zip file."
 
 local function readTextFile(path)
@@ -122,7 +122,7 @@ local function exportMod(modFolder, modName, version)
     local everestPath = utils.joinpath(modFolder, "everest.yaml")
 
     if not version or version == "" or version:find("[\r\n]") then
-        notifications.notify("Export To Zip: please enter a valid version.")
+        notifications.notify("Export to Zip: please enter a valid version.")
 
         return false
     end
@@ -130,7 +130,7 @@ local function exportMod(modFolder, modName, version)
     local success, reason = updateVersion(everestPath, version)
 
     if not success then
-        notifications.notify("Export To Zip: " .. tostring(reason))
+        notifications.notify("Export to Zip: " .. tostring(reason))
 
         return false
     end
@@ -138,7 +138,7 @@ local function exportMod(modFolder, modName, version)
     local desktop = getDesktopFolder()
 
     if not desktop then
-        notifications.notify("Export To Zip: could not find the desktop folder.")
+        notifications.notify("Export to Zip: could not find the desktop folder.")
 
         return false
     end
@@ -147,7 +147,7 @@ local function exportMod(modFolder, modName, version)
     local files = collectFiles(modFolder)
 
     if #files == 0 then
-        notifications.notify("Export To Zip: the mod folder is empty.")
+        notifications.notify("Export to Zip: the mod folder is empty.")
 
         return false
     end
@@ -155,12 +155,12 @@ local function exportMod(modFolder, modName, version)
     local zipped, zipReason = zipWriter.write(destination, files)
 
     if not zipped then
-        notifications.notify("Export To Zip: " .. tostring(zipReason))
+        notifications.notify("Export to Zip: " .. tostring(zipReason))
 
         return false
     end
 
-    notifications.notify(string.format("Export To Zip: exported %d files to '%s'.", #files, destination))
+    notifications.notify(string.format("Export to Zip: exported %d files to '%s'.", #files, destination))
 
     return true
 end
@@ -171,7 +171,7 @@ function script.open()
     local modFolder, modName = tilesetDefaults.getMapModFolder()
 
     if not modFolder then
-        notifications.notify("Export To Zip: the current map is not inside a valid, unpacked Mod folder.")
+        notifications.notify("Export to Zip: the current map is not inside a valid, unpacked Mod folder.")
 
         return
     end
