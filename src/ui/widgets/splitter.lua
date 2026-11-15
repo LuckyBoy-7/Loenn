@@ -8,7 +8,9 @@ local cursorUtils = require("utils.cursor")
 local splitter = {}
 
 local function otherDragActive(self)
-    return ui.dragging ~= nil and ui.dragging ~= self
+    -- ui.dragging defaults to false, not nil: a plain ~= nil check would treat every idle state
+    -- as another drag and permanently disable the splitter.
+    return ui.dragging and ui.dragging ~= self
 end
 
 local function clamp(value, minimum, maximum)
