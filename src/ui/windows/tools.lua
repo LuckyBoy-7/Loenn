@@ -25,6 +25,7 @@ local utils = require("utils")
 local cursorUtils = require("utils.cursor")
 local hotkeyHandler = require("hotkey_handler")
 local loadedState = require("loaded_state")
+local namePreviewScope = require("ui.name_preview_scope")
 local subLayers = require("sub_layers")
 local history = require("history")
 local selectionUtils = require("selections")
@@ -3152,8 +3153,9 @@ end
 local function getNamePreviewItems(language)
     local groups = {entities = {}, triggers = {}}
     local seen = {entities = {}, triggers = {}}
+    local rooms = namePreviewScope.getRooms() or (loadedState.map and loadedState.map.rooms) or {}
 
-    for _, room in ipairs(loadedState.map and loadedState.map.rooms or {}) do
+    for _, room in ipairs(rooms) do
         for _, layerName in ipairs({"entities", "triggers"}) do
             for _, item in ipairs(room[layerName] or {}) do
                 local name = item._name
@@ -3220,6 +3222,9 @@ local function getNamePreviewItems(language)
         flat = true,
         leafText = function(entry)
             return entry.displayName
+        end,
+        searchText = function(entry)
+            return entry.displayName
         end
     })
 
@@ -3236,6 +3241,7 @@ local function getNamePreviewItems(language)
     for _, item in ipairs(items) do
         -- Clicking the right panel must not blur the form field that triggered the Name view.
         item.keepInputFocus = true
+        item.indent = 0
 
         if item.data and not item.isHeader then
             local layerName = layerByName[item.data]
@@ -5186,8 +5192,10 @@ function toolWindow.getWindow()
     local materialItems = getMaterialItems()
     local scrolledMaterialList, materialList, materialSearchField = lists.getMagicList(materialCallback, materialItems, materialListOptions)
 
-    -- Dragging the material list scrollbar must not blur a form field on the left.
-    scrolledMaterialList.keepInputFocus = true
+    -- Dragging the material list scrollbar must not blur a form field on the left. Set this on the
+    -- scrollbox itself, not the column: the column also contains the search field, which must still
+    -- be able to take focus.
+    materialList.scrolledList.keepInputFocus = true
 
     -- The magic list scrolls by a fixed element size, which getMaterialItems keeps in sync with
     -- the current layer

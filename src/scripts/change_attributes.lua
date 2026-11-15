@@ -9,9 +9,11 @@
 
 local entities = require("entities")
 local utils = require("utils")
+local state = require("loaded_state")
+local selectionUtils = require("selections")
 local ui = require("ui")
 local utf8 = require("utf8")
-local subLayers = require("sub_layers")
+local namePreviewScope = require("ui.name_preview_scope")
 
 local script = {}
 
@@ -32,8 +34,6 @@ script.defaultData = {
 }
 
 local focusedFormField
-local previousToolName
-local previousLayerName
 local namePreviewActive = false
 
 local function getToolsWindow()
@@ -44,21 +44,32 @@ end
 
 local function switchToNamePreview()
     local toolHandler = require("tools")
-    local currentTool = toolHandler.currentTool
     local currentName = toolHandler.currentToolName
 
     if not currentName then
+        namePreviewScope.clear()
+
         return
     end
 
-    previousToolName = currentName
+    local currentLayer = toolHandler.getLayer(currentName)
 
-    local previousLayer = toolHandler.getLayer(currentName)
-    local previousSubLayer = currentTool and currentTool.subLayer
-    previousLayerName = type(previousLayer) == "string" and subLayers.formatLayerName(
-        previousLayer,
-        type(previousSubLayer) == "number" and previousSubLayer or -1
-    ) or nil
+    if currentName == "scripts" and currentLayer == "currentRoom" then
+        local rooms = selectionUtils.getSelectedRooms()
+
+        if #rooms == 0 then
+            local room = state.getSelectedRoom()
+
+            if room then
+                rooms = {room}
+            end
+        end
+
+        namePreviewScope.setRooms(rooms)
+
+    else
+        namePreviewScope.clear()
+    end
 
     local toolsWindow = getToolsWindow()
 
@@ -81,69 +92,22 @@ local function switchToNamePreview()
     namePreviewActive = true
 end
 
-local function restorePreviousTool()
-    if not namePreviewActive then
-        return
-    end
-
-    namePreviewActive = false
-
-    local toolHandler = require("tools")
-    local toolName = previousToolName
-    local layerName = previousLayerName
-    local toolsWindow = getToolsWindow()
-
-    previousToolName = nil
-    previousLayerName = nil
-
-    if not toolName then
-        return
-    end
-
-    if toolsWindow and toolsWindow.selectTool then
-        toolsWindow.selectTool(toolName)
-
-        if layerName and toolsWindow.selectLayer then
-            ui.runLate(function()
-                if not namePreviewActive and toolHandler.currentToolName == toolName then
-                    toolsWindow.selectLayer(layerName)
-                end
-            end)
-        end
-
-    else
-        toolHandler.selectTool(toolName)
-
-        if layerName then
-            local layer, subLayer = subLayers.parseLayerName(layerName)
-
-            toolHandler.setLayer(layer, subLayer)
-        end
-    end
-end
-
 local function onNameFieldFocus(formField)
     focusedFormField = formField
 
-    if not namePreviewActive then
+    local toolHandler = require("tools")
+
+    if not namePreviewActive or toolHandler.currentToolName ~= "preview"
+        or toolHandler.getLayer() ~= "name" then
+        namePreviewActive = false
         switchToNamePreview()
     end
 end
 
 local function onNameFieldBlur(formField)
-    if focusedFormField ~= formField then
-        return
+    if focusedFormField == formField then
+        focusedFormField = nil
     end
-
-    -- Clicking an entry in Preview -> Name also blurs the field. Wait for the click to run first;
-    -- if focus moved to another Change Attributes field, that field's onFocus replaces the target.
-    ui.runLate(function()
-        if focusedFormField == formField and not formField.field.focused then
-            focusedFormField = nil
-
-            restorePreviousTool()
-        end
-    end)
 end
 
 -- Called by Preview -> Name when an entry is clicked. It only replaces a form field that was
@@ -168,13 +132,6 @@ function script.replaceFocusedField(name)
     end
 
     return true
-end
-
--- Restores the original tool if the picker has to be closed programmatically.
-function script.finishNamePreview()
-    focusedFormField = nil
-
-    restorePreviousTool()
 end
 
 script.fieldInformation = {
@@ -364,7 +321,13 @@ function script.prerun(args)
             applyArgs[key] = value
         end
 
-        toolHandler.currentTool.executeScript(applyScript, applyArgs)
+        -- Focus switching temporarily selects Preview -> Name, so currentTool is not necessarily
+        -- the Scripts tool here. Always run through the Scripts tool that owns executeScript.
+        local scriptsTool = toolHandler.tools.scripts or toolHandler.currentTool
+
+        if scriptsTool and scriptsTool.executeScript then
+            scriptsTool.executeScript(applyScript, applyArgs)
+        end
     end)
 
     return nil
