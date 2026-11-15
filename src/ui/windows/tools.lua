@@ -855,6 +855,18 @@ local function layerItemToggleVisibilityHandler(listItem, button)
 end
 
 local function materialSortFunction(lhs, rhs)
+    -- Some action rows (Add Defaults / Only Keep Used) stay above every source and Favorites block.
+    local lhsPinned = lhs.alwaysTop or false
+    local rhsPinned = rhs.alwaysTop or false
+
+    if lhsPinned ~= rhsPinned then
+        return lhsPinned
+    end
+
+    if lhsPinned then
+        return (lhs.sortIndex or 0) < (rhs.sortIndex or 0)
+    end
+
     -- Favorites always form one block at the top, including the generic (non path-tree) lists.
     local lhsFavoriteSection = lhs.isFavoritesHeader or lhs.isFavoritesGroup
     local rhsFavoriteSection = rhs.isFavoritesHeader or rhs.isFavoritesGroup
@@ -2901,6 +2913,7 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
         indent = 0,
         tooltip = tostring(language.ui.tools_window.add_defaults_description),
         isButton = true,
+        alwaysTop = true,
         sortIndex = 0,
         ancestors = {},
         onPress = function()
@@ -2922,6 +2935,7 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
         indent = 0,
         tooltip = tostring(language.ui.tools_window.only_keep_used_description),
         isButton = true,
+        alwaysTop = true,
         sortIndex = 0.5,
         ancestors = {},
         onPress = function()

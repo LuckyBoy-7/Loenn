@@ -651,11 +651,9 @@ end
 local function prepareItemDoubleClickHook(callback)
     return {
         onPress = function(orig, self, x, y, button, isDrag, presses)
-            -- sameTarget is a workaround for a OlympUI bug where presses is not reset when target changes
-            -- Causes some incorrect pressing behavor, but better than this triggering too often
-            -- TODO - Remove this workaround when its fixed in OlympUI
-
-            local sameTarget = self == ui.focusing
+            -- presses is not reset when the click target changes, so require the same element to
+            -- have been pressed last time instead of relying on keyboard focus.
+            local sameTarget = self == ui.lastPressed
             local doubleClick = presses % 2 == 0
 
             if sameTarget and doubleClick then
