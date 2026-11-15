@@ -11,9 +11,35 @@ tool.group = "preview"
 -- Right below Stylegrounds
 tool.order = 9.6
 
--- Secondary entries: asset folders whose images are listed on the right, plus the raw entity and
--- trigger names used by scripts. The Name entry has no images, it lists names instead.
+-- Secondary entries: asset folders whose images are listed on the right. The Name layer lists raw
+-- entity/trigger names and uses the mode panel to choose Current Room vs All Rooms.
 tool.validLayers = {"bg", "collectables", "danger", "objects", "name", "colorGrading"}
+
+tool.layer = "bg"
+tool.subLayer = -1
+tool.mode = "currentRoom"
+
+function tool.getModes()
+    if tool.layer == "name" then
+        return {"currentRoom", "allRooms"}
+    end
+
+    return {}
+end
+
+function tool.getMode()
+    return tool.mode
+end
+
+function tool.setMode(mode)
+    if mode == "currentRoom" or mode == "allRooms" then
+        tool.mode = mode
+
+        return true
+    end
+
+    return false
+end
 
 tool.layer = "bg"
 tool.subLayer = -1
@@ -40,8 +66,14 @@ function tool.setMaterial()
 end
 
 function tool.setLayer(layer, subLayer)
+    local previousLayer = tool.layer
+
     tool.layer = layer or "bg"
     tool.subLayer = subLayer or -1
+
+    if tool.layer == "name" and previousLayer ~= "name" then
+        tool.mode = "currentRoom"
+    end
 
     updateColorGradingPreview()
 

@@ -25,7 +25,7 @@ local utils = require("utils")
 local cursorUtils = require("utils.cursor")
 local hotkeyHandler = require("hotkey_handler")
 local loadedState = require("loaded_state")
-local namePreviewScope = require("ui.name_preview_scope")
+local namePreviewFocus = require("ui.name_preview_focus")
 local subLayers = require("sub_layers")
 local history = require("history")
 local selectionUtils = require("selections")
@@ -1287,7 +1287,7 @@ local function shouldShowMaterialIcon(data)
         return false
     end
 
-    -- The Name list groups by source for navigation only; no folder/source icons are wanted there.
+    -- Name list groups by source for navigation only; no folder/source icons are wanted there.
     if data.currentToolName == "preview" and data.currentLayer == "name" then
         return false
     end
@@ -3150,10 +3150,25 @@ end
 
 -- Raw entity/trigger names used by the current map. Unlike Placements, the rows copy the internal
 -- name instead of placing an object, and entity rows still use the normal entity preview.
-local function getNamePreviewItems(language)
+local function getNamePreviewItems(language, mode)
     local groups = {entities = {}, triggers = {}}
     local seen = {entities = {}, triggers = {}}
-    local rooms = namePreviewScope.getRooms() or (loadedState.map and loadedState.map.rooms) or {}
+    local rooms
+
+    if mode == "currentRoom" then
+        rooms = selectionUtils.getSelectedRooms()
+
+        if #rooms == 0 then
+            local room = loadedState.getSelectedRoom()
+
+            if room then
+                rooms = {room}
+            end
+        end
+
+    else
+        rooms = loadedState.map and loadedState.map.rooms or {}
+    end
 
     for _, room in ipairs(rooms) do
         for _, layerName in ipairs({"entities", "triggers"}) do
@@ -3230,12 +3245,7 @@ local function getNamePreviewItems(language)
 
     local function selectName(name)
         love.system.setClipboardText(name)
-
-        local changeAttributes = package.loaded["scripts/change_attributes"]
-
-        if changeAttributes and changeAttributes.replaceFocusedField then
-            changeAttributes.replaceFocusedField(name)
-        end
+        namePreviewFocus.replaceFocusedField(name)
     end
 
     for _, item in ipairs(items) do
@@ -3286,7 +3296,7 @@ getMaterialItems = function(layer)
     local language = languageRegistry.getLanguage()
 
     if currentTool and currentTool.name == "preview" and currentLayer == "name" then
-        return getNamePreviewItems(language)
+        return getNamePreviewItems(language, toolHandler.getMode())
     end
 
     -- Stylegrounds: one entry per style kind (Parallax, Group and every registered effect), grouped
@@ -4480,6 +4490,8 @@ local function getLayerTargetMaterial(tool, layer)
     return toolUtils.getPersistenceMaterial(tool, layer)
 end
 
+local updateToolModeList
+
 local function layerCallback(list, layerName)
     local layer, subLayer = subLayers.parseLayerName(layerName)
 
@@ -4498,14 +4510,23 @@ local function layerCallback(list, layerName)
 
         toolHandler.setLayer(layer, subLayer)
 
+        if updateToolModeList then
+            updateToolModeList(toolHandler.currentToolName)
+
+            if toolWindow.modeList then
+                toolWindow.modeList:setSelection(toolHandler.getMode(), true)
+            end
+        end
+
         if not sameLayer then
             toolWindow.materialList:updateItems(getMaterialItems(layer), targetMaterial)
         end
     end
 end
 
--- Switch to a layer from code (used by Change Attributes to temporarily show the Name list).
-function toolWindow.selectLayer(layerName, clearSearch)
+-- Switch to a layer from code (used by focus pickers). The optional mode is applied before the
+-- material list is rebuilt, so the list never flashes with the previous mode first.
+function toolWindow.selectLayer(layerName, clearSearch, mode)
     if not layerName or not toolWindow.layerList or not toolWindow.materialList then
         return false
     end
@@ -4520,8 +4541,24 @@ function toolWindow.selectLayer(layerName, clearSearch)
         end
     end
 
+    local layer, subLayer = subLayers.parseLayerName(layerName)
+    toolHandler.setLayer(layer, subLayer)
+
     toolWindow.layerList:setSelection(layerName, true)
     layerCallback(toolWindow.layerList, layerName)
+
+    if mode then
+        -- Preview -> Name resets to its default mode in setLayer. Apply the requested mode after
+        -- the layer callback, then rebuild the list once with the final mode.
+        toolHandler.setMode(mode)
+        updateToolModeList(toolHandler.currentToolName)
+
+        if toolWindow.modeList then
+            toolWindow.modeList:setSelection(mode, true)
+        end
+
+        toolWindow.materialList:updateItems(getMaterialItems())
+    end
 
     return true
 end
@@ -4726,6 +4763,11 @@ local function modeCallback(list, mode)
         toolWindow.eventStates.material = nil
 
         toolHandler.setMode(mode)
+
+        if toolHandler.currentToolName == "preview" and toolHandler.getLayer() == "name"
+            and toolWindow.materialList then
+            toolWindow.materialList:updateItems(getMaterialItems())
+        end
     end
 end
 
@@ -4735,10 +4777,13 @@ local function toolModeChangedCallback(self, tool, mode)
     toolWindow.modeList:setSelection(mode, true)
 end
 
-local function updateToolModeList(name)
+updateToolModeList = function(name)
     local items = getModeItems(name)
+    local currentMode = toolHandler.getMode(name)
 
-    toolWindow.modeList:updateItems(items)
+    -- Rebuilding the mode rows must not apply the first row as a new mode. That made Preview ->
+    -- Name briefly switch to Current Room while the focus picker was opening.
+    toolWindow.modeList:updateItems(items, currentMode, nil, true)
 
     local newVisible = #items > 0
 
@@ -5009,7 +5054,7 @@ local function toolCallback(list, toolName)
         toolWindow.eventStates.material = nil
 
         toolHandler.selectTool(toolName)
-        updateLayerList(toolName, toolHandler.tools[toolName])
+        updateLayerList(toolName, toolHandler.tools[toolName], nil, toolWindow._preventLayerCallback)
         updateToolModeList(toolName)
         updateTileToolList(toolName)
 
@@ -5920,15 +5965,19 @@ function toolWindow.reloadPreviewCopiedFiles(copied, copyPrefix)
     end
 end
 
-function toolWindow.selectTool(name)
+function toolWindow.selectTool(name, preventLayerCallback)
     if not name or not toolWindow.toolList then
         return false
     end
 
     toolWindow.toolList:setSelection(name, true)
-    toolCallback(toolWindow.toolList, name)
+    toolWindow._preventLayerCallback = preventLayerCallback
 
-    return true
+    local result = toolCallback(toolWindow.toolList, name)
+
+    toolWindow._preventLayerCallback = nil
+
+    return result ~= false
 end
 
 return toolWindow

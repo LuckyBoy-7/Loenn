@@ -91,6 +91,10 @@ tools.description.stylegrounds=Adds backgrounds to the foreground or background 
 
 tools.name.preview=Preview
 tools.description.preview=Lists images of the asset folders and copies their paths.
+tools.preview.modes.name.currentRoom=Current Room
+tools.preview.modes.description.currentRoom=Lists names used in the selected room.
+tools.preview.modes.name.allRooms=All Rooms
+tools.preview.modes.description.allRooms=Lists names used in every room.
 
 tools.name.scripts=Scripts
 tools.description.scripts=Runs scripts on the selected room or on all rooms.

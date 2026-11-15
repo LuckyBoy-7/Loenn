@@ -9,11 +9,7 @@
 
 local entities = require("entities")
 local utils = require("utils")
-local state = require("loaded_state")
-local selectionUtils = require("selections")
-local ui = require("ui")
-local utf8 = require("utf8")
-local namePreviewScope = require("ui.name_preview_scope")
+local namePreviewFocus = require("ui.name_preview_focus")
 
 local script = {}
 
@@ -33,110 +29,9 @@ script.defaultData = {
     allowPreserving = false
 }
 
-local focusedFormField
-local namePreviewActive = false
-
-local function getToolsWindow()
-    local success, toolsWindow = pcall(require, "ui/windows/tools")
-
-    return success and toolsWindow or nil
-end
-
-local function switchToNamePreview()
-    local toolHandler = require("tools")
-    local currentName = toolHandler.currentToolName
-
-    if not currentName then
-        namePreviewScope.clear()
-
-        return
-    end
-
-    local currentLayer = toolHandler.getLayer(currentName)
-
-    if currentName == "scripts" and currentLayer == "currentRoom" then
-        local rooms = selectionUtils.getSelectedRooms()
-
-        if #rooms == 0 then
-            local room = state.getSelectedRoom()
-
-            if room then
-                rooms = {room}
-            end
-        end
-
-        namePreviewScope.setRooms(rooms)
-
-    else
-        namePreviewScope.clear()
-    end
-
-    local toolsWindow = getToolsWindow()
-
-    if toolsWindow and toolsWindow.selectTool and toolsWindow.selectLayer then
-        toolsWindow.selectTool("preview")
-
-        -- selectTool restores the preview tool's persisted layer. Switch to Name after that has
-        -- finished, otherwise the restore overwrites the layer again.
-        ui.runLate(function()
-            if namePreviewActive and toolHandler.currentToolName == "preview" then
-                toolsWindow.selectLayer("name", true)
-            end
-        end)
-
-    else
-        toolHandler.selectTool("preview")
-        toolHandler.setLayer("name")
-    end
-
-    namePreviewActive = true
-end
-
-local function onNameFieldFocus(formField)
-    focusedFormField = formField
-
-    local toolHandler = require("tools")
-
-    if not namePreviewActive or toolHandler.currentToolName ~= "preview"
-        or toolHandler.getLayer() ~= "name" then
-        namePreviewActive = false
-        switchToNamePreview()
-    end
-end
-
-local function onNameFieldBlur(formField)
-    if focusedFormField == formField then
-        focusedFormField = nil
-    end
-end
-
--- Called by Preview -> Name when an entry is clicked. It only replaces a form field that was
--- focused before the picker took over.
-function script.replaceFocusedField(name)
-    if not focusedFormField then
-        return false
-    end
-
-    focusedFormField:setValue(name)
-
-    local field = focusedFormField.field
-
-    if field then
-        field.index = utf8.len(name) or #name
-        field.blinkTime = 0
-        field:repaint()
-    end
-
-    if focusedFormField.notifyFieldChanged then
-        focusedFormField:notifyFieldChanged()
-    end
-
-    return true
-end
-
 script.fieldInformation = {
-    type = {editable = true, onFocus = onNameFieldFocus, onBlur = onNameFieldBlur},
-    replaceWith = {editable = true, onFocus = onNameFieldFocus, onBlur = onNameFieldBlur}
+    type = {editable = true, onFocus = namePreviewFocus.onFocus, onBlur = namePreviewFocus.onBlur},
+    replaceWith = {editable = true, onFocus = namePreviewFocus.onFocus, onBlur = namePreviewFocus.onBlur}
 }
 
 script.tooltips = {
