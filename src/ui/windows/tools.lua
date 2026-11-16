@@ -661,7 +661,7 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
         item.currentToolName = currentTool.name
         item.currentLayer = currentLayer
 
-        local rowHeight = tiles.tileLayers[currentLayer]
+        local rowHeight = (tiles.tileLayers[currentLayer] or currentLayer == "sceneryObj")
             and (thumbnailSize + thumbnailPadding * 2)
             or math.floor(22 * (configs.ui.theme.uiScale or 1))
 
@@ -1514,6 +1514,7 @@ local function materialDataToElement(list, data, element)
             -- Tile rows are taller because of their thumbnail; every other list keeps the stock
             -- row height, otherwise the mixed heights make scrolling twitch
             local tileList = tiles.tileLayers[toolHandler.getLayer() or ""] ~= nil
+            or toolHandler.getLayer() == "sceneryObj"
 
             if tileList then
                 element.minHeight = thumbnailSize + thumbnailPadding * 2
@@ -1603,6 +1604,7 @@ local function materialDataToElement(list, data, element)
 
         element.isButton = nil
         local tileList = tiles.tileLayers[toolHandler.getLayer() or ""] ~= nil
+            or toolHandler.getLayer() == "sceneryObj"
         local indent = data.indent or 0
         local text = data.text or ""
         local flatIndent = usesFlatIndentation(data.currentToolName, data.currentLayer)
@@ -1670,7 +1672,9 @@ local function materialDataToElement(list, data, element)
         local thumbnail = data.thumbnail
 
         -- Rows may be rebuilt from plain data, so fall back to looking the tileset up again
-        if not thumbnail and not data.isHeader and tiles.tileLayers[data.currentLayer or ""] and data.data then
+        if not thumbnail and not data.isHeader
+            and (tiles.tileLayers[data.currentLayer or ""] or data.currentLayer == "sceneryObj")
+            and data.data then
             thumbnail = getTilesetThumbnail(data.currentLayer, data.data)
         end
 
@@ -2537,7 +2541,9 @@ updateHoverPreview = function(list)
 
     local thumbnail = item.thumbnail
 
-    if not thumbnail and item.currentLayer and tiles.tileLayers[item.currentLayer] and material then
+    if not thumbnail and item.currentLayer
+        and (tiles.tileLayers[item.currentLayer] or item.currentLayer == "sceneryObj")
+        and material then
         thumbnail = getTilesetThumbnail(item.currentLayer, material)
     end
 
@@ -2653,6 +2659,52 @@ getTilesetThumbnail = function(layer, id)
 
     if cached ~= nil then
         return cached or nil
+    end
+
+    if layer == "sceneryObj" then
+        local tile = tonumber(id)
+        local celesteRender = require("celeste_render")
+        local meta = celesteRender.getSceneryMeta()
+        local quad = tile and tile >= 0 and celesteRender.getOrCacheScenerySpriteQuad(tile)
+
+        if not meta or not quad then
+            local emptyCanvas = love.graphics.newCanvas(thumbnailRowCanvasSize, thumbnailRowCanvasSize)
+            local emptyPreview = love.graphics.newCanvas(thumbnailCanvasSize, thumbnailCanvasSize)
+
+            emptyCanvas:renderTo(function()
+                love.graphics.clear(0, 0, 0, 0)
+            end)
+            emptyPreview:renderTo(function()
+                love.graphics.clear(0, 0, 0, 0)
+            end)
+
+            local emptyThumbnail = {canvas = emptyCanvas, preview = emptyPreview, image = emptyPreview}
+            tilesetThumbnails[key] = emptyThumbnail
+
+            return emptyThumbnail
+        end
+
+        local function render(size)
+            local canvas = love.graphics.newCanvas(size, size)
+
+            canvas:renderTo(function()
+                love.graphics.clear(0, 0, 0, 0)
+                love.graphics.setColor(1, 1, 1, 1)
+                love.graphics.draw(meta.image, quad, 0, 0, 0, size / 8, size / 8)
+            end)
+
+            return canvas
+        end
+
+        local thumbnail = {
+            canvas = render(thumbnailRowCanvasSize),
+            preview = render(thumbnailCanvasSize)
+        }
+
+        thumbnail.image = thumbnail.preview
+        tilesetThumbnails[key] = thumbnail
+
+        return thumbnail
     end
 
     local meta = brushHelper.getTilerMeta(layer)
@@ -2806,7 +2858,12 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
 
             -- Grouping by path: vanilla path = vanilla tileset, a path recorded by Add Defaults
             -- belongs to that source, everything else was made by the map author
-            if not rulePath or vanillaPaths[rulePath] then
+            if currentLayer == "sceneryObj" then
+                -- Object tiles all come from Celeste's shared tilesets/scenery atlas, even when
+                -- a mod overrides that image.
+                modName = vanillaLabel
+
+            elseif not rulePath or vanillaPaths[rulePath] then
                 modName = vanillaLabel
 
             else
@@ -2817,8 +2874,10 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
                 end
             end
 
+            local entryId = currentLayer == "sceneryObj" and tostring(id) or id
+
             table.insert(entries, {
-                name = id,
+                name = entryId,
                 associatedMods = {modName},
                 displayNameNoMods = displayName,
                 tooltipText = displayName
@@ -2827,7 +2886,7 @@ local function getTilesetItems(materials, currentTool, currentLayer, favoritesLo
             local thumbnail = getTilesetThumbnail(currentLayer, id)
 
             if thumbnail then
-                thumbnails[id] = thumbnail
+                thumbnails[entryId] = thumbnail
             end
         end
     end
@@ -3931,7 +3990,7 @@ getMaterialItems = function(layer)
     -- Tile tools list their tilesets grouped by source, with a thumbnail per entry. The special
     -- entries (Add Defaults / Only Keep Used) only make sense for the tools that actually place
     -- tiles, not for the selection tool which also works on tile layers.
-    if tiles.tileLayers[currentLayer] then
+    if tiles.tileLayers[currentLayer] or currentLayer == "sceneryObj" then
         local toolName = currentTool and currentTool.name or ""
         local tilePlacingTools = {
             brush = true,
@@ -3943,7 +4002,7 @@ getMaterialItems = function(layer)
         }
 
         return getTilesetItems(materials, currentTool, currentLayer, favoritesLookup, language,
-            tilePlacingTools[toolName] == true)
+            currentLayer ~= "sceneryObj" and tilePlacingTools[toolName] == true)
     end
 
     if currentLayer == "triggers" or currentLayer == "entities" then
@@ -4087,7 +4146,7 @@ getMaterialItems = function(layer)
     -- The magic list scrolls by a fixed element size. Tile lists have taller rows (thumbnail),
     -- every other list keeps the stock row height.
     if toolWindow.materialList then
-        toolWindow.materialList.style.elementSize = tiles.tileLayers[currentLayer]
+        toolWindow.materialList.style.elementSize = (tiles.tileLayers[currentLayer] or currentLayer == "sceneryObj")
             and (thumbnailSize + thumbnailPadding * 2)
             or false
     end

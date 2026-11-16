@@ -790,6 +790,68 @@ function celesteRender.getTilesBgBatch(room, tiles, viewport)
     return getRoomTileBatch(room, tiles, false)
 end
 
+local function getObjectTilesBatchTaskFunc(room, objectTiles)
+    local objectMatrix = objectTiles and objectTiles.matrix
+    local sceneryMeta = celesteRender.getSceneryMeta()
+
+    if not objectMatrix or not sceneryMeta then
+        return getTilesBatchFromMode(1, 1, "matrixDrawingBatch")
+    end
+
+    local width, height = objectMatrix:size()
+
+    if width <= 0 or height <= 0 then
+        return getTilesBatchFromMode(1, 1, "matrixDrawingBatch")
+    end
+
+    local batch = getTilesBatchFromMode(width, height, "matrixDrawingBatch")
+
+    for x = 1, width do
+        for y = 1, height do
+            local tile = objectMatrix:getInbounds(x, y, -1)
+
+            if tile and tile >= 0 then
+                local quad = celesteRender.getOrCacheScenerySpriteQuad(tile)
+
+                if quad then
+                    batch:set(x, y, sceneryMeta, quad, x * 8 - 8, y * 8 - 8)
+                end
+            end
+        end
+    end
+
+    return batch
+end
+
+function celesteRender.getObjectTilesBatch(room, objectTiles, viewport)
+    local objectMatrix = objectTiles and objectTiles.matrix
+
+    if not objectMatrix then
+        return nil
+    end
+
+    local width, height = objectMatrix:size()
+
+    if width <= 0 or height <= 0 then
+        return nil
+    end
+
+    local cache = roomCache[room.name]
+
+    if not cache then
+        cache = {}
+        roomCache[room.name] = cache
+    end
+
+    if not cache.sceneryObj then
+        cache.sceneryObj = {
+            result = getObjectTilesBatchTaskFunc(room, objectTiles)
+        }
+    end
+
+    return cache.sceneryObj.result
+end
+
 local function getDecalsBatchTaskFunc(decals, room, fg, viewport)
     local batches = {}
 
@@ -1016,6 +1078,7 @@ local depthBatchingFunctions = {
     {"Background Decals", "decalsBg", celesteRender.getDecalsBgBatch},
     {"Entities", "entities", celesteRender.getEntityBatch},
     {"Foreground Tiles", "tilesFg", celesteRender.getTilesFgBatch, tilesFgDepth},
+    {"Objects", "sceneryObj", celesteRender.getObjectTilesBatch, depths.fgTerrain - 1},
     {"Foreground Decals", "decalsFg", celesteRender.getDecalsFgBatch},
     {"Triggers", "triggers", celesteRender.getTriggerBatch}
 }
@@ -1096,7 +1159,16 @@ function celesteRender.getRoomBatches(room, state)
                 end
 
             else
-                if layerVisible then
+                local optionalObjectLayer = key == "sceneryObj"
+
+                if optionalObjectLayer then
+                    local objectMatrix = room[key] and room[key].matrix
+                    local width, height = objectMatrix and objectMatrix:size()
+
+                    optionalObjectLayer = not width or width <= 0 or not height or height <= 0
+                end
+
+                if layerVisible and not optionalObjectLayer then
                     done = false
                 end
             end
@@ -1210,9 +1282,14 @@ end
 
 -- Force the rooms canvas cache to be rendered
 function celesteRender.forceRoomCanvasRender(room, state, selected)
+    -- Selected rooms are drawn from their live batches, not from the canvas cache.
+    if selected then
+        return
+    end
+
     local canvas, task = getRoomCanvas(room, state, selected)
 
-    if not canvas then
+    if not canvas and task then
         tasks.processTask(task)
     end
 end

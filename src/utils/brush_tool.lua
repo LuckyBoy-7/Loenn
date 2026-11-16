@@ -3,11 +3,13 @@
 local viewportHandler = require("viewport_handler")
 local toolUtils = require("tool_utils")
 local state = require("loaded_state")
+local utils = require("utils")
 local brushHelper = require("brushes")
 local history = require("history")
 local snapshotUtils = require("snapshot_utils")
 local matrixLib = require("utils.matrix")
 local tiles = require("tiles")
+local objectTilePlacement = require("object_tile_placement")
 
 local brushToolUtils = {}
 
@@ -17,7 +19,7 @@ function brushToolUtils.getPlacements(tool)
 
     for displayName, id in pairs(materialsLookup) do
         table.insert(placements, {
-            name = id,
+            name = tostring(id),
             displayName = displayName
         })
     end
@@ -28,7 +30,13 @@ end
 function brushToolUtils.setLayer(tool, layer)
     tool.layer = layer
 
-    tool.materialsLookup = brushHelper.getMaterialLookup(layer)
+    if layer == "sceneryObj" then
+        tool.materialsLookup = objectTilePlacement.getMaterialLookup()
+
+    else
+        tool.materialsLookup = brushHelper.getMaterialLookup(layer)
+    end
+
     toolUtils.sendLayerEvent(tool, layer)
 
     local persistenceMaterial = toolUtils.getPersistenceMaterial(tool, layer)
@@ -39,7 +47,15 @@ function brushToolUtils.setLayer(tool, layer)
 end
 
 function brushToolUtils.setMaterial(tool, material)
-    local validTiles = brushHelper.getValidTiles(tool.layer)
+    local validTiles
+
+    if tool.layer == "sceneryObj" then
+        validTiles = objectTilePlacement.getValidTiles()
+
+    else
+        validTiles = brushHelper.getValidTiles(tool.layer)
+    end
+
     local target
 
     if validTiles[material] then
@@ -62,7 +78,14 @@ function brushToolUtils.handleActionClick(tool, x, y, force)
         local tx, ty = viewportHandler.pixelToTileCoordinates(px, py)
 
         if tool.lastMaterial ~= tool.material or tool.lastTileX ~= tx + 1 or tool.lastTileY ~= ty + 1 or force then
-            brushHelper.placeTile(room, tx + 1, ty + 1, tool.material, tool.layer)
+            if tool.layer == "sceneryObj" then
+                objectTilePlacement.placeTile(room, tx + 1, ty + 1, tool.material)
+                toolUtils.redrawTargetLayer(room, {"sceneryObj", "canvas"})
+
+            else
+                brushHelper.placeTile(room, tx + 1, ty + 1, tool.material, tool.layer)
+            end
+
             brushToolUtils.toolMadeChanges(tool)
 
             tool.lastTileX, tool.lastTileY = tx + 1, ty + 1
@@ -81,7 +104,14 @@ function brushToolUtils.handleCloneClick(tool, x, y)
         local px, py = viewportHandler.getRoomCoordinates(room, x, y)
         local tx, ty = viewportHandler.pixelToTileCoordinates(px, py)
 
-        local material = brushHelper.getTile(room, tx + 1, ty + 1, tool.layer)
+        local material
+
+        if tool.layer == "sceneryObj" then
+            material = objectTilePlacement.getTile(room, tx + 1, ty + 1)
+
+        else
+            material = brushHelper.getTile(room, tx + 1, ty + 1, tool.layer)
+        end
 
         if material ~= tool.material then
             tool.material = material
@@ -93,6 +123,18 @@ end
 
 function brushToolUtils.getTileSnapshotValue(tool)
     local room = state.getSelectedRoom()
+
+    if tool.layer == "sceneryObj" then
+        if room then
+            -- A room without an Objects layer has no sceneryObj table yet. Create the empty
+            -- matrix before snapshotting so the first painted object tile still has undo data.
+            objectTilePlacement.ensureRoom(room)
+
+            return utils.deepcopy(room.sceneryObj)
+        end
+
+        return nil
+    end
 
     return tiles.getRoomTileSnapshotValue(room, tool.layer)
 end
@@ -108,7 +150,17 @@ function brushToolUtils.hasSnapshottedRoomResized(tool)
     local currentWidth, currentHeight = tiles.matrix:size()
 
     if tool.snapshotValue then
-        if tool.snapshotValue.width ~= currentWidth or tool.snapshotValue.height ~= currentHeight then
+        local snapshotMatrix = tool.layer == "sceneryObj" and tool.snapshotValue.matrix or nil
+        local snapshotWidth, snapshotHeight
+
+        if snapshotMatrix then
+            snapshotWidth, snapshotHeight = snapshotMatrix:size()
+
+        elseif tool.snapshotValue.width then
+            snapshotWidth, snapshotHeight = tool.snapshotValue.width, tool.snapshotValue.height
+        end
+
+        if snapshotWidth and (snapshotWidth ~= currentWidth or snapshotHeight ~= currentHeight) then
             return true
         end
     end
@@ -141,7 +193,16 @@ function brushToolUtils.stopTileSnapshot(tool)
         local afterSnapshotValue = brushToolUtils.getTileSnapshotValue(tool)
 
         if afterSnapshotValue then
-            local snapshot = snapshotUtils.roomTilesSnapshot(room, tool.layer, "Brush", tool.snapshotValue, afterSnapshotValue)
+            local snapshot
+
+            if tool.layer == "sceneryObj" then
+                snapshot = snapshotUtils.roomLayerValueSnapshot(room, tool.layer, "Brush",
+                    tool.snapshotValue, afterSnapshotValue)
+
+            else
+                snapshot = snapshotUtils.roomTilesSnapshot(room, tool.layer, "Brush",
+                    tool.snapshotValue, afterSnapshotValue)
+            end
 
             history.addSnapshot(snapshot)
 

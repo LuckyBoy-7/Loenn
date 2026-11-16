@@ -60,7 +60,7 @@ function scenery.getSceneryTiles(force)
 end
 
 function scenery.getMaterialLookup(addBlank)
-    local sceneryTiles = scenery.getSceneryTiles()
+    local sceneryTiles = scenery.getSceneryTiles() or {}
     local lookup = {}
     local language = languageRegistry.getLanguage()
     local displayFormat = "%s (%s)"
@@ -81,7 +81,7 @@ function scenery.getMaterialLookup(addBlank)
     if addBlank ~= false then
         local displayName = tostring(language.sceneryTiles.names["-1"])
 
-        lookup[string.format(displayFormat, displayName, id)] = -1
+        lookup[string.format(displayFormat, displayName, -1)] = -1
     end
 
     return lookup

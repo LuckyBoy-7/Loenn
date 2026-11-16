@@ -21,7 +21,8 @@ tool.image = nil
 tool.layer = "tilesFg"
 tool.validLayers = {
     "tilesFg",
-    "tilesBg"
+    "tilesBg",
+    "sceneryObj"
 }
 
 tool.material = "0"

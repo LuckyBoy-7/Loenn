@@ -13,7 +13,12 @@ local function redrawLayer(room, layer)
     local selected = state.isItemSelected(room)
 
     if selected then
-        toolUtils.redrawTargetLayer(room, layer)
+        if layer == "sceneryObj" then
+            toolUtils.redrawTargetLayer(room, {"sceneryObj", "canvas"})
+
+        else
+            toolUtils.redrawTargetLayer(room, layer)
+        end
 
     else
         celesteRender.forceRedrawRoom(room, state, false)
@@ -46,6 +51,10 @@ local function getRoomLayerSnapshot(room, layer, description, itemsBefore, items
     }
 
     return snapshot.create(description, data, backward, forward)
+end
+
+function snapshotUtils.roomLayerValueSnapshot(room, layer, description, before, after)
+    return getRoomLayerSnapshot(room, layer, description, before, after)
 end
 
 function snapshotUtils.roomLayerSnapshot(callback, room, layer, description)
