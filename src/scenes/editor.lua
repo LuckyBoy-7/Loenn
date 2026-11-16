@@ -36,6 +36,11 @@ function editorScene:enter()
     -- the automatic zoom based font choice takes over
     require("fonts").applyConfig(require("configs").font)
 
+    -- Text overlays may have been prepared while the map was loading, before the final camera and
+    -- viewport were applied. Drop those stale labels so the first editor frame does not flash
+    -- oversized text.
+    self.celesteRender.invalidateRoomCache()
+
     self:propagateEvent("enter")
 end
 

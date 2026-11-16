@@ -113,20 +113,18 @@ local defaultTabForms = {
             {
                 title = "ui.settings_window.group.font.font",
                 fieldOrder = {
-                    "font.useHiresPixelFont",
-                    "font.autoSwitchFont"
+                    "font.triggerFontPath",
+                    "font.textSize"
                 }
             },
             {
                 title = "ui.settings_window.group.font.trigger_text",
                 fieldOrder = {
                     "font.addShadowToFont",
-                    "font.doubleTriggerTextSize",
                     "font.highlightSelectedTriggerText",
                     "font.highlightColor",
                     "font.selectTriggerByClickingText",
                     "spacer",
-                    "font.showCompleteTriggerText",
                     "font.extrudeOverlappingTriggerText",
                     "font.ignoreOutOfRoomTextExtruding"
                 }
@@ -314,6 +312,16 @@ local uiScaleOptions = {
     {"150%", 1.5},
     {"175%", 1.75},
     {"200%", 2.0},
+}
+
+local fontPathOptions = {
+    {"Built-in Sans", ""},
+    {"Consolas Bold", "C:/Windows/Fonts/consolab.ttf"},
+    {"8bit Operator Bold", "assets/fonts/8bitOperatorPlus-Bold.ttf"},
+    {"VCR OSD Mono", "assets/fonts/VCR_OSD_MONO.ttf"},
+    {"Mojang", "assets/fonts/Mojang-Regular.ttf"},
+    {"Tahoma", "assets/fonts/windows-xp-tahoma.ttf"},
+    {"Renogare Soft", "assets/fonts/RenogareSoft-Regular.ttf"}
 }
 
 local defaultFieldInformation = {
@@ -645,6 +653,18 @@ local defaultFieldInformation = {
         fieldType = "color"
     },
 
+    ["font.triggerFontPath"] = {
+        fieldType = "string",
+        editable = false,
+        options = fontPathOptions
+    },
+
+    ["font.textSize"] = {
+        fieldType = "number",
+        minimumValue = 0.5,
+        maximumValue = 2.0
+    },
+
     ["general.notificationDuration"] = {
         fieldType = "integer"
     },
@@ -695,9 +715,11 @@ local function applyNewSettings(newSettings, oldSettings)
 
     local fontChanged = false
 
-    for _, key in ipairs({"useHiresPixelFont", "addShadowToFont", "doubleTriggerTextSize",
+    for _, key in ipairs({"addShadowToFont",
+        "triggerFontPath",
+        "textSize",
         "highlightSelectedTriggerText",
-        "selectTriggerByClickingText", "showCompleteTriggerText", "extrudeOverlappingTriggerText",
+        "selectTriggerByClickingText", "extrudeOverlappingTriggerText",
         "ignoreOutOfRoomTextExtruding"}) do
         fontChanged = fontChanged or settingChanged("font." .. key)
     end

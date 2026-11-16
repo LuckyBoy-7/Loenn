@@ -219,25 +219,21 @@ settings.ui.hotkeys.description.focusMaterialSearch=聚焦搜索框。
 settings.ui.hotkeys.attribute.bypassDangerousActionWarningModifier=跳过确认（修饰键）
 settings.ui.hotkeys.description.bypassDangerousActionWarningModifier=按住时跳过确认提示并立即应用修改。
 
-settings.font.attribute.useHiresPixelFont=使用高清像素字体
-settings.font.attribute.autoSwitchFont=放大时切换字体
 settings.font.attribute.addShadowToFont=触发器标签阴影
-settings.font.attribute.doubleTriggerTextSize=双倍触发器标签大小
+settings.font.attribute.triggerFontPath=字体
+settings.font.attribute.textSize=文本大小
+settings.font.description.triggerFontPath=默认使用随项目打包的 Renogare Soft；安装 Windows Consolas 后也可选择。
+settings.font.description.textSize=触发器与实体标签的基础字号倍率。
 settings.font.attribute.highlightSelectedTriggerText=高亮选中的标签
 settings.font.attribute.highlightColor=高亮颜色
 settings.font.attribute.selectTriggerByClickingText=点击标签选择触发器
-settings.font.attribute.showCompleteTriggerText=保持完整单词可见
 settings.font.attribute.extrudeOverlappingTriggerText=分离重叠的标签
 settings.font.attribute.ignoreOutOfRoomTextExtruding=忽略房间外的标签
 
-settings.font.description.useHiresPixelFont=使用更大、更清晰的像素字体替代小型原版字体。\n字形的视觉大小保持不变。
-settings.font.description.autoSwitchFont=放大到 100% 以上时使用高清字体，缩小时使用原版字体。\n启用后会覆盖手动选择。
 settings.font.description.addShadowToFont=在触发器标签后方绘制深色副本，使其在明亮背景上仍然清晰。
-settings.font.description.doubleTriggerTextSize=使用高清像素字体且缩放低于 2 倍时，以双倍大小绘制触发器标签，使缩小时仍然清晰。\n仅适用于高清字体。
 settings.font.description.highlightSelectedTriggerText=使用高亮颜色绘制选中触发器的标签。
 settings.font.description.highlightColor=选中触发器标签使用的颜色，可使用 ffff00 这样的十六进制值或 XNA 颜色名。
 settings.font.description.selectTriggerByClickingText=点击触发器标签即可选中对应触发器，即使点击位置在触发器本身之外。
-settings.font.description.showCompleteTriggerText=当最长单词放不下时加宽标签框，避免单词被截断。
 settings.font.description.extrudeOverlappingTriggerText=将互相重叠的触发器标签分开，确保都能看清。
 settings.font.description.ignoreOutOfRoomTextExtruding=完全位于房间外的标签不参与重叠分离。
 

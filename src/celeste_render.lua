@@ -153,6 +153,8 @@ local ALLOW_NON_VISIBLE_BACKGROUND_DRAWING = configs.editor.prepareRoomRenderInB
 local SCENERY_GAMEPLAY_PATH = "tilesets/scenery"
 
 local roomCache = {}
+local roomTextOverlays = {}
+local roomTextReady = {}
 local roomRandomMatrixCache = {}
 
 local batchingTasks = {}
@@ -271,6 +273,61 @@ local function getOrCreateSmartBatch(batches, key)
     return batches[key]
 end
 
+-- Text is drawn in screen space after the room batches. This keeps custom TTF labels out of the
+-- fixed-sized room canvas, so their glyphs are not resampled with the canvas.
+-- Stable depth order for text overlays. Lua's table.sort is not stable, so drawables without an
+-- explicit depth (many entity labels) would otherwise swap places every frame.
+local function sortTextDrawables(drawables)
+    local order = {}
+
+    for index, drawable in ipairs(drawables) do
+        order[drawable] = index
+    end
+
+    table.sort(drawables, function(a, b)
+        local aDepth = a.depth or 0
+        local bDepth = b.depth or 0
+
+        if aDepth ~= bDepth then
+            return aDepth > bDepth
+        end
+
+        return (order[a] or 0) < (order[b] or 0)
+    end)
+end
+
+local function addDrawableToBatchOrText(batches, textDrawables, drawable, depth)
+    if drawable._type == "drawableText" then
+        local displayFont = fonts.getTriggerFont()
+        local labelFontSize = fonts.size(configs.font.textSize or 1)
+
+        if drawable.font ~= displayFont then
+            local layoutFont = drawable.layoutFont or drawable.font or fonts.font
+
+            drawable.font = displayFont
+            drawable.fontSize = 1
+            drawable.layoutFont = layoutFont
+            -- Entity handlers may pass arbitrary pixel-font sizes (fontSize=8, etc.). The screen
+            -- renderer uses one uniform label size so those values can not turn into huge text.
+            drawable.layoutFontSize = labelFontSize
+        end
+
+        if not drawable.layoutFont then
+            drawable.layoutFont = fonts.font
+            drawable.layoutFontSize = labelFontSize
+        end
+
+        table.insert(textDrawables, drawable)
+
+        return
+    end
+
+    local batchDepth = drawable.depth or depth or 0
+    local batch = getOrCreateSmartBatch(batches, batchDepth)
+
+    batch:addFromDrawable(drawable)
+end
+
 function celesteRender.sortBatchingTasks(state, taskList)
     local visibleTasks = {}
     local nonVisibileTasks = {}
@@ -350,18 +407,37 @@ function celesteRender.invalidateRoomCache(roomName, key)
             roomName = roomName.name
         end
 
-        if roomCache[roomName] then
-            if key then
-                if type(key) == "table" then
-                    for _, k in ipairs(key) do
-                        celesteRender.clearBatchTask(roomName, k)
-                    end
+        if key then
+            local keys = type(key) == "table" and key or {key}
+            local overlays = roomTextOverlays[roomName]
 
-                else
-                    celesteRender.clearBatchTask(roomName, key)
+            for _, layerKey in ipairs(keys) do
+                if layerKey == "entities" or layerKey == "triggers" or layerKey == "complete" then
+                    roomTextReady[roomName] = nil
                 end
 
-            else
+                if overlays then
+                    if layerKey == "entities" then
+                        overlays.entities = nil
+
+                    elseif layerKey == "triggers" then
+                        overlays.triggers = nil
+                    end
+
+                    if not overlays.entities and not overlays.triggers then
+                        roomTextOverlays[roomName] = nil
+                        overlays = nil
+                    end
+                end
+
+                celesteRender.clearBatchTask(roomName, layerKey)
+            end
+
+        else
+            roomTextOverlays[roomName] = nil
+            roomTextReady[roomName] = nil
+
+            if roomCache[roomName] then
                 for name, _ in pairs(roomCache[roomName]) do
                     celesteRender.clearBatchTask(roomName, name)
                 end
@@ -374,6 +450,8 @@ function celesteRender.invalidateRoomCache(roomName, key)
         end
 
         roomCache = {}
+        roomTextOverlays = {}
+        roomTextReady = {}
     end
 end
 
@@ -790,6 +868,7 @@ end
 
 local function getEntityBatchTaskFunc(room, entities, viewport, registeredEntities)
     local batches = {}
+    local textDrawables = {}
 
     for i, entity in ipairs(entities) do
         local name = entity._name
@@ -804,20 +883,12 @@ local function getEntityBatchTaskFunc(room, entities, viewport, registeredEntiti
                 -- Special case for multiple drawable sprites
                 -- Maybe handle this better later
                 if drawable then
-                    local drawableIsTable = utils.typeof(drawable) == "table"
-
-                    if not drawableIsTable then
-                        local batchDepth = drawable.depth or depth or 0
-                        local batch = getOrCreateSmartBatch(batches, batchDepth)
-
-                        batch:addFromDrawable(drawable)
+                    if utils.typeof(drawable) ~= "table" then
+                        addDrawableToBatchOrText(batches, textDrawables, drawable, depth)
 
                     else
                         for _, drawableItem in ipairs(drawable) do
-                            local batchDepth = drawableItem.depth or depth or 0
-                            local batch = getOrCreateSmartBatch(batches, batchDepth)
-
-                            batch:addFromDrawable(drawableItem)
+                            addDrawableToBatchOrText(batches, textDrawables, drawableItem, depth)
                         end
                     end
                 end
@@ -830,6 +901,11 @@ local function getEntityBatchTaskFunc(room, entities, viewport, registeredEntiti
     end
 
     tasks.update(batches)
+
+    local overlays = roomTextOverlays[room.name] or {}
+    sortTextDrawables(textDrawables)
+    overlays.entities = textDrawables
+    roomTextOverlays[room.name] = overlays
 
     return batches
 end
@@ -863,6 +939,7 @@ end
 
 local function getTriggerBatchTaskFunc(room, triggers, viewport, registeredTriggers)
     local batches = {}
+    local textDrawables = {}
 
     for i, trigger in ipairs(triggers) do
         local name = trigger._name
@@ -877,20 +954,12 @@ local function getTriggerBatchTaskFunc(room, triggers, viewport, registeredTrigg
                 -- Special case for multiple drawable sprites
                 -- Maybe handle this better later
                 if drawable then
-                    local drawableIsTable = utils.typeof(drawable) == "table"
-
-                    if not drawableIsTable then
-                        local batchDepth = drawable.depth or depth or 0
-                        local batch = getOrCreateSmartBatch(batches, batchDepth)
-
-                        batch:addFromDrawable(drawable)
+                    if utils.typeof(drawable) ~= "table" then
+                        addDrawableToBatchOrText(batches, textDrawables, drawable, depth)
 
                     else
                         for _, drawableItem in ipairs(drawable) do
-                            local batchDepth = drawableItem.depth or depth or 0
-                            local batch = getOrCreateSmartBatch(batches, batchDepth)
-
-                            batch:addFromDrawable(drawableItem)
+                            addDrawableToBatchOrText(batches, textDrawables, drawableItem, depth)
                         end
                     end
                 end
@@ -903,6 +972,11 @@ local function getTriggerBatchTaskFunc(room, triggers, viewport, registeredTrigg
     end
 
     tasks.update(batches)
+
+    local overlays = roomTextOverlays[room.name] or {}
+    sortTextDrawables(textDrawables)
+    overlays.triggers = textDrawables
+    roomTextOverlays[room.name] = overlays
 
     return batches
 end
@@ -1049,6 +1123,7 @@ function celesteRender.getRoomBatches(room, state)
         end
 
         cache.complete = orderedBatches
+        roomTextReady[roomName] = true
     end
 
     return cache.complete
@@ -1145,7 +1220,7 @@ end
 function celesteRender.forceRedrawRoom(room, state, selected)
     local viewport = state.viewport
 
-    celesteRender.invalidateRoomCache(room)
+    celesteRender.invalidateRoomCache(room, {"canvas", "complete"})
     celesteRender.forceRoomBatchRender(room, state)
     celesteRender.forceRoomCanvasRender(room, state, selected)
 end
@@ -1185,6 +1260,146 @@ function celesteRender.drawRooms(rooms, state, selectedItem, selectedItemType)
             celesteRender.drawRoom(room, state, selected, roomVisible)
         end
     end
+end
+
+-- Screen-space text rendering for the smooth TTF option. The label is positioned from its room
+-- coordinates, but the font is rasterized at the final screen size instead of being drawn through
+-- the viewport transform or into a room canvas.
+local function drawScreenText(drawable, room, viewport)
+    local scale = viewport.scale or 1
+    local x = ((room.x or 0) + drawable.x) * scale - viewport.x
+    local y = ((room.y or 0) + drawable.y) * scale - viewport.y
+    local width = drawable.width * scale
+    local height = drawable.height * scale
+    local font = drawable.font
+    local fontSize = drawable.fontSize or 1
+
+    if not font or font == fonts.font then
+        font = fonts.getTriggerFont()
+    end
+
+    local layoutFont = drawable.layoutFont or fonts.font
+    local layoutFontSize = drawable.layoutFontSize or fontSize
+    local screenSize = math.max(1, math.floor(
+        layoutFont:getHeight() * layoutFontSize * scale + 0.5))
+    local wrapLimit = drawable.width / layoutFontSize
+    local layoutLines = drawable.layoutLines
+
+    if not layoutLines then
+        local _, lines = layoutFont:getWrap(drawable.text, wrapLimit)
+        layoutLines = {}
+
+        for index, line in ipairs(lines) do
+            layoutLines[index] = {
+                text = utils.trim(line)
+            }
+        end
+
+        drawable.layoutLines = layoutLines
+    end
+
+    local screenFont = fonts.getScreenFont(screenSize, font)
+    local lineHeight = screenFont:getHeight() * screenFont:getLineHeight()
+    local textHeight = (#layoutLines - 1) * lineHeight + screenFont:getHeight()
+    local offsetY = math.floor((height - textHeight) / 2 + 0.5)
+
+    drawing.callKeepOriginalColor(function()
+        if drawable.color then
+            love.graphics.setColor(drawable.color)
+        end
+
+        local previousFont = love.graphics.getFont()
+
+        love.graphics.setFont(screenFont)
+
+        for index, line in ipairs(layoutLines) do
+            local lineWidth = screenFont:getWidth(line.text)
+            local lineX = math.floor((width - lineWidth) / 2 + 0.5)
+            local lineY = math.floor(y + offsetY + (index - 1) * lineHeight + 0.5)
+
+            love.graphics.print(line.text, math.floor(x + lineX + 0.5), lineY)
+        end
+
+        love.graphics.setFont(previousFont)
+    end)
+end
+
+-- Draw all labels as one final screen-space pass, above every room and room border. This is the
+-- UI-like part: labels are not attached to a room canvas or room draw order.
+local function isTextOnScreen(drawable, room, viewport, selected)
+    local drawWidth = drawable.width or 0
+    local drawHeight = drawable.height or 0
+    local screenWidth = drawWidth * viewport.scale
+    local screenHeight = drawHeight * viewport.scale
+    local screenX = ((room.x or 0) + drawable.x) * viewport.scale - viewport.x
+    local screenY = ((room.y or 0) + drawable.y) * viewport.scale - viewport.y
+
+    if screenX + screenWidth < 0 or screenY + screenHeight < 0
+        or screenX > viewport.width or screenY > viewport.height then
+        return false
+    end
+
+    if selected then
+        return true
+    end
+
+    local roomWidth = room.width or 0
+    local roomHeight = room.height or 0
+
+    return drawable.x >= 0 and drawable.y >= 0
+        and drawable.x + drawWidth <= roomWidth
+        and drawable.y + drawHeight <= roomHeight
+end
+
+local function drawScreenTexts(rooms, state)
+    local viewport = state.viewport
+    local selectedItem, selectedItemType = state.getSelectedItem()
+
+    local function isSelected(room)
+        return selectedItem == room
+            or (selectedItemType == "table" and selectedItem and selectedItem[room] ~= nil)
+    end
+
+    -- This pass is in screen coordinates. A mod entity or room drawable may have leaked a
+    -- transform/scale; isolate the pass so labels cannot inherit it and become enormous.
+    love.graphics.push("all")
+    love.graphics.origin()
+
+    for _, room in ipairs(rooms) do
+        local overlays = roomTextOverlays[room.name]
+
+        if overlays and roomTextReady[room.name] then
+            local selected = isSelected(room)
+            local roomVisible = selected or viewportHandler.roomVisible(room, viewport)
+
+            if roomVisible then
+                local scissorX, scissorY, scissorWidth, scissorHeight
+                local useScissor = not selected
+
+                if useScissor then
+                    scissorX = math.floor((room.x or 0) * viewport.scale - viewport.x)
+                    scissorY = math.floor((room.y or 0) * viewport.scale - viewport.y)
+                    scissorWidth = math.ceil((room.width or 0) * viewport.scale)
+                    scissorHeight = math.ceil((room.height or 0) * viewport.scale)
+                    love.graphics.setScissor(scissorX, scissorY, scissorWidth, scissorHeight)
+                end
+
+                for _, layerName in ipairs({"entities", "triggers"}) do
+                    for _, drawable in ipairs(overlays[layerName] or {}) do
+                        if isTextOnScreen(drawable, room, viewport, selected) then
+                            drawScreenText(drawable, room, viewport)
+                        end
+                    end
+                end
+
+                if useScissor then
+                    love.graphics.setScissor()
+                end
+            end
+        end
+    end
+
+    love.graphics.pop()
 end
 
 function celesteRender.drawRoom(room, state, selected, visible)
@@ -1292,6 +1507,7 @@ function celesteRender.drawMap(state)
 
             celesteRender.drawFillers(map.fillers, state, selectedItem, selectedItemType)
             celesteRender.drawRooms(map.rooms, state, selectedItem, selectedItemType)
+            drawScreenTexts(map.rooms, state)
         end
     end
 end

@@ -92,71 +92,66 @@ local function applyAutomaticFont()
     end
 end
 
--- Trigger labels change size with the zoom when the double size setting is on: every cached room
--- canvas has to be rebuilt, otherwise the labels keep the old size. The label size only changes
--- when the zoom crosses the 2x threshold (or the hires font itself changes), so a normal zoom step
--- must not invalidate every room just because the scale changed.
-local function getTriggerLabelSize(scale, useHires)
-    local configs = require("configs")
+local function nextZoomScale(scale, direction)
+    if direction > 0 then
+        if scale >= 1 and scale < 2 then
+            return math.min(2, scale + 0.2)
 
-    if not configs.font or not configs.font.doubleTriggerTextSize or not useHires then
-        return 1
+        elseif scale >= 2 and scale < 4 then
+            return math.min(4, scale + 0.4)
+
+        elseif scale >= 4 then
+            return scale + 0.2
+        end
+
+        return scale * 2
     end
 
-    return scale >= 2 and 1 or 2
+    if scale > 4 then
+        return scale - 0.2
+
+    elseif scale > 2 and scale <= 4 then
+        return math.max(2, scale - 0.4)
+
+    elseif scale > 1 and scale <= 2 then
+        return math.max(1, scale - 0.2)
+    end
+
+    return scale / 2
 end
 
-local function refreshTriggerTextOnZoomChange(previousScale, previousHires)
-    local fonts = require("fonts")
+local function setZoomScale(newScale, mouseX, mouseY)
+    local previousScale = viewport.scale
 
-    if not previousScale then
+    if newScale == previousScale then
         return
     end
 
-    if previousHires == nil then
-        previousHires = fonts.useHires
-    end
+    local ratio = newScale / previousScale
 
-    if getTriggerLabelSize(previousScale, previousHires) == getTriggerLabelSize(viewport.scale, fonts.useHires) then
-        return
-    end
+    viewport.scale = newScale
+    viewport.x = viewport.x * ratio + mouseX * (ratio - 1)
+    viewport.y = viewport.y * ratio + mouseY * (ratio - 1)
 
-    require("loaded_state").clearRoomRenderCache()
+    applyAutomaticFont()
+
+    viewportHandler.persistCamera()
 end
 
 function viewportHandler.zoomIn()
     local mouseX, mouseY = viewportHandler.getMousePosition()
-    local previousScale = viewport.scale
-    local previousHires = require("fonts").useHires
 
-    viewport.scale *= 2
-    viewport.x = viewport.x * 2 + mouseX
-    viewport.y = viewport.y * 2 + mouseY
-
-    applyAutomaticFont()
-    refreshTriggerTextOnZoomChange(previousScale, previousHires)
-
-    viewportHandler.persistCamera()
+    setZoomScale(nextZoomScale(viewport.scale, 1), mouseX, mouseY)
 end
 
 function viewportHandler.zoomOut()
     local mouseX, mouseY = viewportHandler.getMousePosition()
-    local previousScale = viewport.scale
-    local previousHires = require("fonts").useHires
 
-    viewport.scale /= 2
-    viewport.x = (viewport.x - mouseX) / 2
-    viewport.y = (viewport.y - mouseY) / 2
-
-    applyAutomaticFont()
-    refreshTriggerTextOnZoomChange(previousScale, previousHires)
-
-    viewportHandler.persistCamera()
+    setZoomScale(nextZoomScale(viewport.scale, -1), mouseX, mouseY)
 end
 
 function viewportHandler.moveToPosition(x, y, scale, centered)
     local previousScale = viewport.scale
-    local previousHires = require("fonts").useHires
 
     if scale then
         viewport.scale = scale
@@ -164,7 +159,6 @@ function viewportHandler.moveToPosition(x, y, scale, centered)
 
     if scale and scale ~= previousScale then
         applyAutomaticFont()
-        refreshTriggerTextOnZoomChange(previousScale, previousHires)
     end
 
     if centered then

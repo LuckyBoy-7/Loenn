@@ -9,6 +9,128 @@ local font = {}
 
 local cjkFontPath = "assets/fonts/FusionPixel12-zh_hans.ttf"
 local cjkFonts = {}
+local labelFonts = {}
+local screenFonts = {}
+local fontPaths = {}
+local fontPathFailures = {}
+
+local function resolveFontPath(path)
+    if path:match("^%a:[/\\]") or path:sub(1, 1) == "/" then
+        return path
+    end
+
+    local source = love.filesystem.getSource()
+
+    if source then
+        return source .. "/" .. path
+    end
+
+    return path
+end
+
+local function loadFontFromPath(path, size)
+    path = path and path:match("^%s*(.-)%s*$") or ""
+
+    if path == "" or fontPathFailures[path] then
+        return nil
+    end
+
+    local resolvedPath = resolveFontPath(path)
+    local cacheKey = resolvedPath .. "|" .. tostring(size)
+    local cached = labelFonts[cacheKey]
+
+    if cached then
+        return cached
+    end
+
+    local data
+
+    if not path:match("^%a:[/\\]") and path:sub(1, 1) ~= "/"
+        and love.filesystem.getInfo(path, "file") then
+        data = love.filesystem.read(path)
+
+    else
+        local file = io.open(resolvedPath, "rb")
+
+        if not file then
+            fontPathFailures[path] = true
+
+            return nil
+        end
+
+        data = file:read("*a")
+        file:close()
+    end
+
+    if not data then
+        fontPathFailures[path] = true
+
+        return nil
+    end
+
+    local ok, fileData = pcall(love.filesystem.newFileData, data, "trigger-font.ttf")
+
+    if not ok then
+        fontPathFailures[path] = true
+
+        return nil
+    end
+
+    local fontOk, loadedFont = pcall(love.graphics.newFont, fileData, size)
+
+    if not fontOk then
+        fontPathFailures[path] = true
+
+        return nil
+    end
+
+    font.addCJKFallback(loadedFont, size)
+    loadedFont:setFilter("linear", "linear")
+
+    labelFonts[cacheKey] = loadedFont
+    fontPaths[loadedFont] = path
+
+    return loadedFont
+end
+
+function font.getScreenFont(size, sourceFont)
+    size = math.max(1, math.floor(size + 0.5))
+
+    local path = sourceFont and fontPaths[sourceFont]
+
+    if path then
+        local loaded = loadFontFromPath(path, size)
+
+        if loaded then
+            return loaded
+        end
+    end
+
+    if not screenFonts[size] then
+        screenFonts[size] = love.graphics.newFont(size)
+        screenFonts[size]:setFilter("linear", "linear")
+        font.addCJKFallback(screenFonts[size], size)
+    end
+
+    return screenFonts[size]
+end
+
+-- Smooth font used by the dynamic trigger/entity labels.
+function font.getTriggerFont()
+    local configs = require("configs")
+    local loaded = loadFontFromPath(configs.font.triggerFontPath, 8)
+
+    if loaded then
+        return loaded
+    end
+
+    if not labelFonts["builtin|8"] then
+        labelFonts["builtin|8"] = love.graphics.newFont(8)
+        font.addCJKFallback(labelFonts["builtin|8"], 8)
+    end
+
+    return labelFonts["builtin|8"]
+end
 
 -- Chinese glyphs are not part of the pixel image fonts. Keep the themed/pixel font for Latin text
 -- and let LÖVE fall back to a CJK font for the missing glyphs.

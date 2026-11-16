@@ -32,8 +32,8 @@ tool.image = nil
 -- Selection keeps its single/multi layer selection in memory across tool switches.
 tool.keepLayerStateInMemory = true
 
-tool.layer = "entities"
-tool.subLayer = 0
+tool.layer = "allLayers"
+tool.subLayer = -1
 tool.validLayers = {
     "allLayers",
     "tilesFg",
@@ -55,7 +55,7 @@ local allLayers = {
     "decalsBg"
 }
 
-local selectedLayerItems = {"entities"}
+local selectedLayerItems = {"allLayers"}
 
 local dragStartX, dragStartY = nil, nil
 local coverStartX, coverStartY, coverStartWidth, coverStartyHeight = nil, nil, nil, nil
@@ -181,10 +181,17 @@ local function resetSelectedLayerItems(layer)
 end
 
 function tool.setLayer(layer, subLayer)
+    local previousLayer = tool.layer
+
     resetSelectedLayerItems(layer)
     applySelectedLayerItems()
 
     tool.subLayer = subLayer
+
+    if previousLayer ~= tool.layer then
+        tool.setSelectionTargets({})
+        tool.setSelectionPreviews({})
+    end
 
     toolUtils.sendLayerEvent(tool, layer, subLayer)
 
@@ -192,12 +199,30 @@ function tool.setLayer(layer, subLayer)
 end
 
 function tool.selectSingleLayer(layer, subLayer)
+    local previousLayer = tool.layer
+
     resetSelectedLayerItems(layer)
     applySelectedLayerItems()
 
     tool.subLayer = subLayer or -1
 
+    if previousLayer ~= tool.layer then
+        tool.setSelectionTargets({})
+        tool.setSelectionPreviews({})
+    end
+
     return true
+end
+
+-- The first time the selection tool is opened in a session, make sure the tool state and the
+-- visible "All" row agree. Later switches keep the user's chosen layer(s).
+local hasSelectedOnce = false
+
+function tool.selected()
+    if not hasSelectedOnce then
+        hasSelectedOnce = true
+        tool.setLayer("allLayers", -1)
+    end
 end
 
 function tool.isLayerSelected(layer)

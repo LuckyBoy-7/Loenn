@@ -5080,6 +5080,7 @@ local function toolCallback(list, toolName)
     end
 
     local sameTool = toolName == toolWindow.eventStates.tool
+        and toolName == toolHandler.currentToolName
 
     -- Stylegrounds owns a separate singleton window. Clicking its row while the tool is already
     -- selected must still reopen the window after the close callback switched back to Selection.
@@ -6047,6 +6048,13 @@ end
 function toolWindow.selectTool(name, preventLayerCallback)
     if not name or not toolWindow.toolList then
         return false
+    end
+
+    -- Tool hotkeys can change the UI focus without changing the active tool. Activate the tool
+    -- first, then let toolCallback refresh the layer/material lists for it.
+    if toolHandler.currentToolName ~= name and toolHandler.tools[name] then
+        toolWindow.eventStates.tool = nil
+        toolHandler.selectTool(name)
     end
 
     toolWindow.toolList:setSelection(name, true)

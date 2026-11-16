@@ -362,6 +362,10 @@ function entities.getDrawableUnsafe(name, handler, room, entity, viewport)
         end
     end
 
+    if utils.typeof(entityDrawable) ~= "table" then
+        entityDrawable = {entityDrawable}
+    end
+
     return entityDrawable, depth
 end
 

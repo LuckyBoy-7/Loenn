@@ -33,6 +33,8 @@ local function selectToolThroughUi(name)
     return toolHandler.selectTool(name)
 end
 
+toolHandler.selectToolThroughUi = selectToolThroughUi
+
 local function selectToolHotkey(name)
     return function()
         selectToolThroughUi(name)

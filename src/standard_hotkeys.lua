@@ -69,13 +69,9 @@ function hotkeys.addStandardHotkeys(hotkeyHandler)
     -- already active (it used to toggle the coordinate panel)
     hotkeyHandler.addHotkey("global", configs.hotkeys.toggleCoordinatePanel, function()
         local toolHandler = require("tools")
+        local target = toolHandler.currentToolName == "debug" and "selection" or "debug"
 
-        if toolHandler.currentToolName == "debug" then
-            toolHandler.selectTool("selection")
-
-        else
-            toolHandler.selectTool("debug")
-        end
+        toolHandler.selectToolThroughUi(target)
     end)
 end
 

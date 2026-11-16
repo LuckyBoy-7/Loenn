@@ -23,8 +23,8 @@ local roomSignatures = {}
 -- Text rectangle
 -- --------------------------------------------------------------------------
 
--- Rectangle the label actually covers inside the trigger, centered like
--- drawableText draws it
+-- Layout always uses the original pixel font. A custom display font only changes the glyphs; the
+-- trigger label boxes, wrapping and extrusion stay identical.
 function triggerText.getRect(text, x, y, width, height, font, fontSize)
     font = font or fonts.font
     fontSize = fontSize or 1
@@ -61,15 +61,12 @@ end
 -- Widens the box around its center when the longest word does not fit, so words
 -- are not cut in half. Uses the same font metrics the label is drawn with.
 function triggerText.stretchRect(x, y, width, height, text, fontSize)
-    if not configs.font.showCompleteTriggerText then
-        return x, y, width, height
-    end
-
     fontSize = fontSize or 1
+    local font = fonts.font
 
     -- Widths depend on the label size: selecting a room switches between the normal and the
     -- doubled size, so the cache can not be keyed by text alone
-    local cacheKey = text .. "|" .. tostring(fontSize)
+    local cacheKey = text .. "|" .. tostring(fontSize) .. "|" .. tostring(font)
     local maxWidth = wordWidthCache[cacheKey]
 
     if not maxWidth then
@@ -81,11 +78,11 @@ function triggerText.stretchRect(x, y, width, height, text, fontSize)
             local parenthesized = line:sub(1, 1) == "(" and line:sub(-1) == ")"
 
             if parenthesized then
-                maxWidth = math.max(maxWidth, fonts.font:getWidth(line) * fontSize)
+                maxWidth = math.max(maxWidth, font:getWidth(line) * fontSize)
 
             else
                 for word in line:gmatch("[^%s]+") do
-                    maxWidth = math.max(maxWidth, fonts.font:getWidth(word) * fontSize)
+                    maxWidth = math.max(maxWidth, font:getWidth(word) * fontSize)
                 end
             end
         end
@@ -405,6 +402,7 @@ function triggerText.updateRoom(room, triggerList)
     -- Same size the label is drawn with, otherwise the boxes and the overlap
     -- solver work with the wrong text metrics
     local fontSize = fonts.size(triggers.getTriggerFontSize(room))
+    local font = fonts.font
 
     -- Cheap numeric signature: this runs on every frame that the room batches
     -- are requested, so it must not build strings or call into trigger text.
@@ -438,7 +436,7 @@ function triggerText.updateRoom(room, triggerList)
         local width, height = trigger.width or 16, trigger.height or 16
 
         x, y, width, height = triggerText.stretchRect(x, y, width, height, text, fontSize)
-        rects[index] = triggerText.getRect(text, x, y, width, height, fonts.font, fontSize)
+        rects[index] = triggerText.getRect(text, x, y, width, height, font, fontSize)
     end
 
     if configs.font.extrudeOverlappingTriggerText then

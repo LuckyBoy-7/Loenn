@@ -2,18 +2,18 @@
 -- Previously provided by the FontLoennPlugin mod.
 
 return {
-    -- Font
+    -- Internally selected by the editor; no longer exposed as a setting.
     useHiresPixelFont = true,
     autoSwitchFont = false,
 
     -- Trigger text
     addShadowToFont = true,
-    doubleTriggerTextSize = true,
+    triggerFontPath = "assets/fonts/RenogareSoft-Regular.ttf",
+    textSize = 1.0,
     highlightSelectedTriggerText = true,
     highlightColor = "ffff00",
     selectTriggerByClickingText = false,
 
-    showCompleteTriggerText = true,
     extrudeOverlappingTriggerText = true,
     ignoreOutOfRoomTextExtruding = true
 }
