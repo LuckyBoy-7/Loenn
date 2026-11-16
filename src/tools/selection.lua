@@ -859,6 +859,94 @@ local function pasteItems(room, layer, targets)
     return snapshot, relevantLayers
 end
 
+local function getSelectedDecalTargets()
+    local targets = {}
+    local seen = {}
+
+    for _, list in ipairs({selectionTargets or {}, selectionPreviews or {}}) do
+        for _, target in ipairs(list) do
+            local item = target.item
+            local layer = target.layer
+
+            if item and item._type == "decal"
+                and (layer == "decalsFg" or layer == "decalsBg")
+                and not seen[item] then
+                seen[item] = true
+                table.insert(targets, target)
+            end
+        end
+    end
+
+    return targets
+end
+
+local function moveSelectedDecals(targetLayer)
+    local room = state.getSelectedRoom()
+
+    if not room then
+        return false
+    end
+
+    local targets = getSelectedDecalTargets()
+    local moving = {}
+
+    for _, target in ipairs(targets) do
+        if target.layer ~= targetLayer then
+            table.insert(moving, target)
+        end
+    end
+
+    if #moving == 0 then
+        return false
+    end
+
+    local moved = {}
+    local snapshot, redraw = snapshotUtils.roomLayersSnapshot(function()
+        for _, target in ipairs(moving) do
+            local item = target.item
+            local source = room[target.layer]
+            local destination = room[targetLayer]
+
+            for index = #source, 1, -1 do
+                if source[index] == item then
+                    table.remove(source, index)
+                end
+            end
+
+            table.insert(destination, item)
+            target.layer = targetLayer
+            moved[item] = true
+        end
+
+        for _, preview in ipairs(selectionPreviews or {}) do
+            if moved[preview.item] then
+                preview.layer = targetLayer
+            end
+        end
+
+        return true
+    end, room, {"decalsFg", "decalsBg"}, targetLayer == "decalsFg"
+        and "Move Decals to Foreground" or "Move Decals to Background")
+
+    if redraw then
+        history.addSnapshot(snapshot)
+        toolUtils.redrawTargetLayer(room, {"decalsFg", "decalsBg"})
+    end
+
+    return true
+end
+
+local function handleDecalLayerKeys(room, key)
+    if key == configs.editor.decalToForeground then
+        return moveSelectedDecals("decalsFg")
+
+    elseif key == configs.editor.decalToBackground then
+        return moveSelectedDecals("decalsBg")
+    end
+
+    return false
+end
+
 local function handleItemMovementKeys(room, key, scancode, isrepeat)
     for _, movementData in ipairs(selectionMovementKeys) do
         local configKey, offsetX, offsetY = movementData[1], movementData[2], movementData[3]
@@ -1655,6 +1743,7 @@ function tool.keypressed(key, scancode, isrepeat)
     updateVisualsOnBehaviorChange()
 
     if selectionTargets and room then
+        handled = handled or handleDecalLayerKeys(room, key)
         handled = handled or handleItemMovementKeys(room, key, scancode, isrepeat)
         handled = handled or handleItemResizeKeys(room, key, scancode, isrepeat)
         handled = handled or handleItemRotateKeys(room, key, scancode, isrepeat)

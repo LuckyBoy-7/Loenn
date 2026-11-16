@@ -172,6 +172,9 @@ settings.font.description.selectTriggerByClickingText=Clicking on a trigger labe
 settings.font.description.extrudeOverlappingTriggerText=Move labels of triggers that sit on top of each other apart, so all of them stay readable.
 settings.font.description.ignoreOutOfRoomTextExtruding=Labels that are completely outside the room do not take part in separating overlapping labels.
 
+settings.editor.attribute.decalToForeground=Move Decals to Foreground
+settings.editor.attribute.decalToBackground=Move Decals to Background
+
 # Settings - Hotkeys - General
 settings.ui.hotkeys.attribute.bypassDangerousActionWarningModifier=Skip Confirmation (Modifier)
 

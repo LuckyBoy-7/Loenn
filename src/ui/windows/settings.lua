@@ -192,6 +192,8 @@ local defaultTabForms = {
                     "editor.itemDelete",
                     "editor.itemFlipHorizontal",
                     "editor.itemFlipVertical",
+                    "editor.decalToForeground",
+                    "editor.decalToBackground",
                     "editor.itemRotateLeft",
                     "editor.itemRotateRight",
                     "editor.precisionModifier",
@@ -563,6 +565,12 @@ local defaultFieldInformation = {
         fieldType = "keyboard_hotkey"
     },
     ["editor.itemMoveUp"] = {
+        fieldType = "keyboard_hotkey"
+    },
+    ["editor.decalToForeground"] = {
+        fieldType = "keyboard_hotkey"
+    },
+    ["editor.decalToBackground"] = {
         fieldType = "keyboard_hotkey"
     },
     ["editor.itemResizeDownGrow"] = {

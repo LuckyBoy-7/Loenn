@@ -39,6 +39,8 @@ return {
 
     itemFlipVertical = "v",
     itemFlipHorizontal = "h",
+    decalToForeground = "f",
+    decalToBackground = "b",
 
     itemDelete = "delete",
 
