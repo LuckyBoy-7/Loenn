@@ -6,6 +6,7 @@ local viewportHandler = require("viewport_handler")
 local logging = require("logging")
 local startupProgress = require("startup_progress")
 local liquidFill = require("ui.widgets.liquid_fill")
+local loadingTips = require("assets.loading.tips")
 
 local loadingScene = {}
 
@@ -66,6 +67,36 @@ function loadingScene:loaded()
 
     self.duration = 1
     self.currentTime = 0
+
+    self.birdFrames = {}
+
+    for i = 0, loadingTips.bird.frameCount - 1 do
+        local path = string.format("assets/loading/bird/crow%02d.png", i)
+
+        if love.filesystem.getInfo(path, "file") then
+            table.insert(self.birdFrames, love.graphics.newImage(path))
+        end
+    end
+
+    self.birdFrame = 1
+    self.birdTime = 0
+
+    -- Load the tip font and measure every tip before the loading screen starts drawing.
+    -- The CJK font is loaded lazily by LÖVE; doing that in draw() caused a visible stall
+    -- which consumed most of the time a tip was supposed to stay on screen.
+    -- Prefer a high-resolution system CJK UI font so the tips look like interface text rather
+    -- than the bundled pixel font. Falls back to the bundled CJK font when none is available.
+    self.tipFont = fonts.getLoadingTipFont(loadingTips.settings.fontSize)
+    self.tipScale = 1
+    self.tipTexts = {}
+
+    for i, tip in ipairs(loadingTips.tips) do
+        local text = love.graphics.newText(self.tipFont)
+        text:setf(tip, loadingTips.settings.maxWidth, "left")
+        self.tipTexts[i] = text
+    end
+
+    self:resetTips()
 end
 
 function loadingScene:firstEnter()
@@ -115,6 +146,12 @@ function loadingScene:firstEnter()
 
     -- Microbenchmark to estimate instructions per second
     sandboxUtils.calcIpsAndHookInterval()
+
+    -- Draw the first loading frame before the heavy startup task begins. The tips are already
+    -- rendered to canvases, so this frame can appear immediately instead of waiting for the
+    -- first loading phase to yield.
+    self:draw()
+    love.graphics.present()
 
     -- Load assets and entity, trigger, effect etc modules
     tasks.newTask(
@@ -225,6 +262,144 @@ function loadingScene:firstEnter()
     viewerState.initFromPersistence()
 end
 
+function loadingScene:resetTips()
+    self.tipState = {
+        current = nil,
+        elapsed = 0,
+        index = nil,
+        first = true,
+    }
+
+    if #loadingTips.tips > 0 then
+        local index = love.math.random(#loadingTips.tips)
+        self.tipState.index = index
+        self.tipState.current = loadingTips.tips[index]
+    end
+end
+
+function loadingScene:pickTip()
+    local tips = loadingTips.tips
+
+    if #tips == 0 then
+        return nil
+    end
+
+    local index = love.math.random(#tips)
+
+    if #tips > 1 and index == self.tipState.index then
+        index = index % #tips + 1
+    end
+
+    self.tipState.index = index
+
+    return tips[index]
+end
+
+function loadingScene:updateTips(dt)
+    if not self.tipState then
+        self:resetTips()
+    end
+
+    local settings = loadingTips.settings
+    local state = self.tipState
+
+    if state.current then
+        state.elapsed = state.elapsed + dt
+
+        if state.elapsed >= settings.duration then
+            state.first = false
+            state.current = self:pickTip()
+            state.elapsed = 0
+        end
+
+    else
+        state.current = self:pickTip()
+        state.elapsed = 0
+    end
+end
+
+function loadingScene:updateBird(dt)
+    if #self.birdFrames == 0 then
+        return
+    end
+
+    self.birdTime = self.birdTime + dt
+
+    if self.birdTime >= loadingTips.bird.frameDuration then
+        self.birdTime = self.birdTime - loadingTips.bird.frameDuration
+        self.birdFrame = self.birdFrame % #self.birdFrames + 1
+    end
+end
+
+function loadingScene:drawBird(windowWidth, windowHeight)
+    if #self.birdFrames == 0 then
+        return
+    end
+
+    local image = self.birdFrames[self.birdFrame]
+    local scale = loadingTips.bird.scale
+    local margin = loadingTips.bird.margin
+    local x = margin - loadingTips.bird.visualLeft * scale
+    local y = windowHeight - margin - loadingTips.bird.visualBottom * scale
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(image, x, y, 0, scale, scale)
+end
+
+function loadingScene:drawTips(windowWidth, windowHeight)
+    if not self.tipState then
+        self:resetTips()
+    end
+
+    local bird = loadingTips.bird
+    local settings = loadingTips.settings
+    local state = self.tipState
+
+    self:drawBird(windowWidth, windowHeight)
+
+    if not state.current then
+        return
+    end
+
+    local fadeDuration = settings.fadeDuration
+    local alpha = 1
+
+    if not state.first then
+        if state.elapsed < fadeDuration then
+            alpha = state.elapsed / fadeDuration
+        elseif settings.duration - state.elapsed < fadeDuration then
+            alpha = (settings.duration - state.elapsed) / fadeDuration
+        end
+    end
+
+    alpha = math.max(0, math.min(1, alpha))
+
+    local tipText = self.tipTexts and self.tipTexts[state.index]
+
+    if not tipText then
+        return
+    end
+
+    local textX = bird.margin + bird.visualRight * bird.scale + settings.textGap
+    local maxWidth = math.min(settings.maxWidth, windowWidth - textX - settings.rightMargin)
+
+    if maxWidth < 60 then
+        return
+    end
+
+    local textScale = math.min(self.tipScale or 1, maxWidth / tipText:getWidth())
+    local textHeight = tipText:getHeight() * textScale
+    local birdY = windowHeight - bird.margin - bird.visualBottom * bird.scale
+    local birdCenterY = birdY + (bird.visualTop + bird.visualBottom) / 2 * bird.scale
+    local textY = birdCenterY - textHeight / 2
+
+    love.graphics.setColor(1, 1, 1, alpha)
+    love.graphics.draw(tipText,
+        math.floor(textX + 0.5),
+        math.floor(textY + 0.5),
+        0, textScale, textScale)
+end
+
 function loadingScene:draw()
     -- Scenes metatable will make this seem like a function, make sure its actually set
     if type(self.text) == "string" then
@@ -238,6 +413,7 @@ function loadingScene:draw()
         local y = (windowHeight - self.quadSize) / 2 - self.logoOffset
 
         self:drawLogo(x, y)
+        self:drawTips(windowWidth, windowHeight)
     end
 end
 
@@ -264,6 +440,9 @@ function loadingScene:update(dt)
     if self.liquidLogo then
         liquidFill.update(self.liquidLogo, dt)
     end
+
+    self:updateBird(dt)
+    self:updateTips(math.min(dt, 0.2))
 end
 
 return loadingScene

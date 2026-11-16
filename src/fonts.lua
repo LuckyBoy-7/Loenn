@@ -144,6 +144,31 @@ function font.getCJKFont(size)
     return cjkFonts[size]
 end
 
+-- A high-resolution CJK font for small pieces of interface text such as the loading tips.
+-- Uses a system UI font when available and falls back to the bundled pixel CJK font.
+local loadingTipFontPaths = {
+    "C:/Windows/Fonts/simhei.ttf",
+    "C:/Windows/Fonts/Dengb.ttf",
+    "C:/Windows/Fonts/msyhbd.ttc",
+    "C:/Windows/Fonts/msyh.ttc",
+    "/System/Library/Fonts/PingFang.ttc",
+    "/System/Library/Fonts/STHeiti Medium.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+}
+
+function font.getLoadingTipFont(size)
+    for _, path in ipairs(loadingTipFontPaths) do
+        local loaded = loadFontFromPath(path, size)
+
+        if loaded then
+            return loaded
+        end
+    end
+
+    return font.getCJKFont(size)
+end
+
 function font.addCJKFallback(target, size)
     if not target then
         return

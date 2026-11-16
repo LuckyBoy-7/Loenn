@@ -1,0 +1,45 @@
+-- Loading-screen tips. Keep this file as the single place to edit the bird
+-- animation and the Chinese tips shown while Loenn starts up.
+
+return {
+    bird = {
+        frameCount = 15,
+        frameDuration = 0.12,
+        scale = 2,
+        margin = 24,
+        -- Opaque pixel bounds inside the 32x24 bird frames. The sprite has transparent
+        -- space above the bird, so layout uses these bounds instead of the image size.
+        visualLeft = 8,
+        visualTop = 11,
+        visualRight = 23,
+        visualBottom = 24,
+    },
+
+    settings = {
+        duration = 6.5,
+        fadeDuration = 0.35,
+        maxWidth = 700,
+        fontSize = 16,
+        textGap = 10,
+        rightMargin = 24,
+    },
+
+    tips = {
+        "你知道吗，用鼠标中键可以吸取实体。",
+        "现在可以通过拖拽添加背景了！",
+        "按住 Ctrl 可以临时进入精确放置模式。",
+        "在 Tile 工具里按住鼠标，可以连续绘制图块。",
+        "选中实体后按 R 可以旋转，按 H 可以水平翻转。",
+        "滚轮可以缩放视图，中键拖拽可以平移地图。",
+        "Tile 工具的 Objects 图层可以放置 scenery 物件图块。",
+        "撤销和重做会记录大部分编辑操作，不用担心手滑。",
+        "在房间之间拖拽实体时，按住 Shift 可以保持对齐。",
+        "双击材料列表中的项目，可以把它加入收藏。",
+        "房间的宽度和高度可以在选中房间后直接调整。",
+        "背景贴花和前景贴花分别位于 Decals 的两个图层中。",
+        "在搜索框输入名称，可以快速筛选实体、触发器或图块。",
+        "按住 Shift 多选实体，可以一次移动或复制多个对象。",
+        "右上角的图层按钮可以单独隐藏指定图层。",
+        "按 Ctrl + Z 撤销，按 Ctrl + Y 重做。",
+    },
+}
