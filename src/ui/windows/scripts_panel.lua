@@ -53,7 +53,7 @@ function scriptsPanel.open(script, context, runCallback, options)
         }
     }
 
-    for _, extraButton in ipairs(options.extraButtons or {}) do
+    for _, extraButton in ipairs(options.extraButtons or script.extraButtons or {}) do
         table.insert(buttons, {
             text = tostring(extraButton.text),
             callback = function()
