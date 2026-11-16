@@ -239,8 +239,16 @@ function selectionUtils.getLayerSelectionsForRoom(room, layer, subLayer, rectang
             for _, item in ipairs(items) do
                 local processItem = true
 
+                -- With -1 (all sub layers / All Layers selected), still skip items belonging to a
+                -- hidden sub layer.
+                if subLayer == -1
+                    and not subLayers.getShouldLayerRender(layer, item._editorLayer or 0) then
+                    processItem = false
+                end
+
                 if handler.selectionFilterPredicate then
-                    processItem = handler.selectionFilterPredicate(room, layer, subLayer, item)
+                    processItem = processItem
+                        and handler.selectionFilterPredicate(room, layer, subLayer, item)
                 end
 
                 if processItem then
