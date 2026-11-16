@@ -116,7 +116,7 @@ function toolHandler.selectTool(name)
             toolHandler.setMode(modeValue, name)
         end
 
-        if layerValue then
+        if layerValue and not handler.keepLayerStateInMemory then
             local layer, subLayer = subLayers.parseLayerName(layerValue)
 
             toolHandler.setLayer(layer, subLayer, name)

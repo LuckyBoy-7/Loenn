@@ -23,6 +23,7 @@ local modHandler = require("mods")
 local textSearching = require("utils.text_search")
 local utils = require("utils")
 local cursorUtils = require("utils.cursor")
+local keyboardHelper = require("utils.keyboard")
 local hotkeyHandler = require("hotkey_handler")
 local loadedState = require("loaded_state")
 local namePreviewFocus = require("ui.name_preview_focus")
@@ -4476,6 +4477,51 @@ local function layerDataToElement(list, data, element)
         element.keepInputFocus = toolHandler.currentToolName == "preview"
     end
 
+    -- Selection supports selecting more than one content type. Ctrl + click toggles the layer
+    -- without letting the list replace the selection with a single row.
+    if not element._selectionLayerHook then
+        element._selectionLayerHook = true
+
+        element:hook({
+            onPress = function(orig, self, x, y, button, dragging, presses)
+                if button == 1 and self.itemData and toolHandler.currentToolName == "selection"
+                    and not keyboardHelper.modifierHeld("ctrl") then
+                    local selectionTool = toolHandler.tools.selection
+                    local layer = self.itemData.baseLayer
+
+                    if selectionTool and layer then
+                        -- Force the single-layer state before the normal list callback runs, even
+                        -- if All was visually selected. Letting orig run keeps double click and
+                        -- the normal selection callback intact.
+                        selectionTool.selectSingleLayer(layer, self.itemData.subLayer or -1)
+                    end
+                end
+
+                orig(self, x, y, button, dragging, presses)
+            end,
+
+            onClick = function(orig, self, x, y, button)
+                if button == 1 and self.itemData and toolHandler.currentToolName == "selection"
+                    and keyboardHelper.modifierHeld("ctrl") then
+                    local selectionTool = toolHandler.tools.selection
+                    local layer = self.itemData.baseLayer
+
+                    if selectionTool and layer then
+                        selectionTool.toggleLayerSelection(layer)
+
+                        toolWindow.eventStates.layer = layer
+                        toolWindow.eventStates.subLayer = self.itemData.subLayer or -1
+                        toolWindow.layerList:repaint()
+
+                        return
+                    end
+                end
+
+                return orig(self, x, y, button)
+            end
+        })
+    end
+
     return element
 end
 
@@ -4603,11 +4649,19 @@ local function updateLayerList(toolName, tool, targetLayer, preventCallback)
         tool = toolHandler.tools[toolName]
     end
 
-    if tool and not targetLayer then
+    local preventLayerCallback = preventCallback
+
+    if tool and tool.keepLayerStateInMemory and not targetLayer then
+        -- The tool keeps its own layer set. Do not let the list restore a persisted single layer
+        -- and overwrite the in-memory selection.
+        targetLayer = false
+        preventLayerCallback = true
+
+    elseif tool and not targetLayer then
         targetLayer = toolUtils.getPersistenceLayer(tool)
     end
 
-    toolWindow.layerList:updateItems(items, targetLayer, nil, preventCallback)
+    toolWindow.layerList:updateItems(items, targetLayer, nil, preventLayerCallback)
 
     local newVisible = #items > 0
 
@@ -5259,6 +5313,23 @@ function toolWindow.getWindow()
     toolWindow.toolList = toolList
     toolWindow.tileToolList = tileToolList
     toolWindow.layerList = layerList
+
+    -- Selection can have several content types enabled at once. The magic list only knows one
+    -- selected index, so derive layer highlighting from the selection tool's layer set.
+    local defaultLayerGetIsSelected = layerList.getIsSelected
+
+    layerList.getIsSelected = function(self, element)
+        if toolHandler.currentToolName == "selection" and element.itemData then
+            local selectionTool = toolHandler.tools.selection
+            local layer = element.itemData.baseLayer
+
+            if selectionTool and layer then
+                return selectionTool.isLayerSelected(layer)
+            end
+        end
+
+        return defaultLayerGetIsSelected(self, element)
+    end
     toolWindow.materialList = materialList
 
     -- The room tool supports multi selection on the canvas. The generic magic list only knows a

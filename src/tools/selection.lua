@@ -29,6 +29,9 @@ tool.group = "placement"
 tool.order = 7
 tool.image = nil
 
+-- Selection keeps its single/multi layer selection in memory across tool switches.
+tool.keepLayerStateInMemory = true
+
 tool.layer = "entities"
 tool.subLayer = 0
 tool.validLayers = {
@@ -51,6 +54,8 @@ local allLayers = {
     "decalsFg",
     "decalsBg"
 }
+
+local selectedLayerItems = {"entities"}
 
 local dragStartX, dragStartY = nil, nil
 local coverStartX, coverStartY, coverStartWidth, coverStartyHeight = nil, nil, nil, nil
@@ -133,13 +138,51 @@ function tool.setSelectionPreviews(previews)
     selectionPreviews = previews
 end
 
-function tool.setLayer(layer, subLayer)
-    if layer == "allLayers" then
+local function applySelectedLayerItems()
+    local hasAll = false
+    local layers = {}
+
+    for _, layer in ipairs(selectedLayerItems) do
+        if layer == "allLayers" then
+            hasAll = true
+
+        else
+            table.insert(layers, layer)
+        end
+    end
+
+    -- All is a real, independently selectable item. It is a superset for the actual selection
+    -- query, but the UI still shows exactly the entries the user selected.
+    if hasAll then
         tool.layer = allLayers
 
+    elseif #layers == 1 then
+        tool.layer = layers[1]
+
     else
-        tool.layer = layer
+        tool.layer = layers
     end
+end
+
+local function resetSelectedLayerItems(layer)
+    selectedLayerItems = {}
+
+    if layer == "allLayers" then
+        table.insert(selectedLayerItems, "allLayers")
+
+    elseif type(layer) == "table" then
+        for _, name in ipairs(layer) do
+            table.insert(selectedLayerItems, name)
+        end
+
+    else
+        table.insert(selectedLayerItems, layer)
+    end
+end
+
+function tool.setLayer(layer, subLayer)
+    resetSelectedLayerItems(layer)
+    applySelectedLayerItems()
 
     tool.subLayer = subLayer
 
@@ -148,14 +191,67 @@ function tool.setLayer(layer, subLayer)
     return false
 end
 
+function tool.selectSingleLayer(layer, subLayer)
+    resetSelectedLayerItems(layer)
+    applySelectedLayerItems()
+
+    tool.subLayer = subLayer or -1
+
+    return true
+end
+
+function tool.isLayerSelected(layer)
+    for _, selectedLayer in ipairs(selectedLayerItems) do
+        if selectedLayer == layer then
+            return true
+        end
+    end
+
+    return false
+end
+
+function tool.toggleLayerSelection(layer)
+    -- A single selected item cannot be toggled off by itself. Doing that used to fall back to
+    -- another layer, which made the other row flash.
+    if #selectedLayerItems == 1 and selectedLayerItems[1] == layer then
+        return false
+    end
+
+    local found
+
+    for index, selectedLayer in ipairs(selectedLayerItems) do
+        if selectedLayer == layer then
+            found = index
+
+            break
+        end
+    end
+
+    if found then
+        table.remove(selectedLayerItems, found)
+
+    else
+        table.insert(selectedLayerItems, layer)
+    end
+
+    if #selectedLayerItems == 0 then
+        table.insert(selectedLayerItems, "entities")
+    end
+
+    applySelectedLayerItems()
+
+    tool.subLayer = -1
+
+    return true
+end
+
 local function selectionChanged(x, y, width, height, fromClick)
     local room = state.getSelectedRoom()
 
     -- Clicking a trigger label selects the trigger even when the click misses the
     -- (often small) trigger rectangle itself
     if fromClick and room and configs.font.selectTriggerByClickingText and subLayers.getShouldLayerRender("triggers", -1) then
-        local layer = tool.layer
-        local onTriggers = layer == "triggers" or (type(layer) == "table" and layer._persistenceName == "AllLayers")
+        local onTriggers = tool.isLayerSelected("allLayers") or tool.isLayerSelected("triggers")
 
         if onTriggers then
             local trigger = require("trigger_text").findTriggerAt(room, x, y)
