@@ -68,11 +68,14 @@ local function checkMaskFromTilesWithBitmask(tilemask, bitmask, ignoremask, bxor
     return band(bxor(tilemask, bitmask), ignoremask) == 0
 end
 
-local function checkPadding(tiles, x, y, tile, ignores, airTile, emptyTile, wildcard)
-    local left = tiles:get(x - 2, y, tile)
-    local right = tiles:get(x + 2, y, tile)
-    local up = tiles:get(x, y - 2, tile)
-    local down = tiles:get(x, y + 2, tile)
+local function checkPadding(tiles, x, y, tile, ignores, airTile, emptyTile, wildcard, scanWidth, scanHeight, defaultTile)
+    local offsetX = math.floor((scanWidth or 3) / 2) + 1
+    local offsetY = math.floor((scanHeight or 3) / 2) + 1
+    local fallback = defaultTile or tile
+    local left = tiles:get(x - offsetX, y, fallback)
+    local right = tiles:get(x + offsetX, y, fallback)
+    local up = tiles:get(x, y - offsetY, fallback)
+    local down = tiles:get(x, y + offsetY, fallback)
 
     -- Special case for tiles with ignores, should treat ignored tiles as "air"
     if ignores and ignores.hasIgnores then
@@ -85,10 +88,10 @@ local function checkPadding(tiles, x, y, tile, ignores, airTile, emptyTile, wild
     return left == airTile or right == airTile or up == airTile or down == airTile
 end
 
-local function getPaddingOrCenterQuad(x, y, tile, tiles, tileMeta, airTile, emptyTile, wildcard, defaultQuad, defaultSprite)
+local function getPaddingOrCenterQuad(x, y, tile, tiles, tileMeta, airTile, emptyTile, wildcard, defaultQuad, defaultSprite, scanWidth, scanHeight)
     local ignores = tileMeta.ignores
 
-    if checkPadding(tiles, x, y, tile, ignores, airTile, emptyTile, wildcard) then
+    if checkPadding(tiles, x, y, tile, ignores, airTile, emptyTile, wildcard, scanWidth, scanHeight) then
         if tileMeta.hasPadding then
             return tileMeta.padding, defaultSprite
         end
@@ -141,6 +144,21 @@ local function maskToIgnoreBitmask(mask, lshift)
 end
 
 
+local function isFilledScanArea(x, y, tiles, tile, ignore, airTile, wildcard, checkTile, scanWidth, scanHeight)
+    local halfWidth = math.floor(scanWidth / 2)
+    local halfHeight = math.floor(scanHeight / 2)
+
+    for offsetY = -halfHeight, halfHeight do
+        for offsetX = -halfWidth, halfWidth do
+            if not checkTile(tile, tiles:get(x + offsetX, y + offsetY, airTile), ignore, airTile, wildcard) then
+                return false
+            end
+        end
+    end
+
+    return true
+end
+
 local function getMaskQuadsFromTiles(x, y, masks, tiles, tile, ignore, air, wildcard, checkTile, scanWidth, scanHeight)
     if masks then
         local checkedTiles = {}
@@ -150,7 +168,7 @@ local function getMaskQuadsFromTiles(x, y, masks, tiles, tile, ignore, air, wild
 
         for offsetY = -halfHeight, halfHeight do
             for offsetX = -halfWidth, halfWidth do
-                table.insert(checkedTiles, checkTile(tile, tiles:get(x + offsetX, y + offsetY, tile), ignore, air, wildcard))
+                table.insert(checkedTiles, checkTile(tile, tiles:get(x + offsetX, y + offsetY, air), ignore, air, wildcard))
             end
         end
 
@@ -197,14 +215,30 @@ function autotiler.getQuads(x, y, tiles, tileMeta, airTile, emptyTile, wildcard,
         matches, quads, sprites = getMaskQuadsFromTilesWithBitmask(x, y, masks, tiles, tile, ignore, airTile, wildcard, checkTile, lshift, bxor, band)
 
     else
+        -- Everest checks whether the whole scan area is filled before testing masks. A filled
+        -- area uses Center/Padded, which is why a large solid block does not fall through to an
+        -- edge mask whose outer row is a wildcard.
+        if isFilledScanArea(x, y, tiles, tile, ignore, airTile, wildcard, checkTile, scanWidth, scanHeight) then
+            if not checkPadding(tiles, x, y, tile, ignore, airTile, emptyTile, wildcard, scanWidth, scanHeight, airTile) then
+                return tileMeta.center or defaultQuad, defaultSprite
+            end
+
+            return tileMeta.padding or defaultQuad, defaultSprite
+        end
+
         matches, quads, sprites = getMaskQuadsFromTiles(x, y, masks, tiles, tile, ignore, airTile, wildcard, checkTile, scanWidth, scanHeight)
     end
 
     if matches then
         return quads, sprites
 
+    elseif scanWidth ~= 3 or scanHeight ~= 3 then
+        -- Everest returns no tile when a custom-size label matches neither the filled area nor a
+        -- mask. Do not fall back to the 3x3 padding/center path here.
+        return {}, nil
+
     else
-        return getPaddingOrCenterQuad(x, y, tile, tiles, tileMeta, airTile, emptyTile, wildcard, defaultQuad, defaultSprite)
+        return getPaddingOrCenterQuad(x, y, tile, tiles, tileMeta, airTile, emptyTile, wildcard, defaultQuad, defaultSprite, scanWidth, scanHeight)
     end
 end
 
@@ -339,13 +373,18 @@ function autotiler.loadTilesetXML(filename)
         end
 
         local copy = element._attr.copy
+        local sourceElement = copy and elementLookup[copy]
         local ignores = element._attr.ignores
         local ignoreExceptions = element._attr.ignoreExceptions
         local path = element._attr.path
         local displayName = element._attr.displayName
         local tileset = getTilesetStructure(id)
-        local scanWidth = tonumber(element._attr.scanWidth) or 3
-        local scanHeight = tonumber(element._attr.scanHeight) or 3
+        local scanWidth = tonumber(element._attr.scanWidth)
+            or (sourceElement and tonumber(sourceElement._attr.scanWidth))
+            or 3
+        local scanHeight = tonumber(element._attr.scanHeight)
+            or (sourceElement and tonumber(sourceElement._attr.scanHeight))
+            or 3
 
         tileset.path = "tilesets/" .. path
         tileset.displayName = displayName

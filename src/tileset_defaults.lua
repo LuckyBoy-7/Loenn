@@ -179,9 +179,18 @@ local function parseTilesets(text)
         local id = string.match(attributes, 'id%s*=%s*"([^"]*)"')
         local path = string.match(attributes, 'path%s*=%s*"([^"]*)"')
         local copy = string.match(attributes, 'copy%s*=%s*"([^"]*)"')
+        local scanWidth = string.match(attributes, 'scanWidth%s*=%s*"([^"]*)"')
+        local scanHeight = string.match(attributes, 'scanHeight%s*=%s*"([^"]*)"')
 
         if id or path then
-            table.insert(entries, {id = id, path = path, copy = copy, body = body})
+            table.insert(entries, {
+                id = id,
+                path = path,
+                copy = copy,
+                scanWidth = scanWidth,
+                scanHeight = scanHeight,
+                body = body
+            })
         end
     end
 
@@ -499,6 +508,10 @@ function tilesetDefaults.collectFromMods(backgroundOnly)
                                 body = body,
                                 template = template,
                                 copy = entry.copy,
+                                scanWidth = entry.scanWidth
+                                    or (entry.copy and modById[entry.copy] and modById[entry.copy].scanWidth),
+                                scanHeight = entry.scanHeight
+                                    or (entry.copy and modById[entry.copy] and modById[entry.copy].scanHeight),
                                 source = string.format("%s (%s)", modName, entry.path)
                             })
                         end
@@ -577,6 +590,8 @@ function tilesetDefaults.collectFromPack(backgroundOnly)
                 template = entry.template,
                 sound = entry.sound,
                 ignores = entry.ignores,
+                scanWidth = entry.scanWidth,
+                scanHeight = entry.scanHeight,
                 source = source,
                 sourceGroup = sourceGroup
             })
@@ -903,6 +918,14 @@ function tilesetDefaults.addDefaults(layer, onDone, targetFolder)
                     end
 
                     local attributes = ""
+
+                    if candidate.scanWidth then
+                        attributes = attributes .. string.format(" scanWidth=\"%s\"", candidate.scanWidth)
+                    end
+
+                    if candidate.scanHeight then
+                        attributes = attributes .. string.format(" scanHeight=\"%s\"", candidate.scanHeight)
+                    end
 
                     if candidate.sound then
                         attributes = attributes .. string.format(" sound=\"%d\"", candidate.sound)
