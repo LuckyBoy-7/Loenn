@@ -1322,8 +1322,8 @@ local function getSimilarSelections(targetSelection, strict)
     return result
 end
 
-local function selectSimilar(strict)
-    local target = selectionTargets[1]
+local function selectSimilar(strict, target)
+    target = target or selectionTargets[1]
 
     if not target then
         return false
@@ -1333,6 +1333,17 @@ local function selectSimilar(strict)
 
     tool.setSelectionPreviews({})
     tool.setSelectionTargets(similarSelections)
+end
+
+local function isSelectionTargetSelected(target)
+    for _, selected in ipairs(selectionTargets) do
+        if selected.item == target.item and selected.layer == target.layer
+            and (selected.node or 0) == (target.node or 0) then
+            return true
+        end
+    end
+
+    return false
 end
 
 local function selectAllHotkey()
@@ -1572,14 +1583,22 @@ function tool.mouseclicked(x, y, button, istouch, presses)
         local cursorX, cursorY = toolUtils.getCursorPositionInRoom(x, y)
 
         if cursorX and cursorY then
-            local addSelections = keyboardHelper.modifierHeld(configs.editor.selectionAddModifier)
+            local room = state.getSelectedRoom()
+            local handledSimilar = false
 
-            if addSelections and presses % 2 == 0 then
-                local strict = keyboardHelper.modifierHeld(configs.editor.precisionModifier)
+            if keyboardHelper.modifierShift() and room then
+                local _, bestTarget = selectionUtils.getContextSelections(
+                    room, tool.layer, tool.subLayer, cursorX, cursorY, selectionTargets)
 
-                selectSimilar(strict)
+                if bestTarget and isSelectionTargetSelected(bestTarget) then
+                    local strict = keyboardHelper.modifierHeld(configs.editor.precisionModifier)
 
-            else
+                    selectSimilar(strict, bestTarget)
+                    handledSimilar = true
+                end
+            end
+
+            if not handledSimilar then
                 selectionChanged(cursorX - 1, cursorY - 1, 3, 3, true)
 
                 selectionFinished(cursorX, cursorY, true)
