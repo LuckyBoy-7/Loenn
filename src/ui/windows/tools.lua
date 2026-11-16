@@ -3246,6 +3246,8 @@ local function getNamePreviewItems(language, mode)
     local function selectName(name)
         love.system.setClipboardText(name)
         namePreviewFocus.replaceFocusedField(name)
+
+        notifications.notify(tostring(language.ui.notifications.namePreviewCopied))
     end
 
     for _, item in ipairs(items) do
@@ -5853,6 +5855,12 @@ function toolWindow.getWindow()
         editorMapNew = mapLoadedCallback,
         editorMapTargetChanged = function()
             scrollRoomListToSelection()
+
+            -- Preview -> Name (Current Room) must follow the selected room.
+            if toolHandler.currentToolName == "preview" and toolHandler.getLayer() == "name"
+                and toolHandler.getMode() == "currentRoom" then
+                toolWindow.refreshMaterialList()
+            end
         end,
         editorShownDependenciesChanged = updateLayerAndPlacementsCallback,
         editorLayerInformationChanged = layerInformationChangedCallback,

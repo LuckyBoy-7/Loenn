@@ -231,6 +231,7 @@ ui.notifications.tilesetDefaultsNothingRemoved=All tilesets are used, nothing wa
 ui.notifications.previewPathCopied=Copied path: %s
 ui.notifications.previewCopyInvalidMod=The current Mod structure is not valid, so the path was copied directly: %s
 ui.notifications.previewCopyDone=Copied %d files to '%s'.
+ui.notifications.namePreviewCopied=Name copied to the clipboard.
 ui.script_window.run_script=Run Scripts
 
 ui.preview_copy_window.title=Copy Object
