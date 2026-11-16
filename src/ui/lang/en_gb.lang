@@ -361,6 +361,7 @@ ui.menubar.metadata=Metadata
 ui.menubar.save_map_image=Save Map Image
 
 ui.menubar.ghost=Ghost
+ui.menubar.ghost_helper_hint=You Should Enable Loenn Helper to Use this Feature
 ui.menubar.ghost_show_player=Show Player Ghost
 ui.menubar.ghost_show_player_hitbox=Show Player Hitbox Ghost
 ui.menubar.ghost_show_holdables=Show Holdable Ghosts

@@ -465,6 +465,7 @@ ui.menubar.dependencies=依赖
 ui.menubar.metadata=元数据
 ui.menubar.save_map_image=保存地图图片
 ui.menubar.ghost=玩家残影
+ui.menubar.ghost_helper_hint=请先启用 Loenn Helper 才能使用此功能
 ui.menubar.ghost_show_player=显示玩家残影
 ui.menubar.ghost_show_player_hitbox=显示玩家判定框残影
 ui.menubar.ghost_show_holdables=显示可持有物残影

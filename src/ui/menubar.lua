@@ -252,6 +252,7 @@ menubar.menubar = {
         {"save_map_image", saveMapImage},
     }},
     {"ghost", {
+        {"ghost_helper_hint", false, "hint"},
         {"ghost_show_player", ghost.togglePlayer, "checkbox", ghost.getPlayer},
         {"ghost_show_player_hitbox", ghost.togglePlayerHitbox, "checkbox", ghost.getPlayerHitbox},
         {"ghost_show_holdables", ghost.toggleHoldables, "checkbox", ghost.getHoldables},
@@ -309,6 +310,10 @@ local function wrapInSubmenuClosers(menu)
 
             if elementType == "checkbox" then
                 shouldCloseMenu = false
+
+            elseif elementType == "hint" then
+                shouldCloseMenu = false
+                callback = nil
             end
 
             if callbackType == "function" or callbackType == "nil" then
