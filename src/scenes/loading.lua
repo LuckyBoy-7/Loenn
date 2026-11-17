@@ -398,6 +398,11 @@ function loadingScene:draw()
     if type(self.text) == "string" then
         local windowWidth, windowHeight = love.graphics.getWidth(), love.graphics.getHeight()
 
+        -- drawTips changes the current font and leaves a faded text color behind. Reset both
+        -- before drawing the loading text, otherwise its opacity follows the tips fade.
+        love.graphics.setFont(fonts.font)
+        love.graphics.setColor(1, 1, 1, 1)
+
         local dots = string.rep(".", utils.mod1(math.floor(self.currentTime / self.duration * 4) + 1, 4))
 
         love.graphics.printf(self.text .. dots, windowWidth / 2 - self.textOffsetX, windowHeight / 2 + self.textOffsetY - self.logoOffset, windowWidth, self.alignment, 0, self.textScale)
