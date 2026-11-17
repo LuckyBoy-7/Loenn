@@ -84,10 +84,11 @@ function loadingScene:loaded()
     -- Load the tip font and measure every tip before the loading screen starts drawing.
     -- The CJK font is loaded lazily by LÖVE; doing that in draw() caused a visible stall
     -- which consumed most of the time a tip was supposed to stay on screen.
-    -- Prefer a high-resolution system CJK UI font so the tips look like interface text rather
-    -- than the bundled pixel font. Falls back to the bundled CJK font when none is available.
+    -- Use the same default font family as the editor UI. The previous system-font Text object
+    -- went through its own texture/filter path, which made the loading tips look different from
+    -- the rest of the interface.
     self.tipFont = fonts.getLoadingTipFont(loadingTips.settings.fontSize)
-    self.tipScale = 1
+    self.tipFont:setFilter("linear", "linear")
     self.tipTexts = {}
 
     for i, tip in ipairs(loadingTips.tips) do
@@ -146,12 +147,6 @@ function loadingScene:firstEnter()
 
     -- Microbenchmark to estimate instructions per second
     sandboxUtils.calcIpsAndHookInterval()
-
-    -- Draw the first loading frame before the heavy startup task begins. The tips are already
-    -- rendered to canvases, so this frame can appear immediately instead of waiting for the
-    -- first loading phase to yield.
-    self:draw()
-    love.graphics.present()
 
     -- Load assets and entity, trigger, effect etc modules
     tasks.newTask(
@@ -387,8 +382,7 @@ function loadingScene:drawTips(windowWidth, windowHeight)
         return
     end
 
-    local textScale = math.min(self.tipScale or 1, maxWidth / tipText:getWidth())
-    local textHeight = tipText:getHeight() * textScale
+    local textHeight = tipText:getHeight()
     local birdY = windowHeight - bird.margin - bird.visualBottom * bird.scale
     local birdCenterY = birdY + (bird.visualTop + bird.visualBottom) / 2 * bird.scale
     local textY = birdCenterY - textHeight / 2
@@ -396,8 +390,7 @@ function loadingScene:drawTips(windowWidth, windowHeight)
     love.graphics.setColor(1, 1, 1, alpha)
     love.graphics.draw(tipText,
         math.floor(textX + 0.5),
-        math.floor(textY + 0.5),
-        0, textScale, textScale)
+        math.floor(textY + 0.5))
 end
 
 function loadingScene:draw()

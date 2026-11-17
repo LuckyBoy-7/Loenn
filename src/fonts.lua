@@ -28,7 +28,7 @@ local function resolveFontPath(path)
     return path
 end
 
-local function loadFontFromPath(path, size)
+local function loadFontFromPath(path, size, hinting)
     path = path and path:match("^%s*(.-)%s*$") or ""
 
     if path == "" or fontPathFailures[path] then
@@ -36,7 +36,7 @@ local function loadFontFromPath(path, size)
     end
 
     local resolvedPath = resolveFontPath(path)
-    local cacheKey = resolvedPath .. "|" .. tostring(size)
+    local cacheKey = resolvedPath .. "|" .. tostring(size) .. "|" .. tostring(hinting or "normal")
     local cached = labelFonts[cacheKey]
 
     if cached then
@@ -76,7 +76,7 @@ local function loadFontFromPath(path, size)
         return nil
     end
 
-    local fontOk, loadedFont = pcall(love.graphics.newFont, fileData, size)
+    local fontOk, loadedFont = pcall(love.graphics.newFont, fileData, size, hinting or "normal", 1)
 
     if not fontOk then
         fontPathFailures[path] = true
@@ -147,9 +147,12 @@ end
 -- A high-resolution CJK font for small pieces of interface text such as the loading tips.
 -- Uses a system UI font when available and falls back to the bundled pixel CJK font.
 local loadingTipFontPaths = {
-    "C:/Windows/Fonts/simhei.ttf",
-    "C:/Windows/Fonts/Dengb.ttf",
+    -- Bundled OFL font. Keeps the loading tips identical on every OS and avoids relying on
+    -- whichever Chinese UI font the system happens to ship.
+    "assets/fonts/NotoSansCJKsc-Bold.otf",
     "C:/Windows/Fonts/msyhbd.ttc",
+    "C:/Windows/Fonts/Dengb.ttf",
+    "C:/Windows/Fonts/simhei.ttf",
     "C:/Windows/Fonts/msyh.ttc",
     "/System/Library/Fonts/PingFang.ttc",
     "/System/Library/Fonts/STHeiti Medium.ttc",
@@ -159,7 +162,7 @@ local loadingTipFontPaths = {
 
 function font.getLoadingTipFont(size)
     for _, path in ipairs(loadingTipFontPaths) do
-        local loaded = loadFontFromPath(path, size)
+        local loaded = loadFontFromPath(path, size, "normal")
 
         if loaded then
             return loaded
