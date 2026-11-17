@@ -1416,16 +1416,10 @@ local function isTextOnScreen(drawable, room, viewport, selected)
         return false
     end
 
-    if selected then
-        return true
-    end
-
-    local roomWidth = room.width or 0
-    local roomHeight = room.height or 0
-
-    return drawable.x >= 0 and drawable.y >= 0
-        and drawable.x + drawWidth <= roomWidth
-        and drawable.y + drawHeight <= roomHeight
+    -- Unselected rooms are already clipped by the room scissor. Requiring the whole label to
+    -- stay inside the room bounds made extruded labels disappear while their offset shadow
+    -- could still intersect the room, so only visibility in the viewport matters here.
+    return true
 end
 
 local function drawScreenTexts(rooms, state)
