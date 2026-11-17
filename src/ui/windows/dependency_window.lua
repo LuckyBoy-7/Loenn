@@ -57,7 +57,9 @@ local function prepareMetadataForSaving(metadata, newDependencies)
 
     local firstMetadata = newMetadata[1] or {}
 
-    firstMetadata.Dependencies = newDependencies
+    -- An empty list serializes inconsistently (the YAML writer/read validation can reject it),
+    -- which made removing the last dependency silently fail. Omitting the key is valid YAML.
+    firstMetadata.Dependencies = #newDependencies > 0 and newDependencies or nil
 
     return newMetadata
 end
@@ -132,12 +134,7 @@ local function removeDependencyCallback(modName, interactionData)
 
         if success then
             markMetadataChanged()
-
-            -- A removed dependency is either missing (still used by the map) or simply available
-            local used = interactionData.usedMods and interactionData.usedMods[modName]
-            local groupName = used and "missing_mods" or "available_mods"
-
-            moveModSection(interactionData, modName, groupName)
+            moveModSection(interactionData, modName, "missing_mods")
         end
     end
 end
@@ -235,9 +232,33 @@ end
 
 local function removeModSection(interactionData, modName)
     local entry = interactionData.modSections and interactionData.modSections[modName]
+    local removed = false
 
-    if entry and entry.element then
-        entry.element:removeSelf()
+    -- Remove every visible row for this mod, not just the cached entry. After a panel reopen
+    -- the cache can point at a detached element while the real row is in another column.
+    if interactionData.sectionColumns then
+        for _, column in pairs(interactionData.sectionColumns) do
+            for i = #(column.children or {}), 1, -1 do
+                local child = column.children[i]
+
+                if child._modName == modName then
+                    child.visible = false
+                    column:removeChild(child)
+                    removed = true
+                end
+            end
+        end
+    end
+
+    if not removed and entry and entry.element then
+        if entry.column and entry.column.removeChild then
+            if not entry.column:removeChild(entry.element) then
+                entry.element:removeSelf()
+            end
+
+        else
+            entry.element:removeSelf()
+        end
     end
 
     if interactionData.modSections then
@@ -245,9 +266,23 @@ local function removeModSection(interactionData, modName)
     end
 end
 
--- Rebuilds only the moved mod instead of the whole window content
 local function insertModSection(interactionData, modName, groupName)
-    local column = interactionData.sectionColumns and interactionData.sectionColumns[groupName]
+    interactionData.sectionColumns = interactionData.sectionColumns or {}
+    interactionData.modSections = interactionData.modSections or {}
+
+    local column = interactionData.sectionColumns[groupName]
+
+    if not column then
+        if groupName == "missing_mods" then
+            column = interactionData.missingModsSection
+
+        elseif groupName == "depended_on" then
+            column = interactionData.dependedOnSection
+
+        else
+            column = interactionData.uncategorizedSection
+        end
+    end
 
     if not column then
         return
@@ -256,61 +291,37 @@ local function insertModSection(interactionData, modName, groupName)
     local localizedName = localizeModName(modName)
     local section = getModSection(modName, localizedName, nil, groupName, interactionData)
 
+    column.children = column.children or {}
     column:addChild(section)
 
-    -- Sorted insertion: keep the alphabetically ordered list, skipping the separator
-    local element = table.remove(column.children)
-    local index = #column.children + 1
-
-    for i = 2, #column.children do
-        local child = column.children[i]
-
-        if child._sortName and child._sortName > localizedName then
-            index = i
-
-            break
-        end
-    end
-
-    -- Everest always stays on the first line of the dependency column
-    if groupName == "depended_on" then
-        local localizedEverestName = localizeModName(mods.everestModName)
-        local isEverest = modName == mods.everestModName or modName == localizedEverestName
-
-        if isEverest then
-            index = 2
-
-        else
-            for i = 2, #column.children do
-                local child = column.children[i]
-                local childIsEverest = child._modName == mods.everestModName
-                    or child._modName == localizedEverestName
-
-                if childIsEverest and index <= i then
-                    index = i + 1
-                end
-            end
-        end
-    end
-
-    table.insert(column.children, index, element)
-
     interactionData.modSections[modName] = {
-        element = element,
+        element = section,
         column = column,
         group = groupName
     }
 end
 
-function moveModSection(interactionData, modName, groupName)
+moveModSection = function(interactionData, modName, groupName)
     removeModSection(interactionData, modName)
     insertModSection(interactionData, modName, groupName)
 
     local window = interactionData.window
 
     if window then
+        -- The scrollbox caches its content height. Moving a row into a previously empty
+        -- column (usually Missing Dependencies) needs the scroll content reflowed too,
+        -- otherwise the new row is laid out outside the visible area.
+        local scroll = interactionData.windowContentScrollable
+
+        if scroll then
+            scroll:layout()
+            scroll:layoutLate()
+            scroll:reflow()
+        end
+
         window:layout()
         window:layoutLate()
+        window:reflow()
     end
 end
 
@@ -537,6 +548,7 @@ function dependencyWindow.editDependencies(filename, side)
 
     local window
     local interactionData = {
+        filename = filename,
         modPath = modPath,
         side = side,
     }
@@ -562,7 +574,6 @@ end
 -- Group to get access to the main group and sanely inject windows in it
 function dependencyWindow.getWindow()
     dependencyEditor.dependencyWindow = dependencyWindow
-
     return dependencyWindowGroup
 end
 
