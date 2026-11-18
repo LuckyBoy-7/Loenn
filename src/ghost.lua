@@ -5,7 +5,7 @@ local loadedState = require("loaded_state")
 local configs = require("configs")
 local fileLocations = require("file_locations")
 local utils = require("utils")
-local virtualFs = require("virtual_fs")
+local logging = require("logging")
 local viewportHandler = require("viewport_handler")
 local drawableSprite = require("structs.drawable_sprite")
 local drawableRectangle = require("structs.drawable_rectangle")
@@ -18,12 +18,24 @@ local ghost = {
 }
 
 local STATE_FOLDER = "ModFiles/LoennHelper"
-local SILHOUETTE_FOLDER = "Graphics/Atlases/Gameplay/characters/loennhelper_silhouette"
+local SILHOUETTE_FOLDER = "assets/silhouette"
+local HITBOX_FOLDER = "assets/hitbox"
 local PLAYER_TEXTURE = "madeline"
 local PLAYER_CROUCH_TEXTURE = "madeline_crouch"
 local PLAYER_HITBOX_TEXTURE = "madeline_hitbox"
 local PLAYER_CROUCH_HITBOX_TEXTURE = "madeline_crouch_hitbox"
 local SPINNER_HITBOX_TEXTURE = "spinner_hitbox"
+
+-- The silhouettes ship with the editor, so drawing them no longer depends on the LoennHelper mod
+-- being installed. The mod is still what writes the ghost state files the editor polls.
+local SILHOUETTE_PATHS = {
+    [PLAYER_TEXTURE] = SILHOUETTE_FOLDER .. "/madeline.png",
+    [PLAYER_CROUCH_TEXTURE] = SILHOUETTE_FOLDER .. "/madeline_crouch.png",
+    [PLAYER_HITBOX_TEXTURE] = HITBOX_FOLDER .. "/madeline_hitbox.png",
+    [PLAYER_CROUCH_HITBOX_TEXTURE] = HITBOX_FOLDER .. "/madeline_crouch_hitbox.png",
+    [SPINNER_HITBOX_TEXTURE] = HITBOX_FOLDER .. "/spinner_hitbox.png"
+}
+
 local OPACITY = 0.33
 local HITBOX_OPACITY = 0.66
 local HEARTBEAT_INTERVAL = 3
@@ -169,24 +181,22 @@ local function getSilhouetteImage(name)
     end
 
     local image
-    local relative = SILHOUETTE_FOLDER .. "/" .. name .. ".png"
-    local owner = virtualFs.getOwner(relative)
-    local paths = {}
+    local path = SILHOUETTE_PATHS[name]
 
-    if owner then
-        table.insert(paths, "$" .. owner .. "$/" .. relative)
+    if not path then
+        logging.warning(string.format("[ghost] Unknown silhouette texture '%s'", tostring(name)))
+
+        images[name] = false
+
+        return nil
     end
 
-    table.insert(paths, "$LoennHelper$/" .. relative)
+    local success, result = pcall(love.graphics.newImage, path)
 
-    for _, path in ipairs(paths) do
-        local success, result = pcall(love.graphics.newImage, path)
-
-        if success then
-            image = result
-
-            break
-        end
+    if success then
+        image = result
+    else
+        logging.warning(string.format("[ghost] Could not load bundled silhouette '%s': %s", path, tostring(result)))
     end
 
     images[name] = image or false
