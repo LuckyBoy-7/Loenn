@@ -392,6 +392,7 @@ ui.menubar.reset_settings=Reset Settings
 ui.menubar.test_console=Test Console
 
 ui.menubar.help=Help
+ui.menubar.celeste_wiki=Celeste Wiki
 ui.menubar.about=About
 ui.menubar.check_for_updates=Check For Updates
 ui.menubar.open_storage_directory=Open Config Directory

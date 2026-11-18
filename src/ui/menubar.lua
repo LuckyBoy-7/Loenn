@@ -48,6 +48,10 @@ local function openStorageDirectory()
     love.system.openURL(fileUrl)
 end
 
+local function openCelesteWiki()
+    love.system.openURL("https://saplonily.top/celeste_wiki/index.html")
+end
+
 local function saveMapImage()
     filesystem.saveDialog(loadedState.filename, "png", function(filename)
         if not filename then
@@ -262,6 +266,7 @@ menubar.menubar = {
     -- Only add if enabled
     addDebug and debugMenu or false,
     {"help", {
+        {"celeste_wiki", openCelesteWiki},
         {"check_for_updates", checkForUpdates},
         {"open_storage_directory", openStorageDirectory},
         {"about", aboutWindow.showAboutWindow}

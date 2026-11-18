@@ -491,6 +491,7 @@ ui.menubar.clear_cache=清除缓存
 ui.menubar.reset_settings=重置设置
 ui.menubar.test_console=测试控制台
 ui.menubar.help=帮助
+ui.menubar.celeste_wiki=Celeste Wiki
 ui.menubar.about=关于
 ui.menubar.check_for_updates=检查更新
 ui.menubar.open_storage_directory=打开配置目录
