@@ -2,6 +2,7 @@ return {
     -- Display
     alwaysShowNodes = true,
     extendedTriggerText = true,
+    tooltipWaitDuration = 0,
 
     -- Tools and Interactions
     toolActionButton = 1,

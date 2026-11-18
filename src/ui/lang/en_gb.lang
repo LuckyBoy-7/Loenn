@@ -107,6 +107,7 @@ ui.settings_window.group.general.notifications=Notifications
 
 ui.settings_window.tab.editor=Editor
 ui.settings_window.group.editor.interface=Interface
+ui.settings_window.group.editor.tooltips=Tooltips
 ui.settings_window.group.editor.clipboard=Clipboard
 ui.settings_window.group.editor.tools=Tools
 ui.settings_window.group.editor.triggers=Triggers

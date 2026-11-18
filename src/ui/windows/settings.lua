@@ -78,6 +78,12 @@ local defaultTabForms = {
                 }
             },
             {
+                title = "ui.settings_window.group.editor.tooltips",
+                fieldOrder = {
+                    "editor.tooltipWaitDuration"
+                }
+            },
+            {
                 title = "ui.settings_window.group.editor.clipboard",
                 fieldOrder = {
                     "editor.copyUsesClipboard",
@@ -668,6 +674,12 @@ local defaultFieldInformation = {
         fieldType = "number",
         minimumValue = 0.5,
         maximumValue = 2.0
+    },
+
+    ["editor.tooltipWaitDuration"] = {
+        fieldType = "number",
+        minimumValue = 0,
+        slider = false,
     },
 
     ["general.notificationDuration"] = {

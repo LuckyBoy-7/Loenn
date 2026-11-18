@@ -4,8 +4,8 @@ local uiUtils = require("ui.utils")
 local hoverPreview = require("ui.hover_preview")
 
 local widgetUtils = require("ui.widgets.utils")
+local configs = require("configs")
 
-local tooltipWaitDuration = 0.5
 local lastX, lastY = 0, 0
 local waitedDuration = 0
 
@@ -18,6 +18,7 @@ local tooltipHandler = {}
 function tooltipHandler.tooltipWindowUpdate(orig, self, dt)
     orig(self, dt)
 
+    local tooltipWaitDuration = configs.editor.tooltipWaitDuration or 0
     local cursorX, cursorY = love.mouse.getPosition()
     local hovered = ui.hovering
     local waitedEnough = waitedDuration >= tooltipWaitDuration

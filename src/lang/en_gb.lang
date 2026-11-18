@@ -1848,10 +1848,12 @@ settings.editor.description.itemAllowPixelPerfect=Allow moving rooms to position
 settings.editor.attribute.triggersTrimModName=Trimmed Trigger Names
 settings.editor.attribute.triggersUseCategoryColors=Use Trigger Category Colours
 settings.editor.attribute.extendedTriggerText=Extended Trigger Text
+settings.editor.attribute.tooltipWaitDuration=Tooltip Delay
 
 settings.editor.description.triggersTrimModName=Don't show the mod name on placed triggers in the map view.
 settings.editor.description.triggersUseCategoryColors=Colour triggers based on their category.
 settings.editor.description.extendedTriggerText=Show extra information below the trigger name, such as the wind direction of wind triggers.
+settings.editor.description.tooltipWaitDuration=Time in seconds before hovering over an element shows its tooltip. 0 shows it immediately.
 
 # Hotkeys - General
 settings.hotkeys.attribute.new=New Map

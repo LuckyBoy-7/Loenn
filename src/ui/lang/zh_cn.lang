@@ -135,6 +135,7 @@ ui.settings_window.group.general.files=文件
 ui.settings_window.group.general.notifications=通知
 ui.settings_window.tab.editor=编辑器
 ui.settings_window.group.editor.interface=界面
+ui.settings_window.group.editor.tooltips=悬浮提示
 ui.settings_window.group.editor.clipboard=剪贴板
 ui.settings_window.group.editor.tools=工具
 ui.settings_window.group.editor.triggers=触发器
