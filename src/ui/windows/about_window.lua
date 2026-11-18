@@ -24,7 +24,7 @@ local aboutText = {
     title = "关于",
     readme = "打开 README",
     description = "Celeste 的关卡编辑器\n由 LÖVE 和 Lua 驱动。",
-    credits = "作者：Cruor、Vexatos、Lucky_boy（Deepseek）\n特别鸣谢：Myn_Gen、格莱西亚、Black_Ice、zzm、rifs\n汉化支持：Myn_Gen、v_t恨",
+    credits = "作者：Cruor、Vexatos、Lucky_boy（Deepseek）\n特别鸣谢：Myn_Gen、格莱西亚、Black_Ice、zzm、rifs、BadwayBear\n汉化支持：Myn_Gen、v_t恨",
     version = "编辑器版本：%s"
 }
 
