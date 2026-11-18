@@ -9,6 +9,11 @@ local viewport = {
 
     scale = 1,
 
+    -- Wheel zoom is accumulated as integer steps from a fixed base scale. Recomputing
+    -- base * sqrt(2)^steps avoids the drift caused by repeatedly multiplying/dividing.
+    zoomSteps = 0,
+    zoomBaseScale = 1,
+
     width = love.graphics.getWidth(),
     height = love.graphics.getHeight(),
 
@@ -80,6 +85,8 @@ function viewportHandler.cameraFromPersistence()
     viewport.x = persistence.cameraPositionX or 0
     viewport.y = persistence.cameraPositionY or 0
     viewport.scale = persistence.cameraPositionScale or 1
+    viewport.zoomBaseScale = viewport.scale
+    viewport.zoomSteps = 0
 end
 
 -- Switches between the vanilla and the hi-res font depending on the zoom level,
@@ -92,35 +99,9 @@ local function applyAutomaticFont()
     end
 end
 
-local function nextZoomScale(scale, direction)
-    if direction > 0 then
-        if scale >= 1 and scale < 2 then
-            return math.min(2, scale + 0.2)
+local WHEEL_ZOOM_FACTOR = math.sqrt(2)
 
-        elseif scale >= 2 and scale < 4 then
-            return math.min(4, scale + 0.4)
-
-        elseif scale >= 4 then
-            return scale + 0.2
-        end
-
-        return scale * 2
-    end
-
-    if scale > 4 then
-        return scale - 0.2
-
-    elseif scale > 2 and scale <= 4 then
-        return math.max(2, scale - 0.4)
-
-    elseif scale > 1 and scale <= 2 then
-        return math.max(1, scale - 0.2)
-    end
-
-    return scale / 2
-end
-
-local function setZoomScale(newScale, mouseX, mouseY)
+local function setZoomScale(newScale, mouseX, mouseY, keepWheelSteps)
     local previousScale = viewport.scale
 
     if newScale == previousScale then
@@ -130,6 +111,12 @@ local function setZoomScale(newScale, mouseX, mouseY)
     local ratio = newScale / previousScale
 
     viewport.scale = newScale
+
+    if not keepWheelSteps then
+        viewport.zoomBaseScale = newScale
+        viewport.zoomSteps = 0
+    end
+
     viewport.x = viewport.x * ratio + mouseX * (ratio - 1)
     viewport.y = viewport.y * ratio + mouseY * (ratio - 1)
 
@@ -138,16 +125,22 @@ local function setZoomScale(newScale, mouseX, mouseY)
     viewportHandler.persistCamera()
 end
 
-function viewportHandler.zoomIn()
+local function zoomByWheelStep(direction)
     local mouseX, mouseY = viewportHandler.getMousePosition()
+    local baseScale = viewport.zoomBaseScale or viewport.scale
+    local steps = (viewport.zoomSteps or 0) + direction
+    local newScale = baseScale * WHEEL_ZOOM_FACTOR ^ steps
 
-    setZoomScale(nextZoomScale(viewport.scale, 1), mouseX, mouseY)
+    setZoomScale(newScale, mouseX, mouseY, true)
+    viewport.zoomSteps = steps
+end
+
+function viewportHandler.zoomIn()
+    zoomByWheelStep(1)
 end
 
 function viewportHandler.zoomOut()
-    local mouseX, mouseY = viewportHandler.getMousePosition()
-
-    setZoomScale(nextZoomScale(viewport.scale, -1), mouseX, mouseY)
+    zoomByWheelStep(-1)
 end
 
 function viewportHandler.moveToPosition(x, y, scale, centered)
@@ -155,6 +148,8 @@ function viewportHandler.moveToPosition(x, y, scale, centered)
 
     if scale then
         viewport.scale = scale
+        viewport.zoomBaseScale = scale
+        viewport.zoomSteps = 0
     end
 
     if scale and scale ~= previousScale then
