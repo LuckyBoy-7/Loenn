@@ -565,7 +565,6 @@ style.effects.windSnow.description.color=雪的颜色。
 
 # Dependency window
 dependencies.layerItemReason=“%s”在房间“%s”的(%s, %s)处使用
-dependencies.foundModFile=使用文件“%s”
 dependencies.category.metadata=元数据
 dependencies.category.parallax=视差
 dependencies.category.effect=效果
@@ -786,9 +785,9 @@ settings.graphics.description.unfocusedUpdateRate=窗口失焦时，两次逻辑
 # 对象占位翻译（待补充）
 entities.default.attributes.placements.name.x=X
 entities.default.attributes.placements.name.y=Y
-entities.default.attributes.placements.name.width=宽度
-entities.default.attributes.placements.name.height=高度
-entities.default.attributes.placements.name.nodes=节点
+entities.default.attributes.placements.name.width=Width
+entities.default.attributes.placements.name.height=Height
+entities.default.attributes.placements.name.nodes=Nodes
 entities.default.attributes.description.x=实体的 X 坐标。
 entities.default.attributes.description.y=实体的 Y 坐标。
 entities.default.attributes.description.nodes=实体的节点。# -- Entities --
@@ -962,7 +961,7 @@ entities.resortmirror.placements.name.mirror=Resort Mirror
 # Dream Block
 entities.dreamBlock.placements.name.dream_block=Dream Block
 entities.dreamBlock.placements.name.space_jam=Space Jam
-entities.dreamBlock.attributes.description.fastMoving=在两种速度之间切换果冻块。
+entities.dreamBlock.attributes.description.fastMoving=增加果冻在节点之间来回移动的速度。
 entities.dreamBlock.attributes.description.oneUse=决定果冻块是否在使用一次后消失。
 entities.dreamBlock.attributes.description.below=决定果冻块渲染在背景还是前景。
 
@@ -980,7 +979,7 @@ entities.hanginglamp.placements.name.hanging_lamp=Hanging Lamp
 
 # Badeline Boost
 entities.badelineBoost.placements.name.boost=Badeline Boost
-entities.badelineBoost.attributes.description.lockCamera=激活后，镜头被垂直锁定。\n译者注：启用该属性时，玩家一旦从上移动到镜头下方，将会立马暴毙。作用类似 Killbox。
+entities.badelineBoost.attributes.description.lockCamera=激活后，镜头被锁定。\n译者注：启用该属性时，玩家一旦从上移动到镜头下方，将会立马暴毙。作用类似 Killbox。
 entities.badelineBoost.attributes.description.canSkip=若玩家位于当前位置右侧过远(100 像素)，Badeline 会移动到下一个节点位置。
 entities.badelineBoost.attributes.description.finalCh9Boost=决定最后一次上抛是否会结束关卡。\n若启用，会将玩家传送到房间 "end-granny"；若玩家持有金草莓且未启用 finalCh9GoldenBoost，则改为传送到金限房 "end-golden"。\n需要背景中存在黑洞，若黑洞位于前景则无效。
 entities.badelineBoost.attributes.description.finalCh9GoldenBoost=用于表示当前位于金限房并从该房间上抛离开。会跳过 finalCh9Boost 中的检查；若同时启用了 finalCh9Boost，则必定结束关卡。
@@ -1019,7 +1018,7 @@ entities.negaBlock.placements.name.nega_block=Nega Block
 entities.invisibleBarrier.placements.name.invisible_barrier=Invisible Barrier
 entities.invisibleBarrier.attributes.description.allowClimbing=决定隐形墙是否可攀爬。
 entities.invisibleBarrier.attributes.description.surfaceIndex=在隐形墙表面上行走时的脚步声。
-entities.invisibleBarrier.attributes.description.allowStaticMovers=决定 StaticMovers 是否可附着于屏障。
+entities.invisibleBarrier.attributes.description.allowStaticMovers=决定 StaticMovers 是否可附着于隐形墙。
 
 # Strawberry Blockfield
 entities.blockField.placements.name.block_field=Strawberry Blockfield
@@ -1029,121 +1028,121 @@ entities.killbox.placements.name.killbox=Killbox
 
 # Tentacles
 entities.tentacles.placements.name.tentacles=Tentacles
-entities.tentacles.attributes.description.slide_until=Changes how far tentacles fall back when Madeline comes into fear distance.
-entities.tentacles.attributes.description.fear_distance=Determines the distance Madeline has to be at for the tentacles to fall back.
+entities.tentacles.attributes.description.slide_until=改变玛德琳进入恐惧范围时触手后缩的距离。\n译者注：此处的恐惧范围即 fear distance 设定的范围。
+entities.tentacles.attributes.description.fear_distance=决定玛德琳需要靠近到什么距离，触手才会后缩。
 
 # Seeker
 entities.seeker.placements.name.seeker=Seeker
 
 # Seeker Statue
 entities.seekerStatue.placements.name.seeker_statue=Seeker Statue
-entities.seekerStatue.attributes.description.hatch=Determines whether the statue releases its seeker when the player is to the right of it, or when the player gets close enough.
+entities.seekerStatue.attributes.description.hatch=决定雕像是在玩家位于其右侧时释放 Seeker (新浪)，还是在玩家靠近到足够距离时释放。
 
 # Seeker Barrier
 entities.seekerBarrier.placements.name.seeker_barrier=Seeker Barrier
 entities.seekerBarrier.placements.name.jellyfish_barrier=Jellyfish Barrier
-entities.seekerBarrier.attributes.description.allowStaticMovers=Whether static movers attach to the barrier.
+entities.seekerBarrier.attributes.description.allowStaticMovers=决定 StaticMovers 是否可附着于屏障。
 
 # Player Seeker
 entities.playerSeeker.placements.name.player_seeker=Player Seeker
 
 # Chapter Checkpoint
 entities.checkpoint.attributes.name.bg=Background
-entities.checkpoint.attributes.description.inventory=Determines the player's inventory when loading from the given chapter.\n Automatic keeps the inventory from Metadata\n Prologue: 0 dashes, dream blocks disabled, wearing a backpack, ground refills enabled\n Default: 1 dash, dream blocks enabled, wearing a backpack, ground refills enabled\n OldSite: 1 dash, dream blocks disabled, wearing a backpack, ground refills enabled\n CH6End: 2 dashes, dream blocks enabled, wearing a backpack, ground refills enabled\n TheSummit: 2 dashes, dream blocks enabled, not wearing a backpack, ground refills enabled\n Core: 2 dashes, dream blocks enabled, wearing a backpack, ground refills disabled
-entities.checkpoint.attributes.description.dreaming=Determines the dreaming state when loading from the given chapter.\nAutomatic keeps the dreaming state from Metadata.
-entities.checkpoint.attributes.description.checkpointID=Manually determine the order in which the checkpoints are placed on the level selection screen. Overrides Everest's automatic checkpoint system. (Default = -1)
-entities.checkpoint.attributes.description.allowOrigin=Whether the Checkpoint shouldn't be special cased and automatically set by Everest if position is (0, 0).
-entities.checkpoint.attributes.description.bg=Image to use for the Checkpoint background.\nValue "9" will give the full path of "objects/checkpoint/bg/9.png", leave blank for no image.
+entities.checkpoint.attributes.description.inventory=决定从指定章节加载时玩家的物品状态。\\n 自动：沿用 Metadata 中的物品状态\\n Prologue：0 次冲刺，禁用梦境方块，背着背包，启用地面回复冲刺\\n Default：1 次冲刺，启用梦境方块，背着背包，启用地面回复冲刺\\n OldSite：1 次冲刺，禁用梦境方块，背着背包，启用地面回复冲刺\\n CH6End：2 次冲刺，启用梦境方块，背着背包，启用地面回复冲刺\\n TheSummit：2 次冲刺，启用梦境方块，不背背包，启用地面回复冲刺\\n Core：2 次冲刺，启用梦境方块，背着背包，禁用地面回复冲刺
+entities.checkpoint.attributes.description.dreaming=决定从指定章节加载时的 dreaming 状态。\\nAutomatic：沿用 Metadata 中的 dreaming 状态。
+entities.checkpoint.attributes.description.checkpointID=手动指定存档点在关卡选择界面中的排列顺序。此设置会覆盖 Everest 的自动存档点排序系统。（默认值：-1）
+entities.checkpoint.attributes.description.allowOrigin=是否允许该存档点在坐标为 (0, 0) 时由 Everest 自动设置，而不进行特殊处理。\n译者注：Everest 对位置放在 (0, 0) 的 checkpoint 有特殊处理、。勾上 Allow Origin 后就取消这种特殊处理，让它按普通存档点对待。\n特殊处理是指：Everest 遇到坐标正好在 (0, 0) 的 checkpoint 时，会把它当成默认占位，不把它当成玩家真正摆放的存档点。
+entities.checkpoint.attributes.description.bg=用作存档点背景的图片。\n填写 "9" 将自动对应完整路径 "objects/checkpoint/bg/9.png"；留空则不使用背景图片。
 
 # Rotate Spinner
-entities.rotateSpinner.placements.name.blade_clockwise=Rotating Spinner (Blade, Clockwise)
-entities.rotateSpinner.placements.name.blade_counter_clockwise=Rotating Spinner (Blade, Counter Clockwise)
-entities.rotateSpinner.placements.name.dust_clockwise=Rotating Spinner (Dust, Clockwise)
-entities.rotateSpinner.placements.name.dust_counter_clockwise=Rotating Spinner (Dust, Counter Clockwise)
-entities.rotateSpinner.placements.name.starfish_clockwise=Rotating Spinner (Starfish, Clockwise)
-entities.rotateSpinner.placements.name.starfish_counter_clockwise=Rotating Spinner (Starfish, Counter Clockwise)
-entities.rotateSpinner.attributes.description.clockwise=The spinning blade will run clockwise.
-entities.rotateSpinner.attributes.description.dust=Changes the appearance of the blade into a dust sprite.
-entities.rotateSpinner.attributes.description.star=Changes the appearance of the blade into a star.
+entities.rotateSpinner.placements.name.blade_clockwise=Rotating圆刺(Blade, Clockwise)
+entities.rotateSpinner.placements.name.blade_counter_clockwise=Rotating圆刺(Blade, Counter Clockwise)
+entities.rotateSpinner.placements.name.dust_clockwise=Rotating圆刺(Dust, Clockwise)
+entities.rotateSpinner.placements.name.dust_counter_clockwise=Rotating圆刺(Dust, Counter Clockwise)
+entities.rotateSpinner.placements.name.starfish_clockwise=Rotating圆刺(Starfish, Clockwise)
+entities.rotateSpinner.placements.name.starfish_counter_clockwise=Rotating圆刺(Starfish, Counter Clockwise)
+entities.rotateSpinner.attributes.description.clockwise=勾选后 Rotate圆刺将按顺时针方向转动。
+entities.rotateSpinner.attributes.description.dust=将 Rotate圆刺的外观改为煤球。
+entities.rotateSpinner.attributes.description.star=将 Rotate圆刺的外观改为星星。
 
 # Spinner
 entities.spinner.placements.name.dust_sprite=Dust Sprite
-entities.spinner.placements.name.blue=Crystal Spinner (Blue)
-entities.spinner.placements.name.red=Crystal Spinner (Red)
-entities.spinner.placements.name.purple=Crystal Spinner (Purple)
-entities.spinner.placements.name.core=Crystal Spinner (Core)
-entities.spinner.placements.name.rainbow=Crystal Spinner (Rainbow)
-entities.spinner.attributes.description.attachToSolid=Whether the spinner attaches to entities or blocks, and can be moved by them.
+entities.spinner.placements.name.blue=Crystal圆刺(Blue)
+entities.spinner.placements.name.red=Crystal圆刺(Red)
+entities.spinner.placements.name.purple=Crystal圆刺(Purple)
+entities.spinner.placements.name.core=Crystal圆刺(Core)
+entities.spinner.placements.name.rainbow=Crystal圆刺(Rainbow)
+entities.spinner.attributes.description.attachToSolid=决定圆刺是否附着于实体或方块，并随其移动。
 
 # Track Spinner
-entities.trackSpinner.placements.name.blade_slow=Track Spinner (Blade, Slow)
-entities.trackSpinner.placements.name.blade_normal=Track Spinner (Blade, Normal)
-entities.trackSpinner.placements.name.blade_fast=Track Spinner (Blade, Fast)
-entities.trackSpinner.placements.name.dust_slow=Track Spinner (Dust, Slow)
-entities.trackSpinner.placements.name.dust_normal=Track Spinner (Dust, Normal)
-entities.trackSpinner.placements.name.dust_fast=Track Spinner (Dust, Fast)
-entities.trackSpinner.placements.name.starfish_slow=Track Spinner (Star, Slow)
-entities.trackSpinner.placements.name.starfish_normal=Track Spinner (Star, Normal)
-entities.trackSpinner.placements.name.starfish_fast=Track Spinner (Star, Fast)
-entities.trackSpinner.attributes.description.speed=Changes the speed of the spinner's rotation.
-entities.trackSpinner.attributes.description.startCenter=The spinner will start at the end of the track.
-entities.trackSpinner.attributes.description.dust=Changes the appearance of the blade into a dust sprite.
-entities.trackSpinner.attributes.description.star=Changes the appearance of the blade into a star.
+entities.trackSpinner.placements.name.blade_slow=Track圆刺(Blade, Slow)
+entities.trackSpinner.placements.name.blade_normal=Track圆刺(Blade, Normal)
+entities.trackSpinner.placements.name.blade_fast=Track圆刺(Blade, Fast)
+entities.trackSpinner.placements.name.dust_slow=Track圆刺(Dust, Slow)
+entities.trackSpinner.placements.name.dust_normal=Track圆刺(Dust, Normal)
+entities.trackSpinner.placements.name.dust_fast=Track圆刺(Dust, Fast)
+entities.trackSpinner.placements.name.starfish_slow=Track圆刺(Star, Slow)
+entities.trackSpinner.placements.name.starfish_normal=Track圆刺(Star, Normal)
+entities.trackSpinner.placements.name.starfish_fast=Track圆刺(Star, Fast)
+entities.trackSpinner.attributes.description.speed=改变 Track圆刺的旋转速度。
+entities.trackSpinner.attributes.description.startCenter=勾选后 Track圆刺将从轨道末端开始运行。
+entities.trackSpinner.attributes.description.dust=将 Track圆刺的外观改为煤球。
+entities.trackSpinner.attributes.description.star=将 Track圆刺的外观改为星星。
 
 # Watchtower
 entities.towerviewer.placements.name.watchtower=Watchtower
 entities.towerviewer.placements.name.lookout=Lookout
 entities.towerviewer.placements.name.binoculars=Binoculars
-entities.towerviewer.attributes.description.summit=Whether the watchtower should zoom on the final node. Requires nodes to function, otherwise the game will crash.
-entities.towerviewer.attributes.description.onlyY=Whether the watchtower can only move vertically. If the watchtower has nodes, it will still follow them.
+entities.towerviewer.attributes.description.summit=决定望远镜是否在最后一个节点聚焦。需要节点才能生效，否则游戏会崩溃。\译者注：7A 3000m最后一个房间的望远镜勾选了此项。
+entities.towerviewer.attributes.description.onlyY=决定望远镜是否只能垂直移动。若望远镜有节点，仍会沿节点移动。
 
 # Wall Booster
 entities.wallBooster.placements.name.booster_left=Wall Booster (Left)
 entities.wallBooster.placements.name.booster_right=Wall Booster (Right)
 entities.wallBooster.placements.name.ice_left=Ice Wall (Left)
 entities.wallBooster.placements.name.ice_right=Ice Wall (Right)
-entities.wallBooster.attributes.description.left=Whether the entity attaches to the left wall.
-entities.wallBooster.attributes.description.notCoreMode=Determines whether the entity should ignore the current core mode and default to ice variant.
+entities.wallBooster.attributes.description.left=决定 Wall Booster 是否附着于左侧墙壁。
+entities.wallBooster.attributes.description.notCoreMode=决定 Wall Booster 是否忽略当前核心模式，始终使用冰形态。
 
 # Bounce Block
 entities.bounceBlock.placements.name.fire=Core Block
 entities.bounceBlock.placements.name.fire_bounce=Bounce Block
 entities.bounceBlock.placements.name.ice=Ice Crumble Block
-entities.bounceBlock.attributes.description.notCoreMode=Determines whether the entity should ignore the current core mode and default to ice variant.
+entities.bounceBlock.attributes.description.notCoreMode=决定 Bounce Block 是否忽略当前核心模式，始终使用冰形态。
 
 # Dark Chaser
 entities.darkChaser.placements.name.dark_chaser=Badeline Chaser
-entities.darkChaser.attributes.description.canChangeMusic=Whether the chaser should be able to change the music to the "chasing" track.
+entities.darkChaser.attributes.description.canChangeMusic=决定 Badeline Chaser 是否能把音乐切换为"追逐"曲目。
 
 # Dark Chaser Barrier
 entities.darkChaserEnd.placements.name.barrier=Badeline Chaser Barrier
 
 # Final Boss
-entities.finalBoss.attributes.description.canChangeMusic=Whether the boss should be able to change the music to the boss track.
+entities.finalBoss.attributes.description.canChangeMusic=决定 BOSS 是否能把音乐切换为 "BOSS" 曲目。
 
 # Moving Platform
 entities.movingPlatform.placements.name.default=Platform (Moving, Default)
 entities.movingPlatform.placements.name.cliffside=Platform (Moving, Cliffside)
-entities.movingPlatform.attributes.description.texture=What texture to use for the platform.
+entities.movingPlatform.attributes.description.texture=Platform 使用的贴图。
 
 # Sinking Platform
 entities.sinkingPlatform.placements.name.default=Platform (Sinking, Default)
 entities.sinkingPlatform.placements.name.cliffside=Platform (Sinking, Cliffside)
-entities.sinkingPlatform.attributes.description.texture=What texture to use for the platform.
+entities.sinkingPlatform.attributes.description.texture=Platform 使用的贴图。
 
 # Crumble Block
 entities.crumbleBlock.placements.name.default=Crumble Block (Default)
 entities.crumbleBlock.placements.name.cliffside=Crumble Block (Cliffside)
-entities.crumbleBlock.attributes.description.texture=What texture to use for the crumble block.
+entities.crumbleBlock.attributes.description.texture=Crumble Block 使用的贴图。
 
 # Fake Block
 entities.fakeBlock.placements.name.fake_block=Fake Block
-entities.fakeBlock.attributes.description.tiletype=Changes the visual appearance of the wall.
-entities.fakeBlock.attributes.description.playTransitionReveal=Determines whether entering the block should play the reveal jingle.
+entities.fakeBlock.attributes.description.tiletype=改变假墙的外观。
+entities.fakeBlock.attributes.description.playTransitionReveal=决定进入假墙时是否播放揭示音效。
 
 # Glass Block
 entities.glassBlock.placements.name.glass_block=Glass Block
-entities.glassBlock.attributes.description.sinks=Whether the tile should sink when the player is on top.
+entities.glassBlock.attributes.description.sinks=决定玩家站在上面时 Glass Block 是否下沉。
 
 # Kevin's PC
 entities.kevins_pc.placements.name.kevins_pc=Kevin's PC
@@ -1153,12 +1152,12 @@ entities.wavedashmachine.placements.name.cafe=Internet Café
 
 # Cobweb
 entities.cobweb.placements.name.cobweb=Cobweb
-entities.cobweb.attributes.description.color=Determines the colour of the cobweb.
+entities.cobweb.attributes.description.color=决定蜘蛛的颜色。
 
 # Lightbeam
 entities.lightbeam.placements.name.lightbeam=Lightbeam
-entities.lightbeam.attributes.description.rotation=Determines the rotation of the lightbeam.
-entities.lightbeam.attributes.description.flag=Only show up if the given flag is set, or always if left empty.
+entities.lightbeam.attributes.description.rotation=决定 Lightbeam 的旋转角度。
+entities.lightbeam.attributes.description.flag=仅当指定 flag 被设置时该 Lightbeam 才显示，留空则始终显示。
 
 # Theo Crystal
 entities.theoCrystal.placements.name.theo_crystal=Theo Crystal
@@ -1168,12 +1167,12 @@ entities.theoCrystalPedestal.placements.name.pedestal=Theo Crystal Pedestal
 
 # Torch
 entities.torch.placements.name.torch=Torch
-entities.torch.attributes.description.startLit=Changes whether the light will start lit or have the player's touch activate it.
+entities.torch.attributes.description.startLit=决定 Torch 是一开始就点亮，还是由玩家触碰才激活。\n译者注：值得一提的是在该属性被取消时，玩家激活 Torch 会获得一个带其自身id的flag。
 
 # Heart Door
 entities.heartGemDoor.placements.name.door=Heart Door
-entities.heartGemDoor.attributes.description.requires=Determines the number of crystal hearts required to open the heart door. Everest keeps track of hearts collected within the level set.
-entities.heartGemDoor.attributes.description.startHidden=Whether the door should start hidden and come crashing down when the player approaches.\nWill destroy dash blocks as it crashes down.
+entities.heartGemDoor.attributes.description.requires=决定打开心门所需的水晶之心数量。Everest会记录地图集内已收集的心。
+entities.heartGemDoor.attributes.description.startHidden=决定心门门是否初始隐藏，并在玩家靠近时轰然落下。\n落下时会摧毁 Dash Block。\n译者注：9A 的 9-4 末尾出现。
 
 # Move Block
 entities.moveBlock.placements.name.up_steer_fast=Move Block (Up, Steerable, Fast)
@@ -1192,9 +1191,9 @@ entities.moveBlock.placements.name.left_steer_fast=Move Block (Left, Steerable, 
 entities.moveBlock.placements.name.left_steer_slow=Move Block (Left, Steerable, Slow)
 entities.moveBlock.placements.name.left_nosteer_fast=Move Block (Left, Fast)
 entities.moveBlock.placements.name.left_nosteer_slow=Move Block (Left, Slow)
-entities.moveBlock.attributes.description.canSteer=Determines whether the move block can be moved by the player.
-entities.moveBlock.attributes.description.fast=Changes the move block between two speeds.
-entities.moveBlock.attributes.description.direction=Determines the direction the move block moves in upon activation.
+entities.moveBlock.attributes.description.canSteer=决定 Move Block（车）能否被玩家控制移动。
+entities.moveBlock.attributes.description.fast=在两种速度模式之间切换 Move Block（车）。
+entities.moveBlock.attributes.description.direction=决定 Move Block（车）激活后的移动方向。
 
 # Forsaken City Satellite
 entities.birdForsakenCityGem.placements.name.satellite=Forsaken City Satellite
@@ -1213,68 +1212,68 @@ entities.switchGate.placements.name.block=Switch Gate (Stone)
 entities.switchGate.placements.name.mirror=Switch Gate (Mirror)
 entities.switchGate.placements.name.temple=Switch Gate (Temple)
 entities.switchGate.placements.name.stars=Switch Gate (Moon)
-entities.switchGate.attributes.description.persistent=Will stay open once activated, even if the player dies.
-entities.switchGate.attributes.description.sprite=Changes the visual appearance of the switch gate.
+entities.switchGate.attributes.description.persistent=激活后保持开启，即使玩家死亡。
+entities.switchGate.attributes.description.sprite=改变硬币门的外观。
 
 # Cliffside Flag
 entities.cliffside_flag.placements.name.cliffside_flag=Cliffside Big Flag
-entities.cliffside_flag.attributes.description.index=Changes the visual appearance of the flag.
+entities.cliffside_flag.attributes.description.index=改变旗帜的外观。
 
 # Dash Switch Horizontal
 entities.dashSwitchH.placements.name.right_default=Dash Switch (Right) (Temple A)
 entities.dashSwitchH.placements.name.right_mirror=Dash Switch (Right) (Temple B)
 entities.dashSwitchH.placements.name.left_default=Dash Switch (Left) (Temple A)
 entities.dashSwitchH.placements.name.left_mirror=Dash Switch (Left) (Temple B)
-entities.dashSwitchH.attributes.description.persistent=Once turned on, it will stay activated, even if the player dies.
-entities.dashSwitchH.attributes.description.sprite=Changes the visual appearance of the switch.
-entities.dashSwitchH.attributes.description.leftSide=Flips the switch entity horizontally so that it can be attached to wall surfaces facing right.
-entities.dashSwitchH.attributes.description.allGates=Whether the switch should open all temple gates instead of opening only the closest one.
+entities.dashSwitchH.attributes.description.persistent=开关一旦被激活，便会一直保持激活状态，即使玩家死亡也不会重置。
+entities.dashSwitchH.attributes.description.sprite=更改 Dash Switch 的外观。
+entities.dashSwitchH.attributes.description.leftSide=将开关实体水平翻转，使其能够贴附在朝右的一侧墙面上。
+entities.dashSwitchH.attributes.description.allGates=决定开关是否开启所有 Temple Gate，而非仅开启距离最近的一扇。\n译者注：这里仅仅针对房间内的 Temple Gate。
 
 # Dash Switch Vertical
 entities.dashSwitchV.placements.name.up_default=Dash Switch (Up) (Temple A)
 entities.dashSwitchV.placements.name.up_mirror=Dash Switch (Up) (Temple B)
 entities.dashSwitchV.placements.name.down_default=Dash Switch (Down) (Temple A)
 entities.dashSwitchV.placements.name.down_mirror=Dash Switch (Down) (Temple B)
-entities.dashSwitchV.attributes.description.persistent=Once turned on, it will stay activated, even if the player dies.
-entities.dashSwitchV.attributes.description.sprite=Changes the visual appearance of the switch.
-entities.dashSwitchV.attributes.description.ceiling=Flips the switch entity vertically so that it can be attached to ceiling surfaces.
-entities.dashSwitchV.attributes.description.allGates=Whether the switch should open all temple gates instead of opening only the closest one.
+entities.dashSwitchV.attributes.description.persistent=开关一旦被激活，便会一直保持激活状态，即使玩家死亡也不会重置。
+entities.dashSwitchV.attributes.description.sprite=更改 Dash Switch 的外观。
+entities.dashSwitchV.attributes.description.ceiling=将开关实体垂直翻转，使其能够贴附在天花板上。
+entities.dashSwitchV.attributes.description.allGates=决定开关是否开启所有 Temple Gate，而非仅开启距离最近的一扇。\n译者注：这里仅仅针对房间内的 Temple Gate。
 
 # Memorial
 entities.memorial.attributes.description.dreaming=Changes the memorial's text to the dream state from Old Site.
 
 # Memorial (Everest)
 entities.everest/memorial.placements.name.memorial=Custom Memorial
-entities.everest/memorial.attributes.description.dreaming=Changes the memorial's text to the dream state from Old Site.
-entities.everest/memorial.attributes.description.dialog=What dialog ID to pull the memorial's text from.
-entities.everest/memorial.attributes.description.sprite=What sprite to render for the memorial.
-entities.everest/memorial.attributes.description.spacing=The spacing for the letters.
+entities.everest/memorial.attributes.description.dreaming=将纪念碑的文字切换为 2A 梦境状态下的文本。
+entities.everest/memorial.attributes.description.dialog=指定用于获取纪念碑文字的 Dialog key。
+entities.everest/memorial.attributes.description.sprite=指定纪念碑使用的贴图。
+entities.everest/memorial.attributes.description.spacing=设置文字之间的间距。
 
 # Water
 entities.water.placements.name.water=Water
-entities.water.attributes.description.hasBottom=Determines whether or not the water has a bottom.
+entities.water.attributes.description.hasBottom=决定水面是否有底部波纹。
 
 # NPC
-entities.npc.attributes.description.npc=Changes which NPC entity appears from a list of entities. Certain entities carry dialogue from certain scenes in the game.
+entities.npc.attributes.description.npc=从实体列表中选择要出现的 NPC。部分 NPC 附带适用于游戏中特定场景的对话。
 
 # NPC (Everest)
 entities.everest/npc.placements.name.npc=Custom NPC
-entities.everest/npc.attributes.description.indicatorOffsetX=Offset for the chat icon on the X axis.
-entities.everest/npc.attributes.description.indicatorOffsetY=Offset for the chat icon on the Y axis.
-entities.everest/npc.attributes.description.dialogId=The dialog ID to use for the dialogue.
-entities.everest/npc.attributes.description.flipY=Flips the sprite of the NPC vertically.
-entities.everest/npc.attributes.description.flipX=Flips the sprite of the NPC horizontally.
-entities.everest/npc.attributes.description.onlyOnce=Whether the dialogue should only be completable once.
-entities.everest/npc.attributes.description.endLevel=Whether finishing the dialogue should count as completing the map.
-entities.everest/npc.attributes.description.approachWhenTalking=Whether Madeline should walk towards the NPC when talking.
-entities.everest/npc.attributes.description.spriteRate=The animation rate for the sprite.
-entities.everest/npc.attributes.description.approachDistance=How far away from the NPC Madeline should stop when approaching.
-entities.everest/npc.attributes.description.sprite=Which sprite to use. `player/idle` will use the full path `Graphics/Atlases/Gameplay/characters/player/idle00` and loop from 00 through 01, 02... upwards, depending on the number of matching file names.
+entities.everest/npc.attributes.description.indicatorOffsetX=设置交互图标在 X 轴方向上的偏移量。
+entities.everest/npc.attributes.description.indicatorOffsetY=设置交互图标在 Y 轴方向上的偏移量。
+entities.everest/npc.attributes.description.dialogId=指定用于该 NPC 对话的 Dialog key。
+entities.everest/npc.attributes.description.flipY=将 NPC 的贴图垂直翻转。
+entities.everest/npc.attributes.description.flipX=将 NPC 的贴图水平翻转。
+entities.everest/npc.attributes.description.onlyOnce=决定该对话是否只能触发一次。
+entities.everest/npc.attributes.description.endLevel=决定完成对话后是否结束关卡。
+entities.everest/npc.attributes.description.approachWhenTalking=决定对话时玛德琳是否会主动走向 NPC。
+entities.everest/npc.attributes.description.spriteRate=设置 NPC 贴图的动画播放速度。
+entities.everest/npc.attributes.description.approachDistance=接近时玛德琳应在距离NPC多远时停下。
+entities.everest/npc.attributes.description.sprite=指定 NPC 使用的贴图。\n`player/idle` 将对应完整路径 `Graphics/Atlases/Gameplay/characters/player/idle00`，并根据匹配文件的数量，依次循环播放 `00`、`01`、`02`……等贴图。
 
 # Slider
 entities.slider.placements.name.clockwise=Slider (Clockwise)
-entities.slider.attributes.description.clockwise=Whether the slider will run clockwise or counter-clockwise.
-entities.slider.attributes.description.surface=Attaches the slider to a surface.
+entities.slider.attributes.description.clockwise=设置 Slider 的运行方向：顺时针或逆时针。
+entities.slider.attributes.description.surface=将 Slider 贴附在表面上。
 
 # Lock Block
 entities.lockBlock.placements.name.wood=Lock Block (Wood)
@@ -1285,9 +1284,9 @@ entities.lockBlock.placements.name.wood_key_door=Key Door (Wood)
 entities.lockBlock.placements.name.temple_a_key_door=Key Door (Temple A)
 entities.lockBlock.placements.name.temple_b_key_door=Key Door (Temple B)
 entities.lockBlock.placements.name.moon_key_door=Key Door (Moon)
-entities.lockBlock.attributes.description.sprite=Changes the visual appearance of the locked door.
-entities.lockBlock.attributes.description.unlock_sfx=The sound to play when unlocking the door. Leave empty for default.
-entities.lockBlock.attributes.description.stepMusicProgress=Whether unlocking the door should increment the music progress by 1.
+entities.lockBlock.attributes.description.sprite=改变 Lock Block 的外观。
+entities.lockBlock.attributes.description.unlock_sfx=用钥匙开锁时播放的音效。留空则使用默认值。
+entities.lockBlock.attributes.description.stepMusicProgress=开锁是否应将音乐进度增加1。
 
 # Key
 entities.key.placements.name.normal=Key
@@ -1304,28 +1303,28 @@ entities.triggerSpikesOriginalUp.placements.name.up_default=Trigger Spikes (Up, 
 entities.triggerSpikesOriginalUp.placements.name.up_outline=Trigger Spikes (Up, Outline)
 entities.triggerSpikesOriginalUp.placements.name.up_cliffside=Trigger Spikes (Up, Cliffside)
 entities.triggerSpikesOriginalUp.placements.name.up_reflection=Trigger Spikes (Up, Reflection)
-entities.triggerSpikesOriginalUp.attributes.description.type=决定尖刺的外观。
+entities.triggerSpikesOriginalUp.attributes.description.type=决定触发刺的外观。
 
 # Trigger Spikes Right
 entities.triggerSpikesOriginalRight.placements.name.right_default=Trigger Spikes (Right, Default)
 entities.triggerSpikesOriginalRight.placements.name.right_outline=Trigger Spikes (Right, Outline)
 entities.triggerSpikesOriginalRight.placements.name.right_cliffside=Trigger Spikes (Right, Cliffside)
 entities.triggerSpikesOriginalRight.placements.name.right_reflection=Trigger Spikes (Right, Reflection)
-entities.triggerSpikesOriginalRight.attributes.description.type=决定尖刺的外观。
+entities.triggerSpikesOriginalRight.attributes.description.type=决定触发刺的外观。
 
 # Trigger Spikes Down
 entities.triggerSpikesOriginalDown.placements.name.down_default=Trigger Spikes (Down, Default)
 entities.triggerSpikesOriginalDown.placements.name.down_outline=Trigger Spikes (Down, Outline)
 entities.triggerSpikesOriginalDown.placements.name.down_cliffside=Trigger Spikes (Down, Cliffside)
 entities.triggerSpikesOriginalDown.placements.name.down_reflection=Trigger Spikes (Down, Reflection)
-entities.triggerSpikesOriginalDown.attributes.description.type=决定尖刺的外观。
+entities.triggerSpikesOriginalDown.attributes.description.type=决定触发刺的外观。
 
 # Trigger Spikes Left
 entities.triggerSpikesOriginalLeft.placements.name.left_default=Trigger Spikes (Left, Default)
 entities.triggerSpikesOriginalLeft.placements.name.left_outline=Trigger Spikes (Left, Outline)
 entities.triggerSpikesOriginalLeft.placements.name.left_cliffside=Trigger Spikes (Left, Cliffside)
 entities.triggerSpikesOriginalLeft.placements.name.left_reflection=Trigger Spikes (Left, Reflection)
-entities.triggerSpikesOriginalLeft.attributes.description.type=决定尖刺的外观。
+entities.triggerSpikesOriginalLeft.attributes.description.type=决定触发刺的外观。
 
 # Trigger Spikes Dust
 entities.triggerSpikesUp.placements.name.up=Trigger Spikes (Up, Dust)
@@ -1335,7 +1334,7 @@ entities.triggerSpikesLeft.placements.name.left=Trigger Spikes (Left, Dust)
 
 # Coverup Wall
 entities.coverupWall.placements.name.coverup_wall=Coverup Wall
-entities.coverupWall.attributes.description.tiletype=Changes the visual appearance of the wall.
+entities.coverupWall.attributes.description.tiletype=改变 Coverup Wall 的外观。
 
 # Fall Plateau
 entities.plateau.placements.name.plateau=Plateau
@@ -1343,39 +1342,38 @@ entities.plateau.placements.name.plateau=Plateau
 # Lamp
 entities.lamp.placements.name.normal=Lamp
 entities.lamp.placements.name.broken=Lamp (Broken)
-entities.lamp.attributes.description.broken=Changes the visual appearance of the lamp to be broken.
+entities.lamp.attributes.description.broken=将路灯的外观设置为损坏状态。
 
 # Falling Block
 entities.fallingBlock.placements.name.falling_block=Falling Block
-entities.fallingBlock.attributes.description.climbFall=After a delay, the block will physically fall down until it comes into contact with another block.
-entities.fallingBlock.attributes.description.tiletype=Changes the visual appearance of the falling block.
-entities.fallingBlock.attributes.description.behind=Whether the block should visually be further behind in the scene.
+entities.fallingBlock.attributes.description.climbFall=延迟一段时间后，掉落块才会真正开始下落，直到碰到另一个方块为止。\n译者注：此处不一定是碰到所谓"方块”才停止。碰到顶部有碰撞箱的实体依然会停止。\n值得一提的是对于 Dash Block，掉落块会直接砸碎它。
+entities.fallingBlock.attributes.description.tiletype=更改掉落块的外观。
+entities.fallingBlock.attributes.description.behind=决定掉落块是否显示在更靠后的深度。
 
 # Fake Wall
 entities.fakeWall.placements.name.fake_wall=Fake Wall
-entities.fakeWall.attributes.description.tiletype=Changes the visual appearance of the wall.
-entities.fakeBlock.attributes.description.playTransitionReveal=Determines whether entering the wall should play the reveal jingle.
+entities.fakeWall.attributes.description.tiletype=改变墙的外观。
 
 # Spinner
-entities.spinner.attributes.description.color=Changes the colour of the spinner.
-entities.spinner.attributes.description.dust=Changes the spinner into a dust sprite.
+entities.spinner.attributes.description.color=改变圆刺的颜色。
+entities.spinner.attributes.description.dust=将圆刺设置为煤球。
 
 # Intro Crusher
 entities.introCrusher.placements.name.intro_crusher=Intro Crusher
-entities.introCrusher.attributes.description.tiletype=Determines the visual appearance of the wall.
-entities.introCrusher.attributes.description.flags=Comma-separated list of room names. If any of these rooms have been visited, the entity will rest at its end node instead.
+entities.introCrusher.attributes.description.tiletype=设置 Intro Crusher 的外观。
+entities.introCrusher.attributes.description.flags=以逗号分隔的房间名称列表。如果列表中的任意房间曾被玩家进入过，该实体便会改为停留在其末端节点。
 
 # Dash Block
 entities.dashBlock.placements.name.dash_block=Dash Block
-entities.dashBlock.attributes.description.canDash=Whether the player can break the block by dashing into it.
-entities.dashBlock.attributes.description.blendin=Blends the block with the walls it touches, making it less apparent.
-entities.dashBlock.attributes.description.tiletype=Determines the visual appearance of the wall.
-entities.dashBlock.attributes.description.permanent=Once broken, the block will remain that way, even if the player dies.
+entities.dashBlock.attributes.description.canDash=玩家能否通过冲刺撞碎该方块。
+entities.dashBlock.attributes.description.blendin=让 Dash Block 与它接触的墙融为一体，使其不那么显眼。
+entities.dashBlock.attributes.description.tiletype=决定 Dash Block 的外观。
+entities.dashBlock.attributes.description.permanent=一旦被破坏，方块将保持破坏状态，即使玩家死亡也不会重置。\n译者注：值得一提的是在该状态下，Dash Block被破坏会给玩家一个带其自身id的flag。
 
 # Exit Block
 entities.exitBlock.placements.name.exit_block=Exit Block
-entities.exitBlock.attributes.description.tileType=Determines the visual appearance of the wall.
-entities.exitBlock.attributes.description.playTransitionReveal=Determines whether revealing the block should play the reveal jingle.
+entities.exitBlock.attributes.description.tileType=设置 Exit Block 的外观。
+entities.exitBlock.attributes.description.playTransitionReveal=决定 Exit Block 显现时是否播放揭示音效。
 
 # Cassette
 entities.cassette.placements.name.cassette=Cassette
@@ -1385,8 +1383,8 @@ entities.cassetteBlock.placements.name.cassette_block_0=Cassette Block (0 - Blue
 entities.cassetteBlock.placements.name.cassette_block_1=Cassette Block (1 - Rose)
 entities.cassetteBlock.placements.name.cassette_block_2=Cassette Block (2 - Bright Sun)
 entities.cassetteBlock.placements.name.cassette_block_3=Cassette Block (3 - Malachite)
-entities.cassetteBlock.attributes.description.index=The colour of the cassette block.
-entities.cassetteBlock.attributes.description.tempo=The tempo of the cassette blocks. The first cassette block with a tempo other than 1.0 decides the tempo for all cassette blocks in the room. A multiplier of 1.0 triggers one beat every 10 frames. Refer to the cassette section in map metadata for details.
+entities.cassetteBlock.attributes.description.index=节奏块的颜色。
+entities.cassetteBlock.attributes.description.tempo=节奏块的速度。房间中第一个速度不为1.0的节奏块将决定该房间内所有节奏块的速度。\n倍率为1.0时每10帧触发一拍。\n详情请参阅地图元数据中的磁带部分。
 
 # Temple Gate
 entities.templeGate.placements.name.theo_holdingtheo=Temple Gate (Theo, Holding Theo)
@@ -1400,8 +1398,8 @@ entities.templeGate.attributes.description.type=Determines the condition for ope
 
 # Temple Mirror
 entities.templeMirror.placements.name.mirror=Temple Mirror
-entities.templeMirror.attributes.description.reflectX=The horizontal offset for the reflection.
-entities.templeMirror.attributes.description.reflectY=The vertical offset for the reflection.
+entities.templeMirror.attributes.description.reflectX=镜子里镜像的水平偏移。
+entities.templeMirror.attributes.description.reflectY=镜子里镜像的垂直偏移。
 
 # Temple Mirror Portal
 entities.templeMirrorPortal.placements.name.temple_mirror_portal=Temple Mirror Portal
@@ -1417,58 +1415,58 @@ entities.sandwichLava.placements.name.lava_sandwich=Lava Sandwich
 
 # Rising Lava
 entities.risingLava.placements.name.rising_lava=Rising Lava
-entities.risingLava.attributes.description.intro=Determines whether the lava rises up from below the bottom of the screen or starts already present near the bottom.
+entities.risingLava.attributes.description.intro=决定岩浆是从屏幕底部下方升起，还是初始就出现在靠近画面底部的位置。
 
 # Ridge Gate
 entities.ridgeGate.placements.name.ridge_gate=Ridge Gate
-entities.ridgeGate.attributes.description.strawberries=Determines when the gate will appear, creating a block after certain strawberries are collected. If keys attribute is set, these will also need to be collected.\n\nFormat: (room:id) for one berry or (room1:id1,room2:id2,...) for multiple\nExample: "a-01:4" and "a-01:4,a-02:5"
-entities.ridgeGate.attributes.description.keys=Determines when the gate will appear, creating a block after certain keys are collected. If strawberries attribute is set, these will also need to be collected.\n\nFormat: (room:id) for one key or (room1:id1,room2:id2,...) for multiple\nExample: "a-01:4" and "a-01:4,a-02:5"
-entities.ridgeGate.attributes.description.texture=The visual appearance of the gate. Defaults to "objects/ridgeGate".
+entities.ridgeGate.attributes.description.strawberries=设置 Ridge Gate 出现所需的草莓条件。收集所有指定的草莓后，Ridge Gate 才会出现。若同时设置了 keys 属性，则还必须收集所有指定的钥匙。\n\n格式：单个草莓使用 (room:id)，多个草莓使用 (room1:id1,room2:id2,...)\n示例："a-01:4" 和 "a-01:4,a-02:5"
+entities.ridgeGate.attributes.description.keys=设置 Ridge Gate 出现所需的钥匙条件。收集所有指定的钥匙后，Ridge Gate 才会出现。若同时设置了 strawberries 属性，则还必须收集所有指定的草莓。\n\n格式：单把钥匙使用 (room:id)，多把钥匙使用 (room1:id1,room2:id2,...)\n示例："a-01:4" 和 "a-01:4,a-02:5"
+entities.ridgeGate.attributes.description.texture=设置 Ridge Gate 使用的贴图，默认为 "objects/ridgeGate"。
 
 # Summit Cloud
 entities.summitcloud.placements.name.summit_cloud=Summit Cloud
 
 # Summit Checkpoints
 entities.summitcheckpoint.placements.name.summit_checkpoint=Summit Checkpoint
-entities.summitcheckpoint.attributes.description.number=Changes the number on the checkpoint card. (Max = 99)
+entities.summitcheckpoint.attributes.description.number=设置 Summit Checkpoint 上的数字。（最大值为99）
 
 # Bird
 entities.bird.placements.name.bird=Bird NPC
-entities.bird.attributes.description.mode=Determines what properties the bird has.
-entities.bird.attributes.description.onlyOnce=Determines whether the bird should only show itself once when in "MoveToNodes" mode.
-entities.bird.attributes.description.onlyIfPlayerLeft=The bird will only spawn if the player starts to the left of it.
+entities.bird.attributes.description.mode=设置鸟的行为模式。
+entities.bird.attributes.description.onlyOnce=决定在 MoveToNodes 模式下，鸟是否只会出现一次。
+entities.bird.attributes.description.onlyIfPlayerLeft=仅当玩家的起始位置位于鸟的左侧时，才会生成这只鸟。
 
 # Custom Tutorial Bird (Everest)
 entities.everest/customBirdTutorial.placements.name.bird=Custom Bird Tutorial
-entities.everest/customBirdTutorial.attributes.description.birdId=The unique id of the bird when used in combination with Custom Tutorial Bird triggers. Useful for extra control over multiple birds in one room.
-entities.everest/customBirdTutorial.attributes.description.controls=The controls to display in the bubble, separated by commas. Each part can be:\n- a path to a texture in the Gui atlas (for example "tinyarrow")\n- a direction: Down, DownRight, Right, UpRight, Up, UpLeft, Left, DownLeft\n- a button: Jump, Dash, CrouchDash, Grab, Talk, ESC, Pause, MenuLeft, MenuRight, MenuUp, MenuDown, MenuConfirm, MenuCancel, MenuJournal, QuickRestart\n- a dialog ID, if you prefix it with "dialog:" (for example, "dialog:TUTORIAL_DREAMJUMP")\n- plain text
-entities.everest/customBirdTutorial.attributes.description.info=The speech bubble title. Can either be a dialog ID or a path to a texture in the GUI atlas.
-entities.everest/customBirdTutorial.attributes.description.faceLeft=Whether the bird should face left or right.
-entities.everest/customBirdTutorial.attributes.description.caw=Whether the bird should caw upon displaying the speech bubble.
-entities.everest/customBirdTutorial.attributes.description.onlyOnce=Whether the bird should respawn after displaying the speech bubble and flying away.
+entities.everest/customBirdTutorial.attributes.description.birdId=与 Custom Tutorial Bird 触发器配合使用时，为鸟指定的唯一 ID。便于在同一个房间内对多只鸟进行单独控制。
+entities.everest/customBirdTutorial.attributes.description.controls=设置对话气泡中显示的操作提示，各项之间以逗号分隔。每一项可以是：\n- GUI 图集中贴图的路径（例如 "tinyarrow"）\n- 一个方向：Down, DownRight, Right, UpRight, Up, UpLeft, Left, DownLeft\n- 一个按键：Jump, Dash, CrouchDash, Grab, Talk, ESC, Pause, MenuLeft, MenuRight, MenuUp, MenuDown, MenuConfirm, MenuCancel, MenuJournal, QuickRestart\n- 一个对话 ID，在其前面加上 "dialog:" 前缀（例如 "dialog:TUTORIAL_DREAMJUMP"）\n- 任意纯文本
+entities.everest/customBirdTutorial.attributes.description.info=设置对话气泡的标题。可以填写对话 ID，也可以填写 GUI 图集中贴图的路径。
+entities.everest/customBirdTutorial.attributes.description.faceLeft=设置鸟的朝向：向左或向右。
+entities.everest/customBirdTutorial.attributes.description.caw=决定鸟在显示对话气泡时是否发出鸣叫声。
+entities.everest/customBirdTutorial.attributes.description.onlyOnce=决定鸟在显示对话气泡并飞走后是否会重新生成。
 
 # Gondola
 entities.gondola.placements.name.gondola=Gondola
-entities.gondola.attributes.description.active=Whether the gondola is active or not. If the gondola is active, it starts at the entity position, otherwise it starts at the node.
+entities.gondola.attributes.description.active=决定缆车是否处于激活状态。若处于激活状态，缆车将生成于实体基准位置；否则将生成于节点所在位置。\n译者注：换句话说，如果激活，缆车的初始位置类似 4A 结尾；如果不激活，缆车的初始位置类似 5A 开头。
 
 # Intro Car
 entities.introCar.placements.name.intro_car=Intro Car
-entities.introCar.attributes.description.hasRoadAndBarriers=Determines whether the car should come with road and barriers.
+entities.introCar.attributes.description.hasRoadAndBarriers=决定序章车是否附带道路和护栏。
 
 # Core Mode Toggle
 entities.coreModeToggle.placements.name.both=Core Mode Toggle (Both)
 entities.coreModeToggle.placements.name.fire=Core Mode Toggle (Fire)
 entities.coreModeToggle.placements.name.ice=Core Mode Toggle (Ice)
-entities.coreModeToggle.attributes.description.onlyIce=Whether the switch can only turn the core mode to ice.
-entities.coreModeToggle.attributes.description.onlyFire=Whether the switch can only turn the core mode to fire.
-entities.coreModeToggle.attributes.description.persistent=Whether the core mode persists after death instead of resetting to initial room entry state.
+entities.coreModeToggle.attributes.description.onlyIce=开关是否只能将核心模式切换为冰。
+entities.coreModeToggle.attributes.description.onlyFire=开关是否只能将核心模式切换为火。
+entities.coreModeToggle.attributes.description.persistent=核心模式是否在死亡后保持，而不是重置为进入房间时的初始状态。
 
 # Clutter Door
 entities.clutterDoor.placements.name.yellow=Clutter Door (Boxes)
 entities.clutterDoor.placements.name.red=Clutter Door (Laundry)
 entities.clutterDoor.placements.name.green=Clutter Door (Books)
 entities.clutterDoor.placements.name.lightning=Clutter Door (Lightning)
-entities.clutterDoor.attributes.description.type=Determines which clutter switch will activate the block, making it appear.
+entities.clutterDoor.attributes.description.type=设置用于激活并使该 Clutter Door 显现的 Clutter Switch 类型。
 
 # Clutter Cabinet
 entities.clutterCabinet.placements.name.cabinet=Clutter Cabinet
@@ -1487,18 +1485,18 @@ entities.colorSwitch.placements.name.yellow=Clutter Switch (Boxes)
 entities.colorSwitch.placements.name.red=Clutter Switch (Laundry)
 entities.colorSwitch.placements.name.green=Clutter Switch (Books)
 entities.colorSwitch.placements.name.lightning=Clutter Switch (Lightning)
-entities.colorSwitch.attributes.description.type=The type of the switch.
+entities.colorSwitch.attributes.description.type= Clutter Switch 的类型。
 
 # Temple Cracked Block
 entities.templeCrackedBlock.placements.name.temple_block=Temple Cracked Block
-entities.templeCrackedBlock.attributes.description.persistent=Once broken, the block will remain that way, even if the player dies.
+entities.templeCrackedBlock.attributes.description.persistent=一旦被破坏，Temple Cracked Block 将保持破坏状态，即使玩家死亡也不会重置。
 
 # Crush Block
 entities.crushBlock.placements.name.both=Kevin (Both)
 entities.crushBlock.placements.name.vertical=Kevin (Vertical)
 entities.crushBlock.placements.name.horizontal=Kevin (Horizontal)
-entities.crushBlock.attributes.description.axes=Determines which sides of the Kevin block are hittable.
-entities.crushBlock.attributes.description.chillout=Whether the block should have the large face and get tired after being hit.
+entities.crushBlock.attributes.description.axes=设置 Kevin 哪些面可以通过冲刺触发。 
+entities.crushBlock.attributes.description.chillout=决定 Kevin 是否带有大笑脸，并在被触发移动后进入疲惫状态。\n译者注：这种 Kevin 在接近终点时会逐渐减速，并且不会返回。处于这种疲惫状态的 Kevin 在 6A 有出现。
 
 # Waterfall
 entities.waterfall.placements.name.waterfall=Waterfall
@@ -1506,123 +1504,123 @@ entities.waterfall.placements.name.waterfall=Waterfall
 # Big Waterfall
 entities.bigWaterfall.placements.name.foreground=Big Waterfall (Foreground)
 entities.bigWaterfall.placements.name.background=Big Waterfall (Background)
-entities.bigWaterfall.attributes.description.layer=Where the waterfall should render.\nFG is in the foreground.\nBG is in the background and parallaxes.
+entities.bigWaterfall.attributes.description.layer=瀑布应显示在哪一层。\nFG为前景。\nBG为背景并随视差移动。
 
 # Sound Source
 entities.soundSource.placements.name.sound_source=Sound Source
-entities.soundSource.attributes.description.sound=The sound event that will be played.
+entities.soundSource.attributes.description.sound=将要播放的音效事件。
 
 # Summit Background Manager
 entities.SummitBackgroundManager.placements.name.manager=Summit Background Manager
-entities.SummitBackgroundManager.attributes.description.dark=Whether the background is dark or not.
-entities.SummitBackgroundManager.attributes.description.cutscene=Dialog ID of cutscene to display. Leave empty for no cutscene.
-entities.SummitBackgroundManager.attributes.description.index=Index of text to display when ascending. -1 for no text.
-entities.SummitBackgroundManager.attributes.description.intro_launch=Used for first boost in Summit. Does not start the cutscene dialogue.
-entities.SummitBackgroundManager.attributes.description.ambience=Ambience background music.
+entities.SummitBackgroundManager.attributes.description.dark=决定背景是否使用深色版本。\n译者注：指 9A 开场中奶奶去世那一幕上升过程中的背景。
+entities.SummitBackgroundManager.attributes.description.cutscene=指定要播放的过场对话的 Dialog Key。留空则不播放过场对话。
+entities.SummitBackgroundManager.attributes.description.index=设置上升过程中显示的文本索引。-1 表示不显示文本。
+entities.SummitBackgroundManager.attributes.description.intro_launch=用于类似山顶开场的首次上升，不会触发过场对话。\n译者注：用于 7A 开场，此时玛德琳会直接飞上来。
+entities.SummitBackgroundManager.attributes.description.ambience=设置环境音效。
 
 # Cutscene Node
 entities.cutsceneNode.placements.name.cutscene_node=Cutscene Node
-entities.cutsceneNode.attributes.description.nodeName=Name of node. Used to find the entity from code.
+entities.cutsceneNode.attributes.description.nodeName=Node的名称。用于在代码中查找该实体。
 
 # Hahaha
 entities.hahaha.placements.name.hahaha=Hahaha
-entities.hahaha.attributes.description.ifset=Only show up if the given flag is set, or always if left empty.
-entities.hahaha.attributes.description.triggerLaughSfx=Whether the laugh should also play audio.
+entities.hahaha.attributes.description.ifset=仅当指定flag被设置时才出现，留空则始终出现。
+entities.hahaha.attributes.description.triggerLaughSfx=奶奶大笑时是否同时播放音效。
 
 # Badeline Boss Moving Block
 entities.finalBossMovingBlock.placements.name.moving_block=Badeline Boss Moving Block
-entities.finalBossMovingBlock.attributes.description.nodeIndex=The node index of the Badeline boss this should fall down on.
+entities.finalBossMovingBlock.attributes.description.nodeIndex=设置该移动方块移动时 Badeline Boss 所处的节点索引。
 
 # Badeline Boss Falling Block
 entities.finalBossFallingBlock.placements.name.falling_block=Badeline Boss Falling Block
 
 # Everest Core Message
 entities.everest/coreMessage.placements.name.core_message=Core Message
-entities.everest/coreMessage.attributes.description.line=Which line of the dialogue to use.
-entities.everest/coreMessage.attributes.description.dialog=The dialogue key to use.
-entities.everest/coreMessage.attributes.description.outline=Whether the text has a black outline or not.
+entities.everest/coreMessage.attributes.description.line=要使用对话中的哪一行。
+entities.everest/coreMessage.attributes.description.dialog=要使用的对话的 Dialog Key。
+entities.everest/coreMessage.attributes.description.outline=文本是否带有黑色描边。
 
 # Star Jump Block
 entities.starJumpBlock.placements.name.star_jump_block=Star Jump Block
-entities.starJumpBlock.attributes.description.sinks=Whether the block sinks when the player stands on it.
+entities.starJumpBlock.attributes.description.sinks=玩家站上去时 Star Jump Block 是否下沉。
 
 # Star Jump Controller
 entities.starClimbController.placements.name.controller=Star Climb Controller
 
 # Star Jump Graphics Controller (Everest)
 entities.everest/starClimbGraphicsController.placements.name.controller=Star Climb Graphics Controller
-entities.everest/starClimbGraphicsController.attributes.description.fgColor=The foreground colour of the Star Jump Block effect.
-entities.everest/starClimbGraphicsController.attributes.description.bgColor=The background colour of the Star Jump Block effect.
+entities.everest/starClimbGraphicsController.attributes.description.fgColor= Star Jump Block 特效的前景颜色。
+entities.everest/starClimbGraphicsController.attributes.description.bgColor= Star Jump Block 特效的背景颜色。
 
 # Badeline Boss
-entities.finalBoss.attributes.description.cameraPastY=Locks the camera from vertically rising, and changes the bottom screen killbox plane to be under Badeline's current position.
+entities.finalBoss.attributes.description.cameraPastY=锁定镜头，禁止其向上移动，并将屏幕底部的死亡边界调整至 Badeline Boss 当前位置的下方。
 
 # Condition Block
 entities.conditionBlock.placements.name.condition_block=Condition Block
-entities.conditionBlock.attributes.description.conditionID=Links the condition block to the ID of a key, strawberry, or button.\nFormat: (room:id)\nExample: "a-01:4"
-entities.conditionBlock.attributes.description.condition=Ties the activation to the collection or activation of a key, strawberry, or button.
-entities.conditionBlock.attributes.description.tileType=Determines the visual appearance of the condition block.
+entities.conditionBlock.attributes.description.conditionID=设置与 Condition Block 关联的钥匙、草莓或按钮的 ID。\n格式：(room:id)\n示例："a-01:4"
+entities.conditionBlock.attributes.description.condition=设置 Condition Block 的触发条件，使其与指定钥匙或草莓的收集、按钮的激活相关联。
+entities.conditionBlock.attributes.description.tileType=设置 Condition Block 的外观。
 
 # Jellyfish (Glider)
 entities.glider.placements.name.normal=Jellyfish
 entities.glider.placements.name.floating=Jellyfish (Floating)
-entities.glider.attributes.description.bubble=Whether the entity should hover in the air before being grabbed.
-entities.glider.attributes.description.tutorial=Whether the entity should show the usage tutorial.
+entities.glider.attributes.description.bubble=该水母在被抓住前是否悬浮在空中。
+entities.glider.attributes.description.tutorial=该水母是否显示使用教程。
 
 # Puffer (Eye Bomb)
 entities.eyebomb.placements.name.right=Puffer (Right)
 entities.eyebomb.placements.name.left=Puffer (Left)
-entities.eyebomb.attributes.description.right=The initial direction of the puffer.
+entities.eyebomb.attributes.description.right=胖头鱼（河豚）的初始朝向。
 
 # Swap Block
 entities.swapBlock.placements.name.normal=Swap Block (Normal)
 entities.swapBlock.placements.name.moon=Swap Block (Moon)
-entities.swapBlock.attributes.description.theme=The visual theme of the swap block.
+entities.swapBlock.attributes.description.theme=设置 Swap Block 的贴图。
 
 # Zip Mover
 entities.zipMover.placements.name.normal=Zip Mover (Normal)
 entities.zipMover.placements.name.moon=Zip Mover (Moon)
-entities.zipMover.attributes.description.theme=The visual theme of the zip mover.
+entities.zipMover.attributes.description.theme=设置红绿灯的贴图。
 
 # Moon Creature
 entities.moonCreature.placements.name.moon_creature=Moon Creature
-entities.moonCreature.attributes.description.number=How many moon creatures should spawn in the cluster.
+entities.moonCreature.attributes.description.number=设置该群集中生成的 Moon Creature 数量。
 
 # Power Source Number
 entities.powerSourceNumber.placements.name.power_source_number=Power Source Number
-entities.powerSourceNumber.attributes.description.number=Determines the visual apperance of the entity.
-entities.powerSourceNumber.attributes.description.strawberries=Determines when the entity will be lit up. If keys attribute is set, these will also need to be collected.\n\nFormat: (room:id) for one berry or (room1:id1,room2:id2,...) for multiple\nExample: "a-01:4" and "a-01:4,a-02:5"
-entities.powerSourceNumber.attributes.description.keys=Determines when the entity will be lit up. If strawberries attribute is set, these will also need to be collected.\n\nFormat: (room:id) for one key or (room1:id1,room2:id2,...) for multiple\nExample: "a-01:4" and "a-01:4,a-02:5"
+entities.powerSourceNumber.attributes.description.number=设置该实体的外观。
+entities.powerSourceNumber.attributes.description.strawberries=决定该实体何时亮起。若同时设置了 keys 属性，则还必须收集所有指定的钥匙。\n\n格式：(room:id) 表示单个草莓，(room1:id1,room2:id2,...) 表示多个草莓\n示例："a-01:4" 和 "a-01:4,a-02:5"
+entities.powerSourceNumber.attributes.description.keys=决定该实体何时亮起。若同时设置了 strawberries 属性，则还必须收集所有指定的草莓。\n\n格式：(room:id) 表示单把钥匙，(room1:id1,room2:id2,...) 表示多把钥匙\n示例："a-01:4" 和 "a-01:4,a-02:5"
 
 # Floaty Space Block
 entities.floatySpaceBlock.placements.name.floaty_space_block=Floaty Space Block
-entities.floatySpaceBlock.attributes.description.tiletype=Determines the visual appearance of the wall.
-entities.floatySpaceBlock.attributes.description.disableSpawnOffset=Whether or not the entity should spawn without the random offset.
+entities.floatySpaceBlock.attributes.description.tiletype=决定月亮块的外观。
+entities.floatySpaceBlock.attributes.description.disableSpawnOffset=该月亮块生成时是否不使用随机偏移。
 
 # Playback Tutorial
 entities.playbackTutorial.placements.name.playback=Ghost Player Playback
-entities.playbackTutorial.attributes.description.tutorial=Determines which tutorial ghost is played.\nFilename is relative to the `Tutorials` folder, and without the .bin extension.
+entities.playbackTutorial.attributes.description.tutorial=决定播放哪个残影教程。\n文件名相对于 `Tutorials` 文件夹，且不含 .bin 扩展名。
 
 # Playback Tutorial
 entities.playbackBillboard.placements.name.playback_billboard=Playback Billboard
 
 # Crumble Wall On Rumble
 entities.crumbleWallOnRumble.placements.name.crumble_wall=Crumble Wall On Rumble
-entities.crumbleWallOnRumble.attributes.description.blendin=Blends the block in with the walls it touches, making it less apparent.
-entities.crumbleWallOnRumble.attributes.description.tiletype=Determines the visual appearance of the wall.
-entities.crumbleWallOnRumble.attributes.description.persistent=Once broken, the block will remain that way, even if the player dies.
+entities.crumbleWallOnRumble.attributes.description.blendin=使 Crumble Wall On Rumble 与周围墙壁融为一体，使其不那么显眼。
+entities.crumbleWallOnRumble.attributes.description.tiletype=设置 Crumble Wall On Rumble 的外观。
+entities.crumbleWallOnRumble.attributes.description.persistent=Crumble Wall On Rumble 一旦被破坏，便会保持破坏状态，即使玩家死亡也不会重置。
 
 # Bird Path
 entities.birdPath.placements.name.bird_path=Bird Path
-entities.birdPath.attributes.description.only_once=If the bird will only fly the path once, and not come back on death or room transitions.
-entities.birdPath.attributes.description.onlyIfLeft=The bird will only fly if the player is to the left of the entity.
-entities.birdPath.attributes.description.speedMult=Speed multiplier for the flight speed.
-entities.birdPath.attributes.description.angleFix=Changes rotation logic of the flight animation to resolve visual issues when using speed multipliers smaller than 1.
-entities.birdPath.attributes.description.angleFixMaxRotation=The maximum turn speed of the bird during the animation, in deg/s. Ignored if Angle Fix is disabled.
+entities.birdPath.attributes.description.only_once=决定鸟是否仅沿指定路径飞行一次。玩家死亡或切换房间后，鸟都不会再次飞回。
+entities.birdPath.attributes.description.onlyIfLeft=仅当玩家位于该实体左侧时，鸟才会沿路径飞行。
+entities.birdPath.attributes.description.speedMult=设置鸟的飞行速度倍率。
+entities.birdPath.attributes.description.angleFix=调整飞行动画的旋转逻辑，以修复速度倍率小于 1 时出现的视觉问题。
+entities.birdPath.attributes.description.angleFixMaxRotation=设置鸟在动画过程中的最大转向速度，单位为度/秒。关闭角度修正时，此设置将被忽略。
 
 # Fake Crystal Heart
 entities.fakeHeart.placements.name.crystal_heart=Crystal Heart (Fake)
-entities.fakeHeart.attributes.description.color=Which colour to use for the heart.\nNormal - Blue\nBSide - Red\nCSide - Yellow
+entities.fakeHeart.attributes.description.color=水晶之心使用的颜色。\nNormal - 蓝色\nBSide - 红色\nCSide - 黄色
 
 # Dream Crystal Heart
 entities.dreamHeartGem.placements.name.crystal_heart=Crystal Heart (Dream)
@@ -1630,8 +1628,8 @@ entities.dreamHeartGem.placements.name.crystal_heart=Crystal Heart (Dream)
 # Lightning
 entities.lightning.placements.name.lightning=Lightning
 entities.lightning.placements.name.electricity=Electricity
-entities.lightning.attributes.description.moveTime=The time it takes to move from the base position to the node position.
-entities.lightning.attributes.description.perLevel=Whether the lightning ignores the global disabling flag set by breaker boxes with the flag attribute set.
+entities.lightning.attributes.description.moveTime=设置电网从基准位置移动到节点位置所需的时间。
+entities.lightning.attributes.description.perLevel=决定该电网是否忽略设置了 flag 属性的电箱所设定的全局禁用标志。\n译者注：换句话说，就是给电网上来免死金牌，别的房间里的电箱随便被怎么撞烂都不会让这个电网消失。
 
 # Fling Bird
 entities.flingBird.placements.name.fling_bird=Fling Bird
@@ -1643,11 +1641,11 @@ entities.flingBirdIntro.attributes.description.crashes=Determines which cutscene
 
 # Lightning Breaker Box
 entities.lightningBlock.placements.name.breaker_box=Lightning Breaker Box
-entities.lightningBlock.attributes.description.music_session=Whether the music should be stored in session when box is broken.
-entities.lightningBlock.attributes.description.flipX=Whether the sprite should be vertically mirrored.
-entities.lightningBlock.attributes.description.flag=Whether the breaker box should disable all lightning entities without the perLevel attribute set when loading a new room.
-entities.lightningBlock.attributes.description.music=Change the currently playing music to this when box is broken.\nLeave empty to not change song.
-entities.lightningBlock.attributes.description.music_progress=The new music progress once box is broken.\n-1 keeps the same progress.
+entities.lightningBlock.attributes.description.music_session=决定电箱被击破时，是否将音乐状态保存到 session 中。
+entities.lightningBlock.attributes.description.flipX=决定是否将贴图水平翻转。
+entities.lightningBlock.attributes.description.flag=决定加载新房间时，电箱是否禁用所有未设置 perLevel 属性的电网实体。
+entities.lightningBlock.attributes.description.music=设置电箱被击破时要切换播放的音乐。\n留空则不更换音乐。
+entities.lightningBlock.attributes.description.music_progress=设置电箱被击破后新的音乐进度。\n-1 表示保持原有音乐进度。
 
 
 # -- Triggers --
@@ -1662,69 +1660,69 @@ triggers.default.attributes.placements.name.y=Y
 triggers.default.attributes.placements.name.width=Width
 triggers.default.attributes.placements.name.height=Height
 triggers.default.attributes.placements.name.nodes=Nodes
-triggers.default.attributes.description.x=X position of the trigger.
-triggers.default.attributes.description.y=Y position of the trigger.
-triggers.default.attributes.description.width=Width of the trigger.
-triggers.default.attributes.description.height=Height of the trigger.
-triggers.default.attributes.description.nodes=Nodes for the trigger.
+triggers.default.attributes.description.x=设置触发器的 X 坐标。
+triggers.default.attributes.description.y=设置触发器的 Y 坐标。
+triggers.default.attributes.description.width=设置触发器的宽度。
+triggers.default.attributes.description.height=设置触发器的高度。
+triggers.default.attributes.description.nodes=设置触发器的节点。
 
 # Alt Music
 triggers.altMusicTrigger.placements.name.alt_music=Alt Music
-triggers.altMusicTrigger.attributes.description.resetOnLeave=Resets the music when the player leaves the trigger area after entering it.
-triggers.altMusicTrigger.attributes.description.track=Changes the track that plays when the player enters the trigger area.
+triggers.altMusicTrigger.attributes.description.resetOnLeave=玩家进入触发区域后再离开时，重置音乐。
+triggers.altMusicTrigger.attributes.description.track=设置玩家进入触发区域时播放的音乐。
 
 # Ambience Param
 triggers.ambienceParamTrigger.placements.name.ambience_param=Ambience Param
-triggers.ambienceParamTrigger.attributes.description.to=Determines the parameter value at the end of the trigger area.
-triggers.ambienceParamTrigger.attributes.description.from=Determines the parameter value at the start of the trigger area.
-triggers.ambienceParamTrigger.attributes.description.parameter=The ambience parameter to change. Uses the ambience properties if left blank.
-triggers.ambienceParamTrigger.attributes.description.direction=Determines the direction of the fade across the trigger area.\nThe parameter fades between the "From" and the "To" value as the player moves through the trigger.
+triggers.ambienceParamTrigger.attributes.description.to=设置触发区域末端的参数值。
+triggers.ambienceParamTrigger.attributes.description.from=设置触发区域起始端的参数值。
+triggers.ambienceParamTrigger.attributes.description.parameter=指定要更改的环境音参数。留空则使用环境音效属性中的设置。
+triggers.ambienceParamTrigger.attributes.description.direction=设置参数在触发区域内的渐变方向。\n玩家穿过触发区域时，参数值会在起始值与结束值之间逐渐变化。
 
 # Ambience
 triggers.everest/ambienceTrigger.placements.name.ambience=Ambience
-triggers.everest/ambienceTrigger.attributes.description.resetOnLeave=Resets the ambience when the player leaves the trigger area after entering it.
-triggers.everest/ambienceTrigger.attributes.description.track=Changes the ambience track that plays when the player enters the trigger area.
+triggers.everest/ambienceTrigger.attributes.description.resetOnLeave=玩家进入触发区域后再离开时，重置环境音。
+triggers.everest/ambienceTrigger.attributes.description.track=改变玩家进入触发区域时播放的环境音。
 
 # Ambience Volume
 triggers.everest/ambienceVolumeTrigger.placements.name.ambience_volume=Ambience Volume
-triggers.everest/ambienceVolumeTrigger.attributes.description.to=Determines the volume of the ambience at the end of the trigger area.
-triggers.everest/ambienceVolumeTrigger.attributes.description.from=Determines the volume of the ambience at the start of the trigger area.
-triggers.everest/ambienceVolumeTrigger.attributes.description.direction=Determines the direction of the fade across the trigger area.\nThe volume fades between the "From" and the "To" value as the player moves through the trigger.
+triggers.everest/ambienceVolumeTrigger.attributes.description.to=设置触发区域末端的环境音音量。
+triggers.everest/ambienceVolumeTrigger.attributes.description.from=设置触发区域起始端的环境音音量。
+triggers.everest/ambienceVolumeTrigger.attributes.description.direction=设置音量在触发区域内的渐变方向。\n玩家穿过触发区域时，环境音音量会在起始值与结束值之间逐渐变化。
 
 # Bird Path
 triggers.birdPathTrigger.placements.name.bird_path=Bird Path
 
 # Black Hole Strength
 triggers.blackholeStrength.placements.name.black_hole_strength=Black Hole Strength
-triggers.blackholeStrength.attributes.description.strength=Sets the next visual appearance of the black hole effect.
+triggers.blackholeStrength.attributes.description.strength=设置黑洞特效接下来的视觉效果。
 
 # Bloom Fade
 triggers.bloomFadeTrigger.placements.name.bloom_fade=Bloom Fade
-triggers.bloomFadeTrigger.attributes.description.positionMode=Determines which direction the bloom fades towards.
-triggers.bloomFadeTrigger.attributes.description.bloomAddTo=Determines where the bloom fade ends.
-triggers.bloomFadeTrigger.attributes.description.bloomAddFrom=Determines where the bloom fade starts.
+triggers.bloomFadeTrigger.attributes.description.positionMode=设置泛光效果的渐变方向。
+triggers.bloomFadeTrigger.attributes.description.bloomAddTo=设置泛光渐变的结束位置。
+triggers.bloomFadeTrigger.attributes.description.bloomAddFrom=设置泛光渐变的起始位置。
 
 # Camera Advance Target
 triggers.cameraAdvanceTargetTrigger.placements.name.camera_advance_target=Camera Advance Target
-triggers.cameraAdvanceTargetTrigger.attributes.description.positionModeX=Determines which direction the camera fades towards horizontally.
-triggers.cameraAdvanceTargetTrigger.attributes.description.positionModeY=Determines which direction the camera fades towards vertically.
-triggers.cameraAdvanceTargetTrigger.attributes.description.xOnly=Whether the trigger should only work horizontally.
-triggers.cameraAdvanceTargetTrigger.attributes.description.yOnly=Whether the trigger should only work vertically.
-triggers.cameraAdvanceTargetTrigger.attributes.description.lerpStrengthX=The horizontal lerp strength.
-triggers.cameraAdvanceTargetTrigger.attributes.description.lerpStrengthY=The vertical lerp strength.
+triggers.cameraAdvanceTargetTrigger.attributes.description.positionModeX=设置镜头在水平方向上的渐变方向。
+triggers.cameraAdvanceTargetTrigger.attributes.description.positionModeY=设置镜头在垂直方向上的渐变方向。
+triggers.cameraAdvanceTargetTrigger.attributes.description.xOnly=决定触发器是否仅在水平方向上生效。
+triggers.cameraAdvanceTargetTrigger.attributes.description.yOnly=决定触发器是否仅在垂直方向上生效。
+triggers.cameraAdvanceTargetTrigger.attributes.description.lerpStrengthX=设置水平方向上的线性插值强度。\n译者注：线性插值强度是控制镜头向目标位置移动的程度的参数。\n数值越大，镜头越倾向于跟随并锁定目标位置。\n\n0：镜头完全不向目标节点移动。\n0.5：镜头向目标节点移动一部分。\n1：镜头完全锁定在目标节点的位置。
+triggers.cameraAdvanceTargetTrigger.attributes.description.lerpStrengthY=设置垂直方向上的线性插值强度。\n译者注：线性插值强度是控制镜头向目标位置移动的程度的参数。\n数值越大，镜头越倾向于跟随并锁定目标位置。\n\n0：镜头完全不向目标节点移动。\n0.5：镜头向目标节点移动一部分。\n1：镜头完全锁定在目标节点的位置。
 
 # Camera Offset
 triggers.cameraOffsetTrigger.placements.name.camera_offset=Camera Offset
-triggers.cameraOffsetTrigger.attributes.description.cameraX=Offsets the player camera on the X axis.
-triggers.cameraOffsetTrigger.attributes.description.cameraY=Offsets the player camera on the Y axis.
+triggers.cameraOffsetTrigger.attributes.description.cameraX=在X轴上偏移玩家镜头。\n译者注：X 轴偏移设为 1 大约相当于 6 格（48 px）。
+triggers.cameraOffsetTrigger.attributes.description.cameraY=在Y轴上偏移玩家镜头。\n译者注：Y 轴偏移设为 1 大约相当于 4 格（32 px）。
 
 # Camera Target
 triggers.cameraTargetTrigger.placements.name.camera_target=Camera Target
-triggers.cameraTargetTrigger.attributes.description.positionMode=Determines which direction the camera position moves in.
-triggers.cameraTargetTrigger.attributes.description.yOnly=The camera will only lock on the Y axis.
-triggers.cameraTargetTrigger.attributes.description.xOnly=The camera will only lock on the X axis.
-triggers.cameraTargetTrigger.attributes.description.lerpStrength=Determines how fast the camera moves to lock into place upon activation.
-triggers.cameraTargetTrigger.attributes.description.deleteFlag=Session flag to deactivate the trigger, ignored if left empty. Camera will not reset if player is inside the trigger as it deactivates.\nIf the player transitions into the room with the flag set, the trigger can not be reactivated. However, if it was enabled and then disabled in the room, the player can reactivate it.
+triggers.cameraTargetTrigger.attributes.description.positionMode=设置镜头位置的移动方向。
+triggers.cameraTargetTrigger.attributes.description.yOnly=设置镜头是否仅在 Y 轴上锁定。
+triggers.cameraTargetTrigger.attributes.description.xOnly=设置镜头是否仅在 X 轴上锁定。
+triggers.cameraTargetTrigger.attributes.description.lerpStrength=设置触发器激活后的线性插值强度。\n译者注：线性插值强度是控制镜头向目标位置移动的程度的参数。\n数值越大，镜头越倾向于跟随并锁定目标位置。\n\n0：镜头完全不向目标节点移动。\n0.5：镜头向目标节点移动一部分。\n1：镜头完全锁定在目标节点的位置。
+triggers.cameraTargetTrigger.attributes.description.deleteFlag=设置用于停用该触发器的 flag。留空则不使用此功能。Camera Target 停用时，若玩家仍处于触发区域内，镜头不会重置。\n若玩家在该 flag 已设置的情况下进入房间，Camera Target 将无法再次激活。但如果触发器是在玩家处于房间内时先启用、后停用的，玩家仍然可以再次激活它。
 
 # Change Respawn
 triggers.changeRespawnTrigger.placements.name.change_respawn=Change Respawn
@@ -1734,161 +1732,161 @@ triggers.checkpointBlockerTrigger.placements.name.checkpoint_blocker=Checkpoint 
 
 # Credits
 triggers.creditsTrigger.placements.name.credits=Credits
-triggers.creditsTrigger.attributes.description.event=The event this will trigger.
+triggers.creditsTrigger.attributes.description.event=将要触发的事件。
 
 # Detach Followers
 triggers.detachFollowersTrigger.placements.name.detach_followers=Detach Followers
-triggers.detachFollowersTrigger.attributes.description.global=Whether the entities following you should get the 'global' instead of the 'persistent' tag.
+triggers.detachFollowersTrigger.attributes.description.global=跟随你的实体是否应获得global而非persistent标签。\n译者注：跟随你的实体即金草莓、钥匙、草莓等等。追逐你的 Badeline 并不算。
 
 # Event
 triggers.eventTrigger.placements.name.event=Event
-triggers.eventTrigger.attributes.description.event=Upon activation, plays the event selected.
-triggers.eventTrigger.attributes.description.onSpawn=Whether the event should automatically play when the player enters the room.
+triggers.eventTrigger.attributes.description.event=设置触发器激活时要播放的事件。
+triggers.eventTrigger.attributes.description.onSpawn=决定玩家进入房间时是否自动播放该事件。
 
 # Activate Dream Block (Everest)
 triggers.everest/activateDreamBlocksTrigger.placements.name.activate_dream_blocks=Activate Dream Blocks
 triggers.everest/activateDreamBlocksTrigger.placements.name.activate_space_jam=Activate Space Jam
-triggers.everest/activateDreamBlocksTrigger.attributes.description.fullRoutine=Whether the Dream Block should play the whole animation, rather than just instantly looking ready.
-triggers.everest/activateDreamBlocksTrigger.attributes.description.activate=Whether the Dream Block should become usable.
-triggers.everest/activateDreamBlocksTrigger.attributes.description.fastAnimation=Whether a faster animation should be used.
+triggers.everest/activateDreamBlocksTrigger.attributes.description.fullRoutine=决定果冻是否播放完整的激活动画，而非直接切换到激活状态。
+triggers.everest/activateDreamBlocksTrigger.attributes.description.activate=决定是否激活果冻，使其变为可使用状态。
+triggers.everest/activateDreamBlocksTrigger.attributes.description.fastAnimation=决定是否使用更快的激活动画。
 
 # Change Inventory (Everest)
 triggers.everest/changeInventoryTrigger.placements.name.change_inventory=Change Inventory
-triggers.everest/changeInventoryTrigger.attributes.description.inventory=The inventory the player should get when the trigger is entered.
+triggers.everest/changeInventoryTrigger.attributes.description.inventory=玩家进入触发器时设定的 Inventory。
 
 # Complete Area (Everest)
 triggers.everest/completeAreaTrigger.placements.name.complete_area=Complete Area
 
 # Core Mode (Everest)
 triggers.everest/coreModeTrigger.placements.name.core_mode=Core Mode
-triggers.everest/coreModeTrigger.attributes.description.mode=The core mode that should be used when the trigger is entered.
-triggers.everest/coreModeTrigger.attributes.description.playEffects=Whether the trigger should play effects when changing the mode.
+triggers.everest/coreModeTrigger.attributes.description.mode=进入触发器时设置的核心模式。
+triggers.everest/coreModeTrigger.attributes.description.playEffects=切换模式时触发器是否播放闪光特效。\n译者注：光敏模式下无效。
 
 # Crystal Shatter (Everest)
 triggers.everest/crystalShatterTrigger.placements.name.crystal_shatter=Crystal Shatter
-triggers.everest/crystalShatterTrigger.attributes.description.mode=Whether the trigger should destroy all crystal spinners, or only the ones contained within it.
+triggers.everest/crystalShatterTrigger.attributes.description.mode=触发器是摧毁所有圆刺，还是只摧毁其范围内的。
 
 # Custom Bird Tutorial (Everest)
 triggers.everest/customBirdTutorialTrigger.placements.name.custom_bird_tutorial=Custom Bird Tutorial
-triggers.everest/customBirdTutorialTrigger.attributes.description.birdId=Which bird the trigger should affect.
-triggers.everest/customBirdTutorialTrigger.attributes.description.showTutorial=If checked, the targeted bird will show its speech bubble. If unchecked, the bird will fly away.
+triggers.everest/customBirdTutorialTrigger.attributes.description.birdId=触发器影响哪只鸟。\n译者注：和鸟 ID 配套。
+triggers.everest/customBirdTutorialTrigger.attributes.description.showTutorial=勾选时，目标鸟会显示对话气泡；不勾选时，鸟会飞走。
 
 # Dialog Cutscene (Everest)
 triggers.everest/dialogTrigger.placements.name.dialog=Dialog Cutscene
-triggers.everest/dialogTrigger.attributes.description.onlyOnce=Whether the dialogue should only trigger once.
-triggers.everest/dialogTrigger.attributes.description.dialogId=The dialog ID to use for the dialogue.
-triggers.everest/dialogTrigger.attributes.description.endLevel=Whether finishing the dialog causes the level to end.
-triggers.everest/dialogTrigger.attributes.description.deathCount=Determines the exact number of deaths required to activate the dialog trigger. Will always trigger if set to -1.
+triggers.everest/dialogTrigger.attributes.description.onlyOnce=决定该对话是否只能触发一次。
+triggers.everest/dialogTrigger.attributes.description.dialogId=指定用于这段对话的 Dialog Key。
+triggers.everest/dialogTrigger.attributes.description.endLevel=决定对话结束后是否同时结束当前关卡。
+triggers.everest/dialogTrigger.attributes.description.deathCount=设置激活对话触发器所需的精确死亡次数。设为 -1 则不限制死亡次数，始终满足触发条件。\n译者注：类似官图在 9A 9-9 中死够一定次数触发对话的效果。\n判断依据是房间内死亡数，而不是关卡内或全局死亡数。
 
 # Flag (Everest)
 triggers.everest/flagTrigger.placements.name.flag=Flag
-triggers.everest/flagTrigger.attributes.description.state=The value to set for the flag.
-triggers.everest/flagTrigger.attributes.description.flag=The name of the flag to modify.
-triggers.everest/flagTrigger.attributes.description.only_once=Whether the trigger should only work once.
-triggers.everest/flagTrigger.attributes.description.mode=Determines how the trigger will activate.
-triggers.everest/flagTrigger.attributes.description.death_count=Determines the exact number of deaths required to activate the flag trigger. Will always trigger if set to -1.
+triggers.everest/flagTrigger.attributes.description.state=设置 Flag 的值。
+triggers.everest/flagTrigger.attributes.description.flag=指定要修改的 Flag 名称。
+triggers.everest/flagTrigger.attributes.description.only_once=决定该触发器是否只能生效一次。
+triggers.everest/flagTrigger.attributes.description.mode=设置触发器的激活方式。
+triggers.everest/flagTrigger.attributes.description.death_count=设置激活 Flag 触发器所需的精确死亡次数。设为 -1 则不限制死亡次数，始终满足触发条件。\n译者注：判断依据是房间内死亡数，而不是关卡内或全局死亡数。
 
 # Lava Blocker (Everest)
 triggers.everest/lavaBlockerTrigger.placements.name.lava_blocker=Lava Blocker
-triggers.everest/lavaBlockerTrigger.attributes.description.canReenter=Whether the trigger should still be functional after leaving it once.
+triggers.everest/lavaBlockerTrigger.attributes.description.canReenter=离开并且再进入后，触发器是否仍然有效。
 
 # Music Layer (Everest)
 triggers.everest/musicLayerTrigger.placements.name.music_layer=Music Layer
-triggers.everest/musicLayerTrigger.attributes.description.layers=Comma-separated list of layers that the trigger should change.
-triggers.everest/musicLayerTrigger.attributes.description.enable=Whether the trigger should enable or disable the specified layers.
+triggers.everest/musicLayerTrigger.attributes.description.layers=设置该触发器要更改的音乐层，以逗号分隔。\n译者注：例如 1,3,4。
+triggers.everest/musicLayerTrigger.attributes.description.enable=决定是否启用指定的音乐层。关闭此选项则禁用这些音乐层。
 
 # Teleport (Everest)
 triggers.everest/teleportTrigger.placements.name.teleport_trigger=Teleport
-triggers.everest/teleportTrigger.attributes.name.nextLevel=Target Room
-triggers.everest/teleportTrigger.attributes.description.nextLevel=The room to teleport to.
-triggers.everest/teleportTrigger.attributes.description.introType=The intro type to use after teleport.
-triggers.everest/teleportTrigger.attributes.description.nearestSpawnX=X coordinate to teleport to. The closest spawn point will be used.
-triggers.everest/teleportTrigger.attributes.description.nearestSpawnY=Y coordinate to teleport to. The closest spawn point will be used.
-triggers.everest/teleportTrigger.attributes.description.useDefaultSpawn=Whether to use the default spawn point of the room rather than the one closest to the coordinates.
-triggers.everest/teleportTrigger.attributes.description.onlyOnce=Whether the trigger should only teleport once.
-triggers.everest/teleportTrigger.attributes.description.flag=Flag required for the trigger to teleport. Leave empty to always teleport.
+triggers.everest/teleportTrigger.attributes.name.nextLevel=目标房间
+triggers.everest/teleportTrigger.attributes.description.nextLevel=指定传送的目标房间。
+triggers.everest/teleportTrigger.attributes.description.introType=设置传送后使用的入场方式。
+triggers.everest/teleportTrigger.attributes.description.nearestSpawnX=设置用于查找最近重生点的 X 坐标。\译者注：这里并不是直接指定玩家的传送坐标，而是用于寻找距离该坐标最近的重生点。
+triggers.everest/teleportTrigger.attributes.description.nearestSpawnY=设置用于查找最近重生点的 Y 坐标。\译者注：这里并不是直接指定玩家的传送坐标，而是用于寻找距离该坐标最近的重生点。
+triggers.everest/teleportTrigger.attributes.description.useDefaultSpawn=决定是否使用房间的默认重生点，而非根据指定坐标选择最近的重生点。
+triggers.everest/teleportTrigger.attributes.description.onlyOnce=决定该触发器是否只能执行一次传送。
+triggers.everest/teleportTrigger.attributes.description.flag=设置触发器执行传送所需的 Flag。留空则无条件传送。
 
 # Smooth Camera Offset (Everest)
 triggers.everest/smoothCameraOffsetTrigger.placements.name.smooth_camera=Smooth Camera Offset
-triggers.everest/smoothCameraOffsetTrigger.attributes.description.offsetXFrom=First X position of the camera offset.
-triggers.everest/smoothCameraOffsetTrigger.attributes.description.offsetXTo=Second X position of the camera offset.
-triggers.everest/smoothCameraOffsetTrigger.attributes.description.offsetYFrom=First Y position of the camera offset.
-triggers.everest/smoothCameraOffsetTrigger.attributes.description.offsetYTo=Second Y position of the camera offset.
-triggers.everest/smoothCameraOffsetTrigger.attributes.description.positionMode=Determines which direction the player position will affect the offset in.
-triggers.everest/smoothCameraOffsetTrigger.attributes.description.onlyOnce=If checked, the trigger will be disabled when the player first leaves it.
-triggers.everest/smoothCameraOffsetTrigger.attributes.description.xOnly=Whether the trigger should only update the horizontal offset, keeping the current vertical offset.
-triggers.everest/smoothCameraOffsetTrigger.attributes.description.yOnly=Whether the trigger should only update the vertical offset, keeping the current horizontal offset.
+triggers.everest/smoothCameraOffsetTrigger.attributes.description.offsetXFrom=设置镜头 X 轴偏移量的起始值。\n译者注：X 轴偏移设为 1 大约相当于 6 格（48 px）。
+triggers.everest/smoothCameraOffsetTrigger.attributes.description.offsetXTo=设置镜头 X 轴偏移量的结束值。\n译者注：X 轴偏移设为 1 大约相当于 6 格（48 px）。
+triggers.everest/smoothCameraOffsetTrigger.attributes.description.offsetYFrom=设置镜头 Y 轴偏移量的起始值。\n译者注：Y 轴偏移设为 1 大约相当于 4 格（32 px）。
+triggers.everest/smoothCameraOffsetTrigger.attributes.description.offsetYTo=设置镜头 Y 轴偏移量的结束值。\n译者注：Y 轴偏移设为 1 大约相当于 4 格（32 px）。
+triggers.everest/smoothCameraOffsetTrigger.attributes.description.positionMode=根据玩家位置，决定镜头偏移量沿哪个方向渐变。
+triggers.everest/smoothCameraOffsetTrigger.attributes.description.onlyOnce=启用此选项后，玩家首次离开触发区域时，该触发器将被禁用。
+triggers.everest/smoothCameraOffsetTrigger.attributes.description.xOnly=决定是否仅更新水平方向的镜头偏移量，并保持当前垂直偏移量不变。
+triggers.everest/smoothCameraOffsetTrigger.attributes.description.yOnly=决定是否仅更新垂直方向的镜头偏移量，并保持当前水平偏移量不变。
 
 # Custom Height Display (Everest)
 triggers.everest/CustomHeightDisplayTrigger.placements.name.custom_height_display=Custom Height Display
-triggers.everest/CustomHeightDisplayTrigger.attributes.description.vanilla=Whether this trigger should use the vanilla height display. The vanilla one only uses the target attribute.
-triggers.everest/CustomHeightDisplayTrigger.attributes.description.target=The new meter count.
-triggers.everest/CustomHeightDisplayTrigger.attributes.description.from=The previous meter count.
-triggers.everest/CustomHeightDisplayTrigger.attributes.description.progressAudio=Whether the trigger should increment audio progress.
-triggers.everest/CustomHeightDisplayTrigger.attributes.description.displayOnTransition=Whether the trigger should wait for a room transition to occur before displaying the counter.
-triggers.everest/CustomHeightDisplayTrigger.attributes.description.text=The text of the counter. The meter count specified in target is substituted in for {x}.\nExample: "Currently at {x} meters".
+triggers.everest/CustomHeightDisplayTrigger.attributes.description.vanilla=决定是否使用原版高度显示。原版高度显示仅使用 target 属性。
+triggers.everest/CustomHeightDisplayTrigger.attributes.description.target=设置新的高度读数（单位：米）。
+triggers.everest/CustomHeightDisplayTrigger.attributes.description.from=设置之前的高度读数（单位：米）。
+triggers.everest/CustomHeightDisplayTrigger.attributes.description.progressAudio=决定是否推进音乐进度。
+triggers.everest/CustomHeightDisplayTrigger.attributes.description.displayOnTransition=决定是否等待房间切换完成后再显示高度计数器。
+triggers.everest/CustomHeightDisplayTrigger.attributes.description.text=设置高度计数器显示的文本。target 属性中指定的高度值将替换文本中的 {x}。\n示例："当前高度：{x} 米"
 
 # Golden Berry Collection
 triggers.goldenBerryCollectTrigger.placements.name.golden_berry_collection=Golden Berry Collection
 
 # Light Fade
 triggers.lightFadeTrigger.placements.name.light_fade=Light Fade
-triggers.lightFadeTrigger.attributes.description.lightAddTo=Determines how the lighting changes passing through the trigger.
-triggers.lightFadeTrigger.attributes.description.lightAddFrom=Determines how the lighting changes passing through the trigger backwards.
-triggers.lightFadeTrigger.attributes.description.positionMode=Determines which direction the light fades towards.
+triggers.lightFadeTrigger.attributes.description.lightAddFrom=设置光照渐变的起始值。
+triggers.lightFadeTrigger.attributes.description.lightAddTo=设置光照渐变的结束值。
+triggers.lightFadeTrigger.attributes.description.positionMode=设置光照渐变的方向。
 
 # Lookout Blocker
 triggers.lookoutBlocker.placements.name.lookout_blocker=Lookout Blocker
 
 # Mini Textbox
 triggers.minitextboxTrigger.placements.name.mini_text_box=Mini Textbox
-triggers.minitextboxTrigger.attributes.description.only_once=Triggers the dialogue the dialog ID references only once.
-triggers.minitextboxTrigger.attributes.description.mode=Determines how the mini text box will trigger.
-triggers.minitextboxTrigger.attributes.description.dialog_id=The dialog ID to use for the dialogue.
-triggers.minitextboxTrigger.attributes.description.death_count=Determines the exact number of deaths required to activate the mini text box trigger. Will always trigger if set to -1.
+triggers.minitextboxTrigger.attributes.description.only_once=决定该小对话是否只能触发一次。
+triggers.minitextboxTrigger.attributes.description.mode=设置 Mini Textbox 的触发方式。
+triggers.minitextboxTrigger.attributes.description.dialog_id=指定用于小对话的 Dialog Key。
+triggers.minitextboxTrigger.attributes.description.death_count=设置激活 Mini Textbox 触发器所需的精确死亡次数。设为 -1 则不限制死亡次数，始终满足触发条件。\n译者注：判断依据是房间内死亡数，而不是关卡内或全局死亡数。
 
 # Moon Glitch Background
 triggers.moonGlitchBackgroundTrigger.placements.name.moon_glitch_background=Moon Glitch Background
-triggers.moonGlitchBackgroundTrigger.attributes.description.duration=The duration of the glitch effect.
-triggers.moonGlitchBackgroundTrigger.attributes.description.stay=Whether the black hole effect stays in the background after triggering.
-triggers.moonGlitchBackgroundTrigger.attributes.description.glitch=Whether the glitch effect is visible or not.
+triggers.moonGlitchBackgroundTrigger.attributes.description.duration=设置故障效果的持续时间。
+triggers.moonGlitchBackgroundTrigger.attributes.description.stay=决定触发后黑洞效果是否继续保留在背景中。
+triggers.moonGlitchBackgroundTrigger.attributes.description.glitch=决定是否显示故障效果。
 
 # Music
 triggers.musicTrigger.placements.name.music=Music
-triggers.musicTrigger.attributes.description.resetOnLeave=Resets the music when the player leaves the trigger area after entering it.
-triggers.musicTrigger.attributes.description.track=Changes the track that plays when the player enters the trigger area.
-triggers.musicTrigger.attributes.description.progress=Changes the progress of the current track. 0 means no change.
+triggers.musicTrigger.attributes.description.resetOnLeave=玩家进入触发区域后再次离开时，是否重置音乐。
+triggers.musicTrigger.attributes.description.track=设置玩家进入触发区域时切换播放的音乐曲目。
+triggers.musicTrigger.attributes.description.progress=设置当前曲目的播放进度。设为 0 表示不更改当前进度。
 
 # Music Fade
 triggers.musicFadeTrigger.placements.name.music_fade=Music Fade
-triggers.musicFadeTrigger.attributes.description.direction=Determines the direction of the fade across the trigger area.\nThe parameter fades between the "From" and the "To" value as the player moves through the trigger.
-triggers.musicFadeTrigger.attributes.description.fadeB=Determines the parameter value at the end of the trigger area.
-triggers.musicFadeTrigger.attributes.description.fadeA=Determines the parameter value at the start of the trigger area.
-triggers.bloomFadeTrigger.attributes.description.positionMode=Determines which direction the music fades towards.
-triggers.musicFadeTrigger.attributes.description.parameter=The music parameter to change. Uses the fade properties if left blank.
+triggers.musicFadeTrigger.attributes.description.direction=设置音乐参数在触发区域内的渐变方向。\n玩家穿过触发区域时，参数值会在起始值与结束值之间渐变。
+triggers.musicFadeTrigger.attributes.description.fadeB=设置触发区域末端的参数值。
+triggers.musicFadeTrigger.attributes.description.fadeA=设置触发区域起始端的参数值。
+triggers.musicFadeTrigger.attributes.description.positionMode=设置音乐渐变的方向。
+triggers.musicFadeTrigger.attributes.description.parameter=指定要更改的音乐参数。留空则使用渐变属性中的设置。
 
 # No Refill
 triggers.noRefillTrigger.placements.name.enable_refills=Refills (Enable)
 triggers.noRefillTrigger.placements.name.disable_refills=Refills (Disable)
-triggers.noRefillTrigger.attributes.description.state=Determines whether the player refills their dashes upon touching the ground.
+triggers.noRefillTrigger.attributes.description.state=决定玩家接触地面时是否恢复冲刺。
 
 # Oshiro
 triggers.oshiroTrigger.placements.name.oshiro_spawn=Oshiro (Spawn)
 triggers.oshiroTrigger.placements.name.oshiro_leave=Oshiro (Leave)
-triggers.oshiroTrigger.attributes.description.state=Triggers whether Oshiro spawns into or leaves the room.
+triggers.oshiroTrigger.attributes.description.state=设置 Oshiro 的行为：在房间中生成或离开房间。
 
 # Respawn Target
 triggers.respawnTargetTrigger.placements.name.respawn_target=Respawn Target
 
 # Rumble
 triggers.rumbleTrigger.placements.name.rumble=Rumble
-triggers.rumbleTrigger.attributes.description.manualTrigger=If set to true, this is not triggered by a player walking into it and can only be triggered by code.
-triggers.rumbleTrigger.attributes.description.persistent=Once turned on, it will stay activated, even if the player dies.
-triggers.rumbleTrigger.attributes.description.constrainHeight=Whether the trigger respects the Y values of the nodes.
+triggers.rumbleTrigger.attributes.description.manualTrigger=启用后，玩家进入触发区域不会自动触发该效果，只能通过代码触发。
+triggers.rumbleTrigger.attributes.description.persistent=该效果一旦被激活，便会一直保持激活状态，即使玩家死亡也不会重置。
+triggers.rumbleTrigger.attributes.description.constrainHeight=决定触发器是否根据各节点的 Y 坐标限制触发范围的高度。
 
 # Spawn Facing
 triggers.spawnFacingTrigger.placements.name.spawn_facing=Spawn Facing
-triggers.spawnFacingTrigger.attributes.description.facing=The direction the player is facing when respawning inside this trigger.
+triggers.spawnFacingTrigger.attributes.description.facing=设置玩家在该触发区域内重生时的朝向。
 
 # Stop Boost
 triggers.stopBoostTrigger.placements.name.stop_boost=Stop Boost
@@ -1900,38 +1898,50 @@ triggers.windAttackTrigger.placements.name.wind_attack=Snowballs
 triggers.windTrigger.placements.name.wind=Wind Pattern
 
 # Wind Trigger
-triggers.windTrigger.attributes.description.pattern=Changes the the room's current wind type.
+triggers.windTrigger.attributes.description.pattern=更改当前房间的风力模式。
 
-# 对象源码中存在、但原文没有的属性（待补充）
-entities.coreMessage.attributes.description.dialog=?
-entities.coreMessage.attributes.description.line=?
-entities.coreMessage.attributes.description.outline=?
-entities.dreamHeartGem.attributes.description.color=?
-entities.fakeWall.attributes.description.playTransitionReveal=?
-entities.goldenBerry.attributes.description.moon=?
-entities.memorial.attributes.description.dialog=?
-entities.memorial.attributes.description.spacing=?
-entities.memorial.attributes.description.sprite=?
-entities.moveBlock.attributes.description.steerable=?
-entities.npc.attributes.description.approachDistance=?
-entities.npc.attributes.description.approachWhenTalking=?
-entities.npc.attributes.description.dialogId=?
-entities.npc.attributes.description.endLevel=?
-entities.npc.attributes.description.flipX=?
-entities.npc.attributes.description.flipY=?
-entities.npc.attributes.description.indicatorOffsetX=?
-entities.npc.attributes.description.indicatorOffsetY=?
-entities.npc.attributes.description.onlyOnce=?
-entities.npc.attributes.description.sprite=?
-entities.npc.attributes.description.spriteRate=?
-entities.starClimbController.attributes.description.bgColor=?
-entities.starClimbController.attributes.description.fgColor=?
-triggers.musicFadeTrigger.attributes.description.positionMode=?
+#补充的条目
+
+# Core Message
+entities.coreMessage.attributes.description.dialog=指定要使用的对话 Dialog Key。
+entities.coreMessage.attributes.description.line=指定要使用的对话行。
+entities.coreMessage.attributes.description.outline=决定文本是否带有黑色描边。
+
+# Dream Crystal Heart
+entities.dreamHeartGem.attributes.description.color=设置水晶之心的颜色。\nNormal - 蓝色\nBSide - 红色\nCSide - 黄色
+
+# Fake Wall
+entities.fakeWall.attributes.description.playTransitionReveal=决定玩家进入 Fake Wall 时是否播放显现音效。
+
+# Golden Strawberry
+entities.goldenBerry.attributes.description.moon=决定金草莓是否以月莓的形式显示。\n原版游戏中，此设置与翅膀或节点不兼容。
+
+# Memorial
+entities.memorial.attributes.description.dialog=指定用于获取纪念碑文字的 Dialog ID。
+entities.memorial.attributes.description.spacing=设置文字之间的间距。
+entities.memorial.attributes.description.sprite=指定纪念碑使用的贴图。
+
+# Move Block
+entities.moveBlock.attributes.description.steerable=决定玩家是否可以控制 Move Block 的移动方向。
+
+# NPC
+entities.npc.attributes.description.approachDistance=设置玛德琳接近 NPC 时，与 NPC 保持的停止距离。
+entities.npc.attributes.description.approachWhenTalking=决定交谈时玛德琳是否会主动走向 NPC。
+entities.npc.attributes.description.dialogId=指定用于该 NPC 对话的 Dialog ID。
+entities.npc.attributes.description.endLevel=决定完成对话后是否视为完成当前地图。
+entities.npc.attributes.description.flipX=将 NPC 的贴图水平翻转。
+entities.npc.attributes.description.flipY=将 NPC 的贴图垂直翻转。
+entities.npc.attributes.description.indicatorOffsetX=设置聊天图标在 X 轴方向上的偏移量。
+entities.npc.attributes.description.indicatorOffsetY=设置聊天图标在 Y 轴方向上的偏移量。
+entities.npc.attributes.description.onlyOnce=决定该对话是否只能完成一次。
+entities.npc.attributes.description.sprite=指定 NPC 使用的贴图。`player/idle` 将对应完整路径 `Graphics/Atlases/Gameplay/characters/player/idle00`，并根据匹配文件的数量，依次循环播放 `00`、`01`、`02`……等贴图。
+entities.npc.attributes.description.spriteRate=设置贴图的动画播放速度。
+
+# Star Climb Controller
+entities.starClimbController.attributes.description.bgColor=设置 Star Jump Block 特效的背景颜色。
+entities.starClimbController.attributes.description.fgColor=设置 Star Jump Block 特效的前景颜色。
 
 entities.default.attributes.description.width=实体的宽度。
 
 entities.default.attributes.description.height=实体的高度。
 
-triggers.default.attributes.description.width=触发器的宽度。
-
-triggers.default.attributes.description.height=触发器的高度。
