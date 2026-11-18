@@ -65,6 +65,11 @@ function hotkeys.addStandardHotkeys(hotkeyHandler)
     -- Ghosts
     hotkeyHandler.addHotkey("global", "shift + c", ghost.clear)
 
+    -- "tools" scope instead of "global": the tool device runs after the UI device, so these plain
+    -- letters do not fire while a text field is focused, but still work anywhere in the editor.
+    hotkeyHandler.addHotkey("tools", "c", ghost.togglePlayer)
+    hotkeyHandler.addHotkey("tools", "x", ghost.togglePlayerHitbox)
+
     -- Debug tool: the grave accent selects it, and selects the selection tool again when it is
     -- already active (it used to toggle the coordinate panel)
     hotkeyHandler.addHotkey("global", configs.hotkeys.toggleCoordinatePanel, function()

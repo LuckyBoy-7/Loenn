@@ -62,11 +62,11 @@ function toolHandler.addHotkeys(hotkeyHandler)
 
     -- Existing settings may still contain the old duplicate Tab binding.
     if previousHotkey == "tab" and configs.hotkeys.toggleToolbar == "tab" then
-        previousHotkey = "x"
-        configs.hotkeys.togglePreviousTool = "x"
+        previousHotkey = "s"
+        configs.hotkeys.togglePreviousTool = "s"
     end
 
-    hotkeyHandler.addHotkey("tools", previousHotkey or "x", selectPreviousTool)
+    hotkeyHandler.addHotkey("tools", previousHotkey or "s", selectPreviousTool)
 
     local function toggleToolbarHotkey()
         local success, toolsWindow = pcall(require, "ui/windows/tools")

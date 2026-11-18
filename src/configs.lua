@@ -19,6 +19,16 @@ if configs.hotkeys
     mergedDefaults = true
 end
 
+-- The ghost toggles took over X, so the previous-tool hotkey now defaults to S. Settings that
+-- still carry the old X default are migrated once; picking X again later is left alone.
+if configs.hotkeys
+    and configs.hotkeys.togglePreviousTool == "x"
+    and not configs.hotkeys.previousToolHotkeyMigrated then
+    configs.hotkeys.togglePreviousTool = "s"
+    configs.hotkeys.previousToolHotkeyMigrated = true
+    mergedDefaults = true
+end
+
 if mergedDefaults then
     config.writeConfig(configs, true)
 end

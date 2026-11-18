@@ -73,7 +73,7 @@ local defaultHotkeys = {
     selectToolLine = "7",
     selectToolCircle = "8",
     selectToolEllipse = "9",
-    togglePreviousTool = "x",
+    togglePreviousTool = "s",
     toggleToolbar = "tab",
 }
 
