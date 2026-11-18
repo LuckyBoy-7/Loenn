@@ -56,24 +56,55 @@ function themer.apply(theme, scale)
 end
 
 function themer.applyFontInfo(theme, scale, previousFont)
+    local fonts = require("fonts")
     local defaultFontSize = configs.ui.theme.defaultFontSize or 12
     local labelFontSizeFallback = math.floor(defaultFontSize * scale)
     local labelFontSize = theme.labelFontSize or labelFontSizeFallback
     local labelFilename = theme.labelFilename
     local labelFont = theme.labelFont
 
+    -- UI font override. Empty keeps the theme/default UI font; a path overrides it.
+    local configuredFont = configs.ui.theme and configs.ui.theme.labelFontPath
+
+    if configuredFont and configuredFont ~= "" then
+        labelFilename = configuredFont
+        labelFont = nil
+    end
+
     if not labelFont then
+        local defaultFont = love.graphics.newFont(labelFontSize)
+        local targetHeight = defaultFont:getHeight()
+
         if labelFilename then
-            labelFont = love.graphics.newFont(labelFilename, labelFontSize)
+            local loaded = fonts.loadUIFont(labelFilename, labelFontSize)
+
+            if loaded then
+                -- Fonts have different vertical metrics. Keep the label height aligned with the
+                -- default UI font so choosing a different font cannot push the whole UI upward.
+                local loadedHeight = loaded:getHeight()
+
+                if loadedHeight > 0 and loadedHeight ~= targetHeight then
+                    local adjustedSize = math.max(1, math.floor(labelFontSize * targetHeight / loadedHeight + 0.5))
+                    local adjusted = fonts.loadUIFont(labelFilename, adjustedSize)
+
+                    if adjusted then
+                        loaded = adjusted
+                    end
+                end
+
+                loaded:setLineHeight(defaultFont:getLineHeight())
+                labelFont = loaded
+
+            else
+                labelFont = defaultFont
+            end
 
         else
-            labelFont = love.graphics.newFont(labelFontSize)
+            labelFont = defaultFont
         end
     end
 
     if labelFont then
-        local fonts = require("fonts")
-
         if fonts.addCJKFallback then
             fonts.addCJKFallback(labelFont, labelFontSize)
         end

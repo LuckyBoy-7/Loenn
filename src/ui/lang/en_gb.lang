@@ -173,6 +173,8 @@ settings.font.description.extrudeOverlappingTriggerText=Move labels of triggers 
 settings.font.description.ignoreOutOfRoomTextExtruding=Labels that are completely outside the room do not take part in separating overlapping labels.
 
 settings.editor.attribute.decalToForeground=Move Decals to Foreground
+settings.ui.theme.attribute.labelFontPath=UI Font
+settings.ui.theme.description.labelFontPath=Font used for interface labels. Auto follows the selected language.
 settings.editor.attribute.decalToBackground=Move Decals to Background
 layers.name.sceneryObj=Objects
 

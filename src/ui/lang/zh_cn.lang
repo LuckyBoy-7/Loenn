@@ -187,6 +187,8 @@ settings.general.attribute.notificationDuration=通知显示时间（秒）
 settings.graphics.attribute.vsync=垂直同步
 
 settings.ui.theme.attribute.themeName=主题
+settings.ui.theme.attribute.labelFontPath=界面字体
+settings.ui.theme.description.labelFontPath=用于界面标签的字体。自动模式会跟随当前语言。
 settings.ui.theme.attribute.uiScale=界面缩放
 settings.ui.lists.attribute.shrinkToFit=列表宽度适应内容
 settings.ui.searching.attribute.searchCaseSensitive=区分大小写搜索

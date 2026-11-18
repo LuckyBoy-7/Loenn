@@ -14,6 +14,7 @@ local tabbedWindow = require("ui.widgets.tabbed_window")
 local startup = require("initial_startup")
 local themes = require("ui.themes")
 local debugUtils = require("debug_utils")
+local fontOptions = require("ui.font_options")
 
 local windowPersister = require("ui.window_position_persister")
 local windowPersisterName = "settings_window"
@@ -69,6 +70,7 @@ local defaultTabForms = {
                 title = "ui.settings_window.group.editor.interface",
                 fieldOrder = {
                     "ui.theme.themeName",
+                    "ui.theme.labelFontPath",
                     "general.language",
                     "ui.theme.uiScale",
                     "spacer",
@@ -314,16 +316,6 @@ local uiScaleOptions = {
     {"150%", 1.5},
     {"175%", 1.75},
     {"200%", 2.0},
-}
-
-local fontPathOptions = {
-    {"Built-in Sans", ""},
-    {"Consolas Bold", "C:/Windows/Fonts/consolab.ttf"},
-    {"8bit Operator Bold", "assets/fonts/8bitOperatorPlus-Bold.ttf"},
-    {"VCR OSD Mono", "assets/fonts/VCR_OSD_MONO.ttf"},
-    {"Mojang", "assets/fonts/Mojang-Regular.ttf"},
-    {"Tahoma", "assets/fonts/windows-xp-tahoma.ttf"},
-    {"Renogare Soft", "assets/fonts/RenogareSoft-Regular.ttf"}
 }
 
 local defaultFieldInformation = {
@@ -644,6 +636,11 @@ local defaultFieldInformation = {
         editable = false,
         options = themeOptions
     },
+    ["ui.theme.labelFontPath"] = {
+        fieldType = "string",
+        editable = false,
+        options = fontOptions.ui
+    },
     ["ui.theme.uiScale"] = {
         fieldType = "number",
         editable = false,
@@ -664,7 +661,7 @@ local defaultFieldInformation = {
     ["font.triggerFontPath"] = {
         fieldType = "string",
         editable = false,
-        options = fontPathOptions
+        options = fontOptions.trigger
     },
 
     ["font.textSize"] = {
@@ -683,9 +680,19 @@ local settingsWindowGroup = uiElements.group({}):with({
 })
 
 local function prepareFormData()
-    local data = rawget(configs, "data")
+    local data = utils.deepcopy(rawget(configs, "data"))
 
-    return utils.deepcopy(data)
+    -- Drop font values that are no longer offered (for example old Regular/Tahoma paths).
+    -- An empty string selects the built-in/default font.
+    if data.ui and data.ui.theme and not fontOptions.isValidUIFont(data.ui.theme.labelFontPath) then
+        data.ui.theme.labelFontPath = ""
+    end
+
+    if data.font and not fontOptions.isValidTriggerFont(data.font.triggerFontPath) then
+        data.font.triggerFontPath = ""
+    end
+
+    return data
 end
 
 local function applyNewSettings(newSettings, oldSettings)
@@ -695,7 +702,9 @@ local function applyNewSettings(newSettings, oldSettings)
         return utils.getPath(newSettings, parts) ~= utils.getPath(oldSettings, parts)
     end
 
-    if settingChanged("ui.theme.themeName") or settingChanged("ui.theme.uiScale") then
+    if settingChanged("ui.theme.themeName")
+        or settingChanged("ui.theme.uiScale")
+        or settingChanged("ui.theme.labelFontPath") then
         themes.useTheme(newSettings.ui.theme.themeName)
 
         -- Layered list rows derive their backgrounds from the theme, so rebuild the right list

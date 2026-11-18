@@ -13,23 +13,25 @@ local loadingScene = {}
 loadingScene.name = "Loading"
 
 local function getLoadingText(language)
-    local scenes = language and language.scenes
-    local loading = scenes and scenes.loading
-    local text = loading and loading.loading
-
-    if text and text._exists then
-        return tostring(text)
-    end
-
+    -- The loading screen deliberately keeps its original English pixel-font presentation.
     return "Loading"
 end
 
 function loadingScene:setText(text)
     self.text = tostring(text)
     self.alignment = "left"
-    self.textScale = fonts.fontScale * 2
-    self.textOffsetX = (fonts.font:getWidth(self.text .. "..") * self.textScale) / 2
+    self.textScale = rawget(self, "loadingTextScale") or fonts.fontScale * 2
+
+    local font = rawget(self, "loadingFont") or fonts.font
+    self.textOffsetX = (font:getWidth(self.text .. "..") * self.textScale) / 2
     self.textOffsetY = self.quadSize / 2
+end
+
+function loadingScene:applyLoadingFont()
+    -- Keep the original high-resolution pixel font for the loading text. It intentionally does
+    -- not follow the UI label font or the selected language.
+    self.loadingFont = fonts.hiresFont
+    self.loadingTextScale = 4
 end
 
 -- Runs every time the loading scene is entered (opening a map goes through it
@@ -39,6 +41,8 @@ function loadingScene:enter()
     local configs = require("configs")
 
     fonts.setUseHires(configs.font.useHiresPixelFont)
+    -- Keep the loading text independent from the configurable UI label font.
+    self:applyLoadingFont()
     self:setText(getLoadingText(languageRegistry.getLanguage()))
 end
 
@@ -132,6 +136,7 @@ function loadingScene:firstEnter()
     -- loading screen always uses the configured font
     fonts.setUseHires(configs.font.useHiresPixelFont)
 
+    self:applyLoadingFont()
     self:setText(getLoadingText(language))
 
     startupProgress.reset()
@@ -400,7 +405,7 @@ function loadingScene:draw()
 
         -- drawTips changes the current font and leaves a faded text color behind. Reset both
         -- before drawing the loading text, otherwise its opacity follows the tips fade.
-        love.graphics.setFont(fonts.font)
+        love.graphics.setFont(rawget(self, "loadingFont") or fonts.font)
         love.graphics.setColor(1, 1, 1, 1)
 
         local dots = string.rep(".", utils.mod1(math.floor(self.currentTime / self.duration * 4) + 1, 4))

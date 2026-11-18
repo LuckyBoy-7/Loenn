@@ -23,4 +23,15 @@ if mergedDefaults then
     config.writeConfig(configs, true)
 end
 
+-- Remove obsolete or no-longer-bundled font paths from older settings.
+local fontOptions = require("ui.font_options")
+
+if configs.ui and configs.ui.theme and not fontOptions.isValidUIFont(configs.ui.theme.labelFontPath) then
+    configs.ui.theme.labelFontPath = ""
+end
+
+if configs.font and not fontOptions.isValidTriggerFont(configs.font.triggerFontPath) then
+    configs.font.triggerFontPath = ""
+end
+
 return configs

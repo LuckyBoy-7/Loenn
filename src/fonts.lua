@@ -172,6 +172,12 @@ function font.getLoadingTipFont(size)
     return font.getCJKFont(size)
 end
 
+-- Load an arbitrary UI font, including absolute system-font paths. Returns nil when the file
+-- cannot be loaded so callers can fall back to the default font.
+function font.loadUIFont(path, size)
+    return loadFontFromPath(path, size, "normal")
+end
+
 function font.addCJKFallback(target, size)
     if not target then
         return
