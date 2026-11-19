@@ -6,6 +6,59 @@ local drawableText = {}
 local drawableTextMt = {}
 drawableTextMt.__index = {}
 
+-- Trigger labels are laid out with the pixel font but may be drawn with a custom display font.
+-- The screen-space renderer in celeste_render lays them out with `layoutFont`/`layoutFontSize`
+-- and rasterizes the display font at the final screen size. Direct draws (the placement ghost and
+-- tool previews) have to do the same, otherwise a custom trigger font shows up huge, wraps at the
+-- wrong width, or is scaled down and blurred compared to the placed label.
+local function drawWithLayout(drawable)
+    local font = drawable.font
+
+    if not font or font == fonts.font then
+        font = fonts.getTriggerFont()
+    end
+
+    local layoutFont = drawable.layoutFont
+    local layoutFontSize = drawable.layoutFontSize or drawable.fontSize or 1
+
+    local _, lines = layoutFont:getWrap(drawable.text, drawable.width / layoutFontSize)
+
+    -- The drawable is positioned in room coordinates, but the label has to be rasterized at the
+    -- size it ends up on screen (just like celeste_render.drawScreenText does). The current
+    -- transform (the viewport transform for the placement ghost) tells us that scale.
+    local screenX, screenY = love.graphics.transformPoint(drawable.x, drawable.y)
+    local nextX, nextY = love.graphics.transformPoint(drawable.x + 1, drawable.y)
+    local screenScale = math.sqrt((nextX - screenX) ^ 2 + (nextY - screenY) ^ 2)
+
+    if screenScale <= 0 then
+        screenScale = 1
+    end
+
+    local screenSize = math.max(1, math.floor(layoutFont:getHeight() * layoutFontSize * screenScale + 0.5))
+    local screenFont = fonts.getScreenFont(screenSize, font)
+    local screenWidth = drawable.width * screenScale
+    local screenHeight = drawable.height * screenScale
+    local lineHeight = screenFont:getHeight() * screenFont:getLineHeight()
+    local textHeight = (#lines - 1) * lineHeight + screenFont:getHeight()
+    local offsetY = math.floor((screenHeight - textHeight) / 2 + 0.5)
+
+    love.graphics.push("all")
+    love.graphics.origin()
+    love.graphics.setFont(screenFont)
+
+    for index, line in ipairs(lines) do
+        line = utils.trim(line)
+
+        local lineWidth = screenFont:getWidth(line)
+        local lineX = math.floor((screenWidth - lineWidth) / 2 + 0.5)
+        local lineY = math.floor(screenY + offsetY + (index - 1) * lineHeight + 0.5)
+
+        love.graphics.print(line, math.floor(screenX + lineX + 0.5), lineY)
+    end
+
+    love.graphics.pop()
+end
+
 function drawableTextMt.__index:draw()
     -- Direct draws (like the placement preview, which tints everything white)
     -- have to respect the color of this drawable, otherwise e.g. the dark
@@ -22,7 +75,12 @@ function drawableTextMt.__index:draw()
     end
 
     if self.width and self.height then
-        drawing.printCenteredText(self.text, self.x, self.y, self.width, self.height, self.font, self.fontSize)
+        if self.layoutFont then
+            drawWithLayout(self)
+
+        else
+            drawing.printCenteredText(self.text, self.x, self.y, self.width, self.height, self.font, self.fontSize)
+        end
 
     else
         local previousFont
