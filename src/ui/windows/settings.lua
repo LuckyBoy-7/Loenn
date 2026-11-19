@@ -864,6 +864,9 @@ function settingsWindow.editSettings()
     local language = languageRegistry.getLanguage()
     local windowTitle = tostring(language.ui.settings_window.window_title)
 
+    -- Pick up fonts the user added to the Fonts folder while the editor was running
+    fontOptions.refreshCustomFonts()
+
     local formData = prepareFormData()
     local fieldInformation = utils.deepcopy(defaultFieldInformation)
     local searchOptions = language.settings.ui.searching.option

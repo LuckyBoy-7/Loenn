@@ -159,7 +159,7 @@ settings.ui.searching.description.sortByScore=Order search results such that the
 settings.font.attribute.addShadowToFont=Trigger Label Shadow
 settings.font.attribute.triggerFontPath=Font
 settings.font.attribute.textSize=Text Size
-settings.font.description.triggerFontPath=Renogare Soft is bundled. Consolas is available when the Windows font is installed.
+settings.font.description.triggerFontPath=Renogare Soft is bundled. You can also put .ttf/.otf font files in a Fonts folder next to Lönn (subfolders are scanned too); reopen the settings to select them.
 settings.font.description.textSize=Base size multiplier for trigger and entity labels.
 settings.font.attribute.highlightSelectedTriggerText=Highlight Selected Label
 settings.font.attribute.highlightColor=Highlight Color
@@ -176,7 +176,7 @@ settings.font.description.ignoreOutOfRoomTextExtruding=Labels that are completel
 
 settings.editor.attribute.decalToForeground=Move Decals to Foreground
 settings.ui.theme.attribute.labelFontPath=UI Font
-settings.ui.theme.description.labelFontPath=Font used for interface labels. Auto follows the selected language.
+settings.ui.theme.description.labelFontPath=Font used for interface labels. Auto follows the selected language. You can also put .ttf/.otf font files in a Fonts folder next to Lönn (subfolders are scanned too); reopen the settings to select them.
 settings.editor.attribute.decalToBackground=Move Decals to Background
 layers.name.sceneryObj=Objects
 

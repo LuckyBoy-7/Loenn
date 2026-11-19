@@ -190,7 +190,7 @@ settings.graphics.attribute.vsync=垂直同步
 
 settings.ui.theme.attribute.themeName=主题
 settings.ui.theme.attribute.labelFontPath=界面字体
-settings.ui.theme.description.labelFontPath=用于界面标签的字体。自动模式会跟随当前语言。
+settings.ui.theme.description.labelFontPath=用于界面标签的字体。自动模式会跟随当前语言。也可以将 .ttf/.otf 字体文件放入 Lönn 同级目录的 Fonts 文件夹（支持子文件夹），重新打开设置后即可选择。
 settings.ui.theme.attribute.uiScale=界面缩放
 settings.ui.lists.attribute.shrinkToFit=列表宽度适应内容
 settings.ui.searching.attribute.searchCaseSensitive=区分大小写搜索
@@ -226,7 +226,7 @@ settings.ui.hotkeys.description.bypassDangerousActionWarningModifier=按住时�
 settings.font.attribute.addShadowToFont=触发器标签阴影
 settings.font.attribute.triggerFontPath=字体
 settings.font.attribute.textSize=文本大小
-settings.font.description.triggerFontPath=默认使用随项目打包的 Renogare Soft；安装 Windows Consolas 后也可选择。
+settings.font.description.triggerFontPath=默认使用随项目打包的 Renogare Soft；也可以将 .ttf/.otf 字体文件放入 Lönn 同级目录的 Fonts 文件夹（支持子文件夹），重新打开设置后即可选择。
 settings.font.description.textSize=触发器与实体标签的基础字号倍率。
 settings.font.attribute.highlightSelectedTriggerText=高亮选中的标签
 settings.font.attribute.highlightColor=高亮颜色

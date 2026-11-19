@@ -20,9 +20,17 @@ local function resolveFontPath(path)
     end
 
     local source = love.filesystem.getSource()
+    local successBase, baseDirectory = pcall(love.filesystem.getSourceBaseDirectory)
 
-    if source then
+    -- Bundled assets and Fonts folders inside the source directory are read through
+    -- love.filesystem. Custom fonts can also sit in a Fonts folder next to the executable,
+    -- which is only reachable through the normal filesystem.
+    if source and (love.filesystem.getInfo(path, "file") or not successBase or not baseDirectory) then
         return source .. "/" .. path
+    end
+
+    if successBase and baseDirectory then
+        return baseDirectory .. "/" .. path
     end
 
     return path
