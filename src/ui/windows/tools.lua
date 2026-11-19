@@ -5158,20 +5158,46 @@ local function scrollRoomListToSelection()
     lists.scrollSelectionVisible(list)
 end
 
+local function lastTileTool()
+    -- Keep the shape that is currently active, otherwise the last shape picked from the secondary
+    -- tile toolbar. Only fall back to Rectangle on the first use.
+    local currentName = toolHandler.currentToolName
+
+    if tileToolSet[currentName] and toolHandler.tools[currentName] then
+        return currentName
+    end
+
+    local remembered = toolWindow.eventStates.tileTool
+
+    if remembered and tileToolSet[remembered] and toolHandler.tools[remembered] then
+        return remembered
+    end
+
+    return "rectangle"
+end
+
 local function toolCallback(list, toolName)
     -- Blank separator rows have no tool behind them
     if not toolName then
         return
     end
 
-    -- Clicking the Tile group selects its default tool. The six tile tools remain individually
-    -- selectable through the secondary rows below it.
-    if toolName == "tile" then
-        toolName = "rectangle"
+    -- Clicking the Tile group keeps the previously selected tile shape. The six tile tools remain
+    -- individually selectable through the secondary rows below it.
+    local clickedTileGroup = toolName == "tile"
+
+    if clickedTileGroup then
+        toolName = lastTileTool()
     end
 
     local sameTool = toolName == toolWindow.eventStates.tool
         and toolName == toolHandler.currentToolName
+
+    -- Clicking the Tile group while one of its tools is already active must not reset that tool's
+    -- layer, mode or search state just because the group row is selected instead of the shape row.
+    if clickedTileGroup and toolName == toolHandler.currentToolName then
+        sameTool = true
+    end
 
     -- Stylegrounds owns a separate singleton window. Clicking its row while the tool is already
     -- selected must still reopen the window after the close callback switched back to Selection.
@@ -5246,6 +5272,8 @@ local function toolChangedCallback(self, tool)
     toolWindow.toolList:setSelection(isTileTool and "tile" or tool.name, true)
 
     if isTileTool then
+        toolWindow.eventStates.tileTool = tool.name
+
         if toolWindow.tileToolList then
             toolWindow.tileToolList:setSelection(tool.name, true)
         end
