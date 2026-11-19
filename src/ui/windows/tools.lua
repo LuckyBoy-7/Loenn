@@ -720,8 +720,17 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
         })
 
         for _, entry in ipairs(favorites) do
+            local favoriteText = favoritesText(entry)
+            local sourceLabel = entry.sourceLabel
+
+            -- The source header is the parent row in the normal tree, but favorites are moved out
+            -- of that tree. Show the source again so the row remains identifiable in Favorites.
+            if sourceLabel and sourceLabel ~= "" then
+                favoriteText = string.format("%s [%s]", tostring(favoriteText), tostring(sourceLabel))
+            end
+
             addItem({
-                text = favoritesText(entry),
+                text = favoriteText,
                 textNoMods = searchText(entry),
                 data = entry.name,
                 indent = 0,
