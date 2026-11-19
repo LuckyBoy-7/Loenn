@@ -538,7 +538,13 @@ local function openPanel()
         -- The seed changes on every run
         seed = os.time() + math.floor(love.timer.getTime() * 1000) % 2147483647
 
-        toolHandler.currentTool.executeScript(applyScript, values, nil, {current.room})
+        -- Focus switching temporarily selects Preview/Name, so currentTool is not necessarily the
+        -- Scripts tool here. Always run through the Scripts tool that owns executeScript.
+        local scriptsTool = toolHandler.tools.scripts or toolHandler.currentTool
+
+        if scriptsTool and scriptsTool.executeScript then
+            scriptsTool.executeScript(applyScript, values, nil, {current.room})
+        end
 
         -- Keep the panel open so the pattern can be adjusted and rerun
         return false
