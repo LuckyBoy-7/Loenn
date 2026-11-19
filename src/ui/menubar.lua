@@ -26,6 +26,7 @@ local metadataEditor = require("ui.metadata_editor")
 local dependencyEditor = require("ui.dependency_editor")
 local settingsEditor = require("ui.settings_editor")
 local aboutWindow = require("ui.about_window_wrapper")
+local tipsWindow = require("ui.tips_window_wrapper")
 local ghost = require("ghost")
 
 local activeMenubar
@@ -266,6 +267,7 @@ menubar.menubar = {
     -- Only add if enabled
     addDebug and debugMenu or false,
     {"help", {
+        {"pick_random_tips", tipsWindow.show},
         {"celeste_wiki", openCelesteWiki},
         {"check_for_updates", checkForUpdates},
         {"open_storage_directory", openStorageDirectory},

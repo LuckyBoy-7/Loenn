@@ -486,6 +486,7 @@ ui.menubar.reset_settings=Reset Settings
 ui.menubar.test_console=Test Console
 
 ui.menubar.help=Help
+ui.menubar.pick_random_tips=Pick Random Tips
 ui.menubar.celeste_wiki=Celeste Wiki
 ui.menubar.about=About
 ui.menubar.check_for_updates=Check For Updates
@@ -522,3 +523,9 @@ scripts.addSpinnersInArea.copy_success=Copy succeeded: %s
 scripts.addSpinnersInArea.added=Added %d Spinners.
 scripts.addSpinnersInArea.none=No Spinners added: not enough free space inside the area.
 scripts.addSpinnersInArea.radius=Radius: %d
+
+# Tips Window
+ui.tips_window.title=Pick Random Tips
+ui.tips_window.pick=Pick a Tip!
+ui.tips_window.placeholder=Click "Pick a Tip!" to draw a random tip.
+ui.tips_window.empty=No tips available.
