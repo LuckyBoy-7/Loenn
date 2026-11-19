@@ -26,6 +26,7 @@ local parallaxStruct = require("structs.parallax")
 local effectStruct = require("structs.effect")
 local formUtils = require("ui.utils.forms")
 local atlases = require("atlases")
+local stylegroundPreviewData = require("styleground_preview")
 
 local form = require("ui.forms.form")
 local tabbedWindow = require("ui.widgets.tabbed_window")
@@ -34,8 +35,14 @@ local dropdowns = require("ui.widgets.dropdown")
 
 local windowPersister = require("ui.window_position_persister")
 local windowPersisterName = "stylegrounds_window"
+local hoverPreviewModule = require("ui.hover_preview")
 
 local stylegroundWindow = {}
+
+-- Separate hover preview for the small otherTexture cells. The tools window keeps hiding the
+-- shared instance whenever its own list is not hovered, so this panel needs its own.
+local cellHoverPreview = hoverPreviewModule.create()
+local cellHoverPreviewOwned = false
 
 -- Runtime-only memory of the last selected style per tab. This intentionally stays in memory so
 -- reopening the panel can restore the row without writing anything to disk.
@@ -230,6 +237,10 @@ local function getOptions(style)
     return options, dummyData
 end
 
+-- Returns a description of what the preview box should show:
+--   sprite   - sprite meta for the big preview (image/quad/layer/real size)
+--   textures - sprite metas for the extra texture cells
+--   label    - text shown when there is nothing to draw
 function stylegroundWindow.getStylegroundPreview(interactionData)
     local language = languageRegistry.getLanguage()
     local formData = interactionData.formData
@@ -240,28 +251,134 @@ function stylegroundWindow.getStylegroundPreview(interactionData)
     -- Not ready yet: still show a placeholder, otherwise the preview container has no content at
     -- all and keeps a zero size
     if not formData then
-        return uiElements.label(tostring(language.ui.styleground_window.preview.no_preview))
+        return {label = tostring(language.ui.styleground_window.preview.no_preview)}
     end
 
     if styleType == "parallax" then
         local sprite = atlases.getResource(formData.texture)
 
         if sprite then
-            local imageElement = uiElements.image(sprite.image, sprite.quad, sprite.layer)
-
-            -- The container positions and scales it: the sprite is drawn as a child element, so
-            -- it follows the normal element transforms instead of raw screen coordinates
-            imageElement._previewSprite = sprite
-            imageElement._previewColor = formData.color
-            imageElement.scaleRoundAuto = false
-
-            return imageElement
+            return {sprite = sprite, color = formData.color}
         end
 
-        return uiElements.label(tostring(language.ui.styleground_window.preview.unknown_texture))
+        return {label = tostring(language.ui.styleground_window.preview.unknown_texture)}
     end
 
-    return uiElements.label(formData.texture or formData._name or tostring(language.ui.styleground_window.preview.no_preview))
+    if styleType == "effect" then
+        local entry = stylegroundPreviewData.getEntry(style._name)
+        local sprite = stylegroundPreviewData.getPreviewSprite(entry, formData)
+        local textures = stylegroundPreviewData.getOtherTextures(entry, formData)
+
+        -- Static preview images are only a reference; attribute previews reflect the real values.
+        -- The placeholder is not a real preview, so it does not get the warning either.
+        local staticPreview = stylegroundPreviewData.getPreviewType(entry) == "image"
+            and sprite ~= stylegroundPreviewData.getPlaceholderSprite()
+
+        if sprite then
+            return {sprite = sprite, textures = textures, staticPreview = staticPreview}
+        end
+
+        return {
+            label = tostring(formData.texture or formData._name or language.ui.styleground_window.preview.no_preview),
+            textures = textures
+        }
+    end
+
+    return {label = tostring(formData.texture or formData._name or language.ui.styleground_window.preview.no_preview)}
+end
+
+local PREVIEW_BOX_WIDTH = 640
+local PREVIEW_BOX_HEIGHT = 360
+local PREVIEW_CELL_ROWS = 6
+local PREVIEW_CELL_GAP = 6
+local PREVIEW_GRID_GAP = 14
+local PREVIEW_MARGIN_TOP = 8
+local PREVIEW_MARGIN_RIGHT = 8
+
+-- RenogareSoft with a CJK fallback, used only for the small "reference only" caption
+local warningFonts = {}
+
+local function getWarningFont(size)
+    local cached = warningFonts[size]
+
+    if cached ~= nil then
+        return cached or nil
+    end
+
+    local success, font = pcall(love.graphics.newFont, "assets/fonts/RenogareSoft-Regular.ttf", size)
+
+    if not success or not font then
+        warningFonts[size] = false
+
+        return nil
+    end
+
+    local fontsOk, fonts = pcall(require, "fonts")
+
+    if fontsOk and fonts and fonts.addCJKFallback then
+        fonts.addCJKFallback(font, size)
+    end
+
+    warningFonts[size] = font
+
+    return font
+end
+
+-- The hover preview is attached above every window. Done lazily: the UI root can be rebuilt by a
+-- UI reload while the window stays open.
+local function ensureCellHoverPreviewAttached()
+    local previewWindow = cellHoverPreview.getWindow()
+
+    if ui.root and previewWindow and previewWindow.parent ~= ui.root then
+        ui.root:addChild(previewWindow)
+    end
+end
+
+local function hideCellHoverPreview()
+    if cellHoverPreviewOwned then
+        cellHoverPreview.hide()
+    end
+
+    cellHoverPreviewOwned = false
+end
+
+local function showCellHoverPreview(cell)
+    local sprite = cell and cell._cellSprite
+
+    if not sprite or not sprite.image then
+        hideCellHoverPreview()
+
+        return
+    end
+
+    local label = cell._cellLabel
+    local parent = cell.parent
+    local frameX = (parent and parent.screenX or 0) + (cell._cellFrameX or 0)
+    local frameY = (parent and parent.screenY or 0) + (cell._cellFrameY or 0)
+    local frameHeight = cell._cellFrameSize or cell.height or 0
+
+    ensureCellHoverPreviewAttached()
+
+    cellHoverPreview.show(frameX, frameY, frameHeight, {
+        image = sprite.image,
+        quad = sprite.quad,
+        layer = sprite.layer,
+        width = sprite.width,
+        height = sprite.height,
+        title = tostring(label or "Texture"),
+        key = string.format("othertexture:%s:%s", tostring(sprite.image), tostring(label)),
+        area = 90000,
+        maxWidth = 440,
+        maxHeight = 460
+    })
+
+    cellHoverPreviewOwned = true
+end
+
+local function clearChildren(element)
+    while element.children and #element.children > 0 do
+        element:removeChild(element.children[1])
+    end
 end
 
 -- TODO - Improve in the future
@@ -273,23 +390,149 @@ function stylegroundWindow.updateStylegroundPreview(interactionData)
         return
     end
 
-    local newPreview = stylegroundWindow.getStylegroundPreview(interactionData)
+    local preview = stylegroundWindow.getStylegroundPreview(interactionData)
 
-    if previewContainer.children[1] then
-        previewContainer:removeChild(previewContainer.children[1])
+    clearChildren(previewContainer)
+    hideCellHoverPreview()
+
+    if preview.sprite then
+        local sprite = preview.sprite
+        local imageElement = uiElements.image(sprite.image, sprite.quad, sprite.layer)
+
+        -- The container positions and scales it: the sprite is drawn as a child element, so it
+        -- follows the normal element transforms instead of raw screen coordinates
+        imageElement._previewSprite = sprite
+        imageElement._previewColor = preview.color
+        imageElement.scaleRoundAuto = false
+
+        previewContainer:addChild(imageElement)
+
+        if sprite.animation and #sprite.animation.frames > 1 then
+            previewContainer._previewAnimation = {
+                animation = sprite.animation,
+                element = imageElement,
+                index = 1,
+                time = 0
+            }
+
+        else
+            previewContainer._previewAnimation = nil
+        end
     end
 
-    if newPreview then
-        previewContainer:addChild(newPreview)
+    if preview.sprite and preview.staticPreview then
+        local language = languageRegistry.getLanguage()
+        local uiScale = configs.ui.theme.uiScale or 1
+        local warningFont = getWarningFont(math.max(8, math.floor(14 * uiScale)))
+        local warning = uiElements.label(tostring(language.ui.styleground_window.preview.static_warning),
+            warningFont)
+
+        warning._previewWarning = true
+        warning._warningOutline = math.max(1, math.floor(uiScale))
+        warning.interactive = -1
+        warning.style.color = {1, 1, 1, 0.8}
+
+        -- Draw an outline manually: a plain label becomes unreadable on bright preview images
+        warning:hook({
+            draw = function(orig, self, ...)
+                local font = self.style.font
+                local text = self._textStr
+                local outline = self._warningOutline or 1
+                local x, y = self.screenX, self.screenY
+                local previousFont = love.graphics.getFont()
+
+                love.graphics.setFont(font)
+                uiUtils.setColor(0, 0, 0, 0.85)
+
+                -- Four directions only: eight copies looked muddy at small sizes
+                love.graphics.print(text, x - outline, y)
+                love.graphics.print(text, x + outline, y)
+                love.graphics.print(text, x, y - outline)
+                love.graphics.print(text, x, y + outline)
+
+                local color = self.style.color
+
+                uiUtils.setColor(color[1], color[2], color[3], color[4])
+                love.graphics.print(text, x, y)
+                love.graphics.setFont(previousFont)
+
+                return true
+            end
+        })
+
+        previewContainer:addChild(warning)
+    end
+
+    for _, texture in ipairs(preview.textures or {}) do
+        local sprite = texture.sprite or texture
+        local cell = uiElements.group({})
+        local image = uiElements.image(sprite.image, sprite.quad, sprite.layer)
+
+        image.interactive = -1
+        image.scaleRoundAuto = false
+        cell:addChild(image)
+
+        cell._previewCell = true
+        cell._cellSprite = sprite
+        cell._cellLabel = texture.label
+        cell._cellImage = image
+        cell.interactive = 1
+        cell.cacheable = false
+        cell.onEnter = showCellHoverPreview
+        cell.onLeave = hideCellHoverPreview
+        cell.calcSize = function(self)
+            local size = self._cellFrameSize or 1
+
+            self.width = size
+            self.height = size
+        end
+
+        previewContainer:addChild(cell)
+    end
+
+    if not preview.sprite and preview.label then
+        previewContainer._previewAnimation = nil
+        previewContainer:addChild(uiElements.label(preview.label))
     end
 
     -- Fill the top right area with a fixed size box and scale the preview into it (aspect
-    -- preserved, centered). The preview is a normal child element, so it is positioned relative to
-    -- the box and follows the element transforms.
+    -- preserved, centered). Extra textures are laid out in cells to the right of that box.
     if not previewContainer._previewHooked then
         previewContainer._previewHooked = true
 
         previewContainer:hook({
+            update = function(orig, self, dt)
+                if orig then
+                    orig(self, dt)
+                end
+
+                local animation = self._previewAnimation
+
+                if not animation or not animation.element then
+                    return
+                end
+
+                local frames = animation.animation.frames
+
+                if #frames < 2 then
+                    return
+                end
+
+                animation.time = animation.time + (dt or 0)
+
+                local delay = animation.animation.delays[animation.index] or 0.1
+
+                while animation.time >= delay do
+                    animation.time = animation.time - delay
+                    animation.index = animation.index % #frames + 1
+
+                    animation.element.image = frames[animation.index]
+                    animation.element:repaint()
+
+                    delay = animation.animation.delays[animation.index] or 0.1
+                end
+            end,
+
             layoutLate = function(orig, self, ...)
                 orig(self, ...)
 
@@ -300,38 +543,81 @@ function stylegroundWindow.updateStylegroundPreview(interactionData)
                 end
 
                 local availableWidth = parent.innerWidth or 0
-                local availableHeight = parent.innerHeight or 0
 
-                if availableWidth <= 0 or availableHeight <= 0 then
+                if availableWidth <= 0 then
                     return
                 end
 
-                local maxWidth = math.floor(math.min(availableWidth, 640))
-                -- Keep this independent of the current window height: a height-dependent preview
-                -- fed its own measurement back into updateStylegroundWindowHeight, so rebuilding
-                -- the form made the window grow in several steps.
-                local previewMaxHeight = 320 * (configs.ui.theme.uiScale or 1)
-                local maxHeight = math.max(1, math.floor(math.min(previewMaxHeight, availableHeight)))
+                local uiScale = configs.ui.theme.uiScale or 1
+                local marginTop = PREVIEW_MARGIN_TOP * uiScale
+                local marginRight = PREVIEW_MARGIN_RIGHT * uiScale
+                local originX, originY = 0, marginTop
+                local previewChild
+                local warning
+                local cells = {}
 
-                local child = self.children and self.children[1]
-                local sprite = child and child._previewSprite
+                for _, child in ipairs(self.children or {}) do
+                    if child._previewSprite then
+                        previewChild = child
 
-                if not sprite then
+                    elseif child._previewCell then
+                        table.insert(cells, child)
+
+                    elseif child._previewWarning then
+                        warning = child
+                    end
+                end
+
+                if not previewChild then
                     -- No preview content: keep only a compact placeholder instead of taking half
                     -- of the window away from the form.
-                    maxHeight = math.max(1, math.floor(math.min(48 * (configs.ui.theme.uiScale or 1), availableHeight)))
-                    if self.width ~= maxWidth or self.height ~= maxHeight then
-                        self.width = maxWidth
-                        self.height = maxHeight
+                    local height = math.floor(48 * uiScale) + math.floor(marginTop)
+                    local width = math.min(availableWidth, 640)
+
+                    if self.width ~= width or self.height ~= height then
+                        self.width = width
+                        self.height = height
                     end
+
+                    -- Drop the previous selection's frames, otherwise they would still be drawn
+                    -- for a row that has no preview at all
+                    self._previewOriginX = nil
+                    self._previewOriginY = nil
+                    self._previewBoxWidth = nil
+                    self._previewBoxHeight = nil
+                    self._previewImageX = nil
+                    self._previewImageY = nil
+                    self._previewImageWidth = nil
+                    self._previewImageHeight = nil
+                    self._previewWarningRect = nil
 
                     return
                 end
 
-                -- Original (untrimmed) size and the trimmed content size
+                local sprite = previewChild._previewSprite
                 local realWidth = sprite.realWidth or sprite.width or 0
                 local realHeight = sprite.realHeight or sprite.height or 0
 
+                if realWidth <= 0 or realHeight <= 0 then
+                    return
+                end
+
+                local boxWidth = math.min(PREVIEW_BOX_WIDTH * uiScale,
+                    math.max(1, availableWidth - marginRight))
+                local boxHeight = PREVIEW_BOX_HEIGHT * uiScale
+
+                -- Scale the original rectangle to fit the fixed preview box
+                local scale = math.min(boxWidth / realWidth, boxHeight / realHeight)
+                scale = math.max(scale, 0.01)
+
+                previewChild.scaleX = scale
+                previewChild.scaleY = scale
+
+                -- Place the trimmed content inside the original rectangle. The atlas stores the
+                -- trim as "position minus offset", so the draw offset is minus the stored value.
+                -- Without offset information the trim is assumed to be symmetric.
+                local offsetX = sprite.offsetX or 0
+                local offsetY = sprite.offsetY or 0
                 local contentWidth, contentHeight
 
                 if sprite.quad then
@@ -342,80 +628,229 @@ function stylegroundWindow.updateStylegroundPreview(interactionData)
                     contentWidth, contentHeight = sprite.width, sprite.height
                 end
 
-                if realWidth <= 0 or realHeight <= 0 or contentWidth <= 0 or contentHeight <= 0 then
-                    return
-                end
+                contentWidth = contentWidth or realWidth
+                contentHeight = contentHeight or realHeight
 
-                -- Scale the original rectangle to fit, then the box is exactly that size
-                local scale = math.min(maxWidth / realWidth, maxHeight / realHeight)
-                scale = math.max(scale, 0.01)
+                local childX, childY
 
-                local drawWidth = math.max(1, math.floor(realWidth * scale))
-                local drawHeight = math.max(1, math.floor(realHeight * scale))
-
-                if self.width ~= drawWidth or self.height ~= drawHeight then
-                    self.width = drawWidth
-                    self.height = drawHeight
-                end
-
-                child.scaleX = scale
-                child.scaleY = scale
-
-                -- Place the trimmed content inside the original rectangle. The atlas stores the
-                -- trim as "position minus offset", so the draw offset is minus the stored value.
-                -- Without offset information the trim is assumed to be symmetric.
-                local offsetX = sprite.offsetX or 0
-                local offsetY = sprite.offsetY or 0
-
-                local childX
                 if offsetX ~= 0 then
-                    childX = -offsetX * scale
+                    childX = (boxWidth - realWidth * scale) / 2 - offsetX * scale
 
                 else
-                    childX = (realWidth - contentWidth) / 2 * scale
+                    childX = (boxWidth - contentWidth * scale) / 2
                 end
 
-                local childY
                 if offsetY ~= 0 then
-                    childY = -offsetY * scale
+                    childY = (boxHeight - realHeight * scale) / 2 - offsetY * scale
 
                 else
-                    childY = (realHeight - contentHeight) / 2 * scale
+                    childY = (boxHeight - contentHeight * scale) / 2
                 end
 
-                child.x = math.floor(childX)
-                child.y = math.floor(childY)
+                previewChild.x = math.floor(childX) + originX
+                previewChild.y = math.floor(childY) + originY
 
                 -- Also set the real position: the element layout may not run again before the
                 -- next draw
-                child.realX = child.x
-                child.realY = child.y
+                previewChild.realX = previewChild.x
+                previewChild.realY = previewChild.y
 
-                local color = child._previewColor
+                -- Frame the original (untrimmed) image rectangle. Atlas sprites may be trimmed,
+                -- and framing only the trimmed quad would make the blue box smaller than the
+                -- source image and drop the empty margins around it.
+                local imageWidth = math.max(1, math.floor(realWidth * scale))
+                local imageHeight = math.max(1, math.floor(realHeight * scale))
+
+                self._previewImageX = math.floor((boxWidth - imageWidth) / 2) + originX
+                self._previewImageY = math.floor((boxHeight - imageHeight) / 2) + originY
+                self._previewImageWidth = imageWidth
+                self._previewImageHeight = imageHeight
+                self._previewOriginX = originX
+                self._previewOriginY = originY
+
+                local color = previewChild._previewColor
 
                 if color then
                     local success, r, g, b, a = utils.parseHexColor(color)
 
                     if success then
-                        child.style.color = {r, g, b, a}
+                        previewChild.style.color = {r, g, b, a}
                     end
                 end
+
+                -- Extra texture cells: fill top to bottom, then continue with the next column.
+                -- The cell size is derived from the box height so that exactly PREVIEW_CELL_ROWS
+                -- cells (plus the gaps between them) fill the preview area.
+                local cellGap = PREVIEW_CELL_GAP * uiScale
+                local gridGap = PREVIEW_GRID_GAP * uiScale
+                local rows = math.max(1, PREVIEW_CELL_ROWS)
+                local cellSize = math.max(1, (boxHeight - (rows - 1) * cellGap) / rows)
+                local columns = math.ceil(#cells / rows)
+
+                for index, cell in ipairs(cells) do
+                    local column = math.floor((index - 1) / rows)
+                    local row = (index - 1) % rows
+                    local cellX = originX + boxWidth + gridGap + column * (cellSize + cellGap)
+                    local cellY = originY + row * (cellSize + cellGap)
+                    local cellSprite = cell._cellSprite or {}
+                    local cellWidth = cellSprite.width or 0
+                    local cellHeight = cellSprite.height or 0
+
+                    if cellSprite.quad then
+                        local _, _, width, height = cellSprite.quad:getViewport()
+                        cellWidth, cellHeight = width, height
+                    end
+
+                    cellWidth = math.max(1, cellWidth)
+                    cellHeight = math.max(1, cellHeight)
+
+                    -- Small textures get a 3x boost so they are readable, but the result is still
+                    -- capped to the cell. Textures that do not fit are shrunk.
+                    local cellScale = math.min(3, (cellSize - 4) / cellWidth, (cellSize - 4) / cellHeight)
+                    cellScale = math.max(cellScale, 0.01)
+
+                    local image = cell._cellImage
+                    local frameX = math.floor(cellX)
+                    local frameY = math.floor(cellY)
+                    local frameSize = math.floor(cellSize)
+
+                    cell._cellFrameX = frameX
+                    cell._cellFrameY = frameY
+                    cell._cellFrameSize = frameSize
+
+                    -- The cell group itself is the hit area, so it must match the frame and not
+                    -- the centered/scaled image. Otherwise neighboring cells' hit areas overlap.
+                    cell.x = frameX
+                    cell.y = frameY
+                    cell.realX = frameX
+                    cell.realY = frameY
+                    cell.width = frameSize
+                    cell.height = frameSize
+
+                    if image then
+                        image.scaleX = cellScale
+                        image.scaleY = cellScale
+                        image.x = math.floor((frameSize - cellWidth * cellScale) / 2)
+                        image.y = math.floor((frameSize - cellHeight * cellScale) / 2)
+                        image.realX = image.x
+                        image.realY = image.y
+                    end
+                end
+
+                if warning then
+                    -- Bottom-right corner of the preview image area
+                    local padding = math.floor(6 * uiScale)
+                    local warningWidth = warning.width or 0
+                    local warningHeight = warning.height or 0
+
+                    warning.x = math.max(originX + padding,
+                        math.floor(originX + boxWidth - padding - warningWidth))
+                    warning.y = math.max(originY + padding,
+                        math.floor(originY + boxHeight - padding - warningHeight))
+                    warning.realX = warning.x
+                    warning.realY = warning.y
+
+                    self._previewWarningRect = {
+                        x = warning.x,
+                        y = warning.y,
+                        width = warningWidth,
+                        height = warningHeight
+                    }
+
+                else
+                    self._previewWarningRect = nil
+                end
+
+                local gridWidth = columns > 0 and (columns * (cellSize + cellGap) - cellGap) or 0
+                local totalWidth = originX + boxWidth + (columns > 0 and (gridGap + gridWidth) or 0) + marginRight
+                local totalHeight = originY + math.max(boxHeight,
+                    #cells > 0 and (rows * (cellSize + cellGap) - cellGap) or 0)
+
+                if self.width ~= totalWidth or self.height ~= totalHeight then
+                    self.width = math.floor(totalWidth)
+                    self.height = math.floor(totalHeight)
+                end
+
+                self._previewBoxWidth = math.floor(boxWidth)
+                self._previewBoxHeight = math.floor(boxHeight)
             end,
 
             draw = function(orig, self, ...)
+                local screenX, screenY = self.screenX or 0, self.screenY or 0
+                local originX = self._previewOriginX or 0
+                local originY = self._previewOriginY or 0
+                local boxX, boxY = screenX + originX, screenY + originY
+                local boxWidth = self._previewBoxWidth or self.width or 0
+                local boxHeight = self._previewBoxHeight or self.height or 0
+
+                -- Backdrop behind the preview image and the texture cells
+                if boxWidth > 0 and boxHeight > 0 then
+                    uiUtils.setColor(0.08, 0.08, 0.08, 0.35)
+
+                    love.graphics.rectangle("fill", boxX, boxY, boxWidth, boxHeight)
+                end
+
+                for _, child in ipairs(self.children or {}) do
+                    if child._previewCell then
+                        uiUtils.setColor(0.13, 0.13, 0.13, 0.6)
+
+                        love.graphics.rectangle("fill", screenX + (child._cellFrameX or 0),
+                            screenY + (child._cellFrameY or 0),
+                            child._cellFrameSize or 0, child._cellFrameSize or 0)
+                    end
+                end
+
+                -- Readability backdrop for the "preview only" warning
+                local warningRect = self._previewWarningRect
+
+                if warningRect and warningRect.width > 0 and warningRect.height > 0 then
+                    local pad = 3
+
+                    uiUtils.setColor(0, 0, 0, 0.35)
+                    love.graphics.rectangle("fill", screenX + warningRect.x - pad,
+                        screenY + warningRect.y - pad,
+                        warningRect.width + pad * 2, warningRect.height + pad * 2)
+                end
+
                 orig(self, ...)
 
-                -- Frame around the preview box, so its bounds are visible
-                local previousR, previousG, previousB, previousA = love.graphics.getColor()
-                local previousLineWidth = love.graphics.getLineWidth()
-
+                -- Preview area frame: the fixed size box the image is fitted into
+                uiUtils.setColor(1, 1, 1, 0.3)
                 love.graphics.setLineWidth(1)
-                love.graphics.setColor(1, 1, 1, 0.3)
-                love.graphics.rectangle("line", (self.screenX or 0) + 0.5, (self.screenY or 0) + 0.5,
-                    math.max(0, (self.width or 0) - 1), math.max(0, (self.height or 0) - 1))
 
-                love.graphics.setLineWidth(previousLineWidth)
-                love.graphics.setColor(previousR, previousG, previousB, previousA)
+                if boxWidth > 0 and boxHeight > 0 then
+                    love.graphics.rectangle("line", boxX + 0.5, boxY + 0.5,
+                        math.max(0, boxWidth - 1), math.max(0, boxHeight - 1))
+                end
+
+                -- Actual image frame: distinguishes the drawn image from the empty margin left by
+                -- an aspect ratio that does not exactly match the preview box
+                local imageX = self._previewImageX
+                local imageY = self._previewImageY
+                local imageWidth = self._previewImageWidth
+                local imageHeight = self._previewImageHeight
+
+                if imageX and imageY and imageWidth and imageHeight
+                    and imageWidth > 1 and imageHeight > 1 then
+                    uiUtils.setColor(0.55, 0.75, 0.95, 0.85)
+
+                    love.graphics.rectangle("line", screenX + imageX + 0.5, screenY + imageY + 0.5,
+                        math.max(0, imageWidth - 1), math.max(0, imageHeight - 1))
+                end
+
+                uiUtils.setColor(1, 1, 1, 0.3)
+
+                for _, child in ipairs(self.children or {}) do
+                    if child._previewCell then
+                        local size = child._cellFrameSize or 0
+
+                        love.graphics.rectangle("line", screenX + (child._cellFrameX or 0) + 0.5,
+                            screenY + (child._cellFrameY or 0) + 0.5,
+                            math.max(0, size - 1), math.max(0, size - 1))
+                    end
+                end
+
+                uiUtils.setColor(1, 1, 1, 1)
             end
         })
     end
@@ -2677,6 +3112,9 @@ function stylegroundWindow.getWindowContent(map)
     local interactionData = {}
     local language = languageRegistry.getLanguage()
 
+    -- Pick up replacement preview images dropped into assets/stylegrounds/ while the editor runs
+    stylegroundPreviewData.clearImageCache()
+
     -- See TODO at top of file
     --cacheParallaxTextureOptions()
 
@@ -3103,6 +3541,9 @@ function stylegroundWindow.editStylegrounds(map)
 
         currentWindow = nil
         currentInteractionData = nil
+
+        cellHoverPreview.hide()
+        cellHoverPreviewOwned = false
 
         -- The styleground clipboard lives only as long as the window
         stylegroundClipboard = nil

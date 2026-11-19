@@ -13,6 +13,7 @@ local listItemUtils = require("ui.utils.list_item")
 local iconUtils = require("ui.utils.icons")
 local notifications = require("ui.notification")
 local hoverPreview = require("ui.hover_preview")
+local stylegroundPreviewData = require("styleground_preview")
 
 local configs = require("configs")
 local languageRegistry = require("language_registry")
@@ -2433,6 +2434,37 @@ updateHoverPreview = function(list)
     previewHoverItem = item
     local material = item.data
     local content
+
+    -- Styleground effect rows in the tools list: reuse the styleground preview index. There is no
+    -- placed style here, so attribute-based previews use the handler's default data.
+    if item.stylegroundEffectName then
+        local effectsModule = require("effects")
+        local style = {_type = "effect", _name = item.stylegroundEffectName}
+        local defaultData = effectsModule.defaultData(style) or {}
+
+        for key, value in pairs(style) do
+            defaultData[key] = value
+        end
+
+        local styleContent = stylegroundPreviewData.getHoverContent(style, defaultData)
+
+        if styleContent then
+            styleContent.key = "stylegroundtool:" .. tostring(item.stylegroundEffectName)
+            styleContent.title = tostring(item.stylegroundLabel or item.text or item.stylegroundEffectName)
+            styleContent.area = 90000
+            styleContent.maxWidth = 440
+            styleContent.maxHeight = 460
+
+            hoverPreview.show(rowX, rowY, rowHeight, styleContent)
+
+        else
+            hoverPreview.hide()
+            previewHoverList = nil
+            previewHoverItem = nil
+        end
+
+        return
+    end
 
     -- Preview tool: load the image of the hovered row directly, showing a checkerboard placeholder
     -- when it is empty or can not be loaded. Entity rows in the Name list keep their normal entity

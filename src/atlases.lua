@@ -2,6 +2,7 @@ local modHandler = require("mods")
 local fileLocations = require("file_locations")
 local spriteLoader = require("sprite_loader")
 local utils = require("utils")
+local logging = require("logging")
 
 local atlases = {}
 local atlasNames = {}
@@ -75,6 +76,53 @@ function atlases.loadCelesteAtlases()
     atlases.loadCelesteAtlas("Gui", guiMeta, celesteAtlasPath)
 end
 
+-- Loads another vanilla Celeste atlas (Overworld, Misc, Portraits, ...) the first time a preview
+-- references it. Only Gameplay and Gui used to be loaded, so resources from the other atlases
+-- could not be resolved at all.
+--
+-- spriteLoader.loadSpriteAtlas yields while it works (it is normally driven by a loading task), so
+-- the load runs in its own coroutine and is resumed to completion here. Calling it directly from
+-- the UI update would yield from the main thread and fail.
+function atlases.loadCelesteAtlasIfAvailable(name)
+    if type(name) ~= "string" or not name:match("^[%w_-]+$") then
+        return
+    end
+
+    if rawget(atlases, name) then
+        return atlases[name]
+    end
+
+    local celesteAtlasPath = utils.joinpath(fileLocations.getCelesteDir(), celesteAtlasRelativePath)
+    local meta = name .. ".meta"
+
+    if not utils.isFile(utils.joinpath(celesteAtlasPath, meta)) then
+        return
+    end
+
+    -- No-packing atlases store one .data per resource and are loaded by loadCelesteResource;
+    -- loadSpriteAtlas only understands packed pages.
+    if utils.isDirectory(utils.joinpath(celesteAtlasPath, name)) then
+        return
+    end
+
+    local thread = coroutine.create(function()
+        atlases.loadCelesteAtlas(name, meta, celesteAtlasPath)
+    end)
+    local success, message = coroutine.resume(thread)
+
+    while success and coroutine.status(thread) ~= "dead" do
+        success, message = coroutine.resume(thread)
+    end
+
+    if not success then
+        logging.warning(string.format("Could not load the '%s' atlas: %s", name, tostring(message)))
+
+        return
+    end
+
+    return atlases[name]
+end
+
 -- Remove everything until after the atlas name
 local function getResourceName(filename)
     local parts = filename:split("/")()
@@ -125,6 +173,99 @@ function atlases.getInternalResource(resource, name)
     end
 end
 
+-- Whether the vanilla atlas stores one .data file per resource instead of one packed page.
+function atlases.isNoPackingAtlas(name)
+    if type(name) ~= "string" or not name:match("^[%w_-]+$") then
+        return false
+    end
+
+    return utils.isDirectory(utils.joinpath(fileLocations.getCelesteDir(), celesteAtlasRelativePath,
+        name))
+end
+
+-- Most Celeste atlases other than Gameplay/Gui use "--no-packing": every resource has its own
+-- .data file under Content/Graphics/Atlases/<atlas>/. Load just the requested resource instead of
+-- the whole atlas. This is what makes Overworld textures (snow, overlay, ...) resolvable.
+function atlases.loadCelesteResource(name, resource)
+    if type(name) ~= "string" or not name:match("^[%w_-]+$") then
+        return
+    end
+
+    if type(resource) ~= "string" then
+        return
+    end
+
+    local resourcePath = resource:gsub("\\", "/")
+
+    if resourcePath:find("%.%.") then
+        return
+    end
+
+    local path = utils.joinpath(fileLocations.getCelesteDir(), celesteAtlasRelativePath,
+        name, resourcePath .. ".data")
+
+    if not utils.isFile(path) then
+        return
+    end
+
+    local image, imageData
+    local thread = coroutine.create(function()
+        image, imageData = spriteLoader.loadDataImage(path)
+    end)
+    local success, message = coroutine.resume(thread)
+
+    while success and coroutine.status(thread) ~= "dead" do
+        success, message = coroutine.resume(thread)
+    end
+
+    if not success or not image then
+        logging.warning(string.format("Could not load the '%s/%s' texture: %s", name, resourcePath,
+            tostring(message)))
+
+        return
+    end
+
+    local width, height = image:getDimensions()
+    local sprite = {
+        x = 0,
+        y = 0,
+        width = width,
+        height = height,
+        offsetX = 0,
+        offsetY = 0,
+        realWidth = width,
+        realHeight = height,
+        image = image,
+        imageData = imageData,
+        meta = {
+            image = image,
+            imageData = imageData,
+            width = width,
+            height = height,
+            filename = path,
+            dataName = name .. "/" .. resourcePath
+        },
+        filename = path,
+        realFilename = path,
+        internalFile = true,
+        fromZipFile = false,
+        loadedAt = os.time()
+    }
+
+    sprite.quad = love.graphics.newQuad(0, 0, width, height, width, height)
+
+    if not atlases[name] then
+        atlases.createAtlas(name)
+    end
+
+    atlases[name].__noPacking = true
+    atlases[name].__vanillaResources = rawget(atlases[name], "__vanillaResources") or {}
+    atlases[name].__vanillaResources[resource] = sprite
+    atlases[name][resource] = sprite
+
+    return sprite
+end
+
 -- TODO - Make it possible to refetch the resource
 function atlases.getResource(resource, name, atlas)
     if not resource then
@@ -135,13 +276,29 @@ function atlases.getResource(resource, name, atlas)
         name = name or "Gameplay"
 
         if not atlases[name] then
+            atlases.loadCelesteAtlasIfAvailable(name)
+        end
+
+        if not atlases[name] then
             atlases.createAtlas(name)
+            atlases[name].__noPacking = atlases.isNoPackingAtlas(name)
         end
 
         atlas = atlases[name]
     end
 
     local targetResource = rawget(atlas, resource)
+
+    -- No-packing vanilla atlases (Overworld, Misc, Portraits, ...): resolve a single resource
+    -- from its own .data file on demand. Read the marker raw: the atlas metatable forwards unknown
+    -- keys to getResource, so atlas.__noPacking would recurse forever.
+    if not targetResource and (rawget(atlas, "__noPacking") or atlases.isNoPackingAtlas(name)) then
+        local vanilla = atlases.loadCelesteResource(name, resource)
+
+        if vanilla then
+            return vanilla
+        end
+    end
 
     -- First attempt to see if this is an external resource
     -- Then check if it is an internal one

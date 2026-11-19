@@ -50,6 +50,7 @@ ui.styleground_window.tab_foreground=前景
 ui.styleground_window.tab_background=背景
 ui.styleground_window.preview.unknown_texture=没有可用预览
 ui.styleground_window.preview.no_preview=没有可用预览
+ui.styleground_window.preview.static_warning=*预览图仅供参考
 ui.styleground_window.form.update=更新
 ui.styleground_window.form.new=新建
 ui.styleground_window.form.remove=移除

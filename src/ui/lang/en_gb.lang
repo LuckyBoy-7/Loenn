@@ -59,6 +59,7 @@ ui.styleground_window.tab_background=Background
 
 ui.styleground_window.preview.unknown_texture=No preview available
 ui.styleground_window.preview.no_preview=No preview available
+ui.styleground_window.preview.static_warning=*Preview for reference only
 
 ui.styleground_window.form.update=Update
 ui.styleground_window.form.new=New
