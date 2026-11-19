@@ -3109,24 +3109,71 @@ function stylegroundWindow.getParallaxOptions()
     return names
 end
 
--- Styles copied with Ctrl+C. Only kept while a window is open, like the room clipboard.
+-- Styles copied with Ctrl+C. The in-memory copy works even when the system clipboard is disabled,
+-- the serialized copy lets styles be pasted into another editor instance.
+local stylegroundClipboardFormat = "loenn_stylegrounds"
 local stylegroundClipboard
 
+local function writeStylegroundsToClipboard(styles, foreground)
+    if not configs.editor.copyUsesClipboard then
+        return
+    end
+
+    local success, text = utils.serialize({
+        format = stylegroundClipboardFormat,
+        foreground = foreground,
+        styles = styles
+    }, true, true, false)
+
+    if success then
+        love.system.setClipboardText(text)
+    end
+end
+
+local function readStylegroundsFromClipboard()
+    if not configs.editor.copyUsesClipboard then
+        return nil
+    end
+
+    local text = love.system.getClipboardText()
+
+    if not text or text:sub(1, 1) ~= "{" or text:sub(-1, -1) ~= "}" then
+        return nil
+    end
+
+    local success, data = utils.unserialize(text, true, 3)
+
+    if not success or type(data) ~= "table" or data.format ~= stylegroundClipboardFormat
+        or type(data.styles) ~= "table" or #data.styles == 0 then
+        return nil
+    end
+
+    return data
+end
+
 function stylegroundWindow.copySelection(interactionData)
-    local targets = interactionData.selectedTargets or {}
+    -- Recompute from the list instead of trusting the cached selectedTargets: after a rebuild or
+    -- a drag the cached list can lag behind what is actually highlighted.
+    local list = interactionData.stylegroundListElement
+    local targets = list and getSelectedTargets(interactionData, list) or interactionData.selectedTargets or {}
 
     if #targets == 0 then
         return
     end
 
-    stylegroundClipboard = {
-        foreground = targets[1].foreground,
-        styles = {}
-    }
+    local foreground = targets[1].foreground
+    local styles = {}
 
     for _, target in ipairs(targets) do
-        table.insert(stylegroundClipboard.styles, utils.deepcopy(target.style))
+        table.insert(styles, utils.deepcopy(target.style))
     end
+
+    stylegroundClipboard = {
+        foreground = foreground,
+        styles = styles
+    }
+
+    writeStylegroundsToClipboard(styles, foreground)
 end
 
 function stylegroundWindow.cutSelection(interactionData)
@@ -3135,7 +3182,11 @@ function stylegroundWindow.cutSelection(interactionData)
 end
 
 function stylegroundWindow.pasteSelection(interactionData)
-    if not stylegroundClipboard or #stylegroundClipboard.styles == 0 then
+    -- Prefer the system clipboard so styles can be copied between editor instances. The
+    -- in-memory copy remains the fallback when the clipboard contains something else.
+    local clipboard = readStylegroundsFromClipboard() or stylegroundClipboard
+
+    if not clipboard or #clipboard.styles == 0 then
         return
     end
 
@@ -3184,7 +3235,7 @@ function stylegroundWindow.pasteSelection(interactionData)
     local commit = beginStyleEdit(map)
     local pastedStyles = {}
 
-    for _, style in ipairs(stylegroundClipboard.styles) do
+    for _, style in ipairs(clipboard.styles) do
         local pastedStyle = utils.deepcopy(style)
 
         table.insert(parent, index + 1, pastedStyle)
