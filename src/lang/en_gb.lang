@@ -82,9 +82,9 @@ tools.name.placement=Placement
 
 tools.name.room=Rooms
 tools.room.modes.name.placement=Place Room
-tools.room.modes.description.placement=Create a room.
+tools.room.modes.description.placement=Create a room by dragging on the map.
 tools.room.modes.name.selection=Select Room
-tools.room.modes.description.selection=Selects rooms and fillers.
+tools.room.modes.description.selection=Selects rooms and fillers. Drag on empty space to select multiple rooms.
 
 tools.name.stylegrounds=Stylegrounds
 tools.description.stylegrounds=Adds backgrounds to the foreground or background list of the map.

@@ -277,6 +277,7 @@ ui.about_window.credits=Created by Cruor and Vexatos
 ui.room_list.window_title=Room List
 ui.room_list.action.edit=Edit
 ui.room_list.action.delete=Delete
+ui.room_list.action.addRoom=Add Room (40x23)
 
 # Color Grading Preview
 ui.color_grading_preview.window_title=Color Grading Preview

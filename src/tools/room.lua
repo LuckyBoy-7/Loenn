@@ -22,6 +22,15 @@ tool.order = 9
 tool.image = nil
 tool.manualRoomLogic = true
 
+-- The Rooms tool is split into two modes: selecting/moving rooms and fillers, and creating rooms.
+tool.mode = "selection"
+tool.defaultMode = "selection"
+tool.resetModeOnSelect = true
+tool.modes = {
+    "selection",
+    "placement"
+}
+
 tool.validLayers = {}
 
 local movementDrag = false
@@ -50,6 +59,24 @@ local selectionMovementKeys = {
     {"itemMoveUp", "up"},
     {"itemMoveDown", "down"},
 }
+
+local function resetDragState()
+    dragStartX = nil
+    dragStartY = nil
+    lastMoveX = nil
+    lastMoveY = nil
+    dragMovementTotalX = 0
+    dragMovementTotalY = 0
+
+    movementDrag = false
+    selectionDrag = false
+    placementDrag = false
+
+    selectionPreviews = nil
+    selectionRectangle = nil
+
+    coverX, coverY, coverWidth, coverHeight = nil, nil, nil, nil
+end
 
 local function rectangleInRoom(rectangle, room)
     return utils.aabbCheck(room, rectangle)
@@ -395,19 +422,7 @@ local function selectionFinished()
         end
     end
 
-    dragStartX = nil
-    dragStartY = nil
-    lastMoveX = nil
-    lastMoveY = nil
-    dragMovementTotalX = 0
-    dragMovementTotalY = 0
-
-    movementDrag = false
-    selectionDrag = false
-    placementDrag = false
-
-    selectionPreviews = nil
-    selectionRectangle = nil
+    resetDragState()
 end
 
 -- Right clicking a room opens a small menu with the same actions as the room
@@ -449,6 +464,45 @@ local function showRoomContextMenu(room)
     contextMenu.showContextMenu(list, {mode = "focused"})
 end
 
+-- Right clicking empty workspace space in Select Room mode offers to add a normal sized room
+-- at the cursor position.
+local function showWorkspaceContextMenu(mapX, mapY)
+    local uiElements = require("ui.elements")
+    local contextMenu = require("ui.context_menu")
+    local languageRegistry = require("language_registry")
+
+    local language = languageRegistry.getLanguage().ui.room_list.action
+
+    local x = math.floor(mapX / 8) * 8
+    local y = math.floor(mapY / 8) * 8
+
+    local function addRoom()
+        if not state.map then
+            return
+        end
+
+        -- roomStruct.decode defaults to a 40x23 tile room
+        local room = roomStruct.decode({x = x, y = y})
+
+        sceneHandler.sendEvent("editorRoomAdd", state.map, room)
+    end
+
+    local list = uiElements.list({
+        uiElements.listItem({
+            text = tostring(language.addRoom),
+            data = addRoom
+        })
+    }, function(element, action)
+        if action then
+            action()
+        end
+
+        element:removeSelf()
+    end)
+
+    contextMenu.showContextMenu(list, {mode = "focused"})
+end
+
 function tool.mouseclicked(x, y, button, istouch, pressed)
     local actionButton = configs.editor.actionButton
     local contextMenuButton = configs.editor.contextMenuButton
@@ -456,7 +510,7 @@ function tool.mouseclicked(x, y, button, istouch, pressed)
     if button == actionButton then
         selectionFinished()
 
-    elseif button == contextMenuButton then
+    elseif button == contextMenuButton and tool.mode == "selection" then
         local map = state.map
         local mapX, mapY = viewportHandler.getMapCoordinates(x, y)
         local hovering = hoveringMapItem(mapX, mapY)
@@ -464,6 +518,9 @@ function tool.mouseclicked(x, y, button, istouch, pressed)
         if map and hovering and utils.typeof(hovering) == "room" then
             state.selectItem(hovering)
             showRoomContextMenu(hovering)
+
+        elseif map and not hovering then
+            showWorkspaceContextMenu(mapX, mapY)
         end
     end
 end
@@ -551,9 +608,16 @@ function tool.mousepressed(x, y, button, istouch, pressed)
 
     selectionRectangle = rectangleStruct.create(mapX, mapY, 1, 1)
 
-    -- Clicking nothing starts a room placement drag, clicking a room moves it
-    if not mapItemHovered then
+    if tool.mode == "placement" then
+        -- Place Room: any drag creates a new room. Clicking without dragging does nothing.
         placementDrag = true
+
+        return
+    end
+
+    -- Select Room: dragging empty space draws a selection rectangle, clicking a room moves it.
+    if not mapItemHovered then
+        selectionDrag = true
 
         return
     end
@@ -580,7 +644,25 @@ function tool.mousereleased(x, y, button, istouch, presses, click)
     end
 end
 
+function tool.setMode(mode)
+    if mode ~= "selection" and mode ~= "placement" then
+        return false
+    end
+
+    if mode ~= tool.mode then
+        -- Do not carry a half finished drag across modes
+        resetDragState()
+        tool.mode = mode
+    end
+
+    return true
+end
+
 function tool.keypressed(key, scancode, isrepeat)
+    if tool.mode ~= "selection" then
+        return
+    end
+
     for _, movementData in ipairs(selectionMovementKeys) do
         local configKey, direction = movementData[1], movementData[2]
         local targetKey = configs.editor[configKey]
@@ -785,6 +867,8 @@ function tool.selected()
 end
 
 function tool.unselected()
+    resetDragState()
+
     return true
 end
 

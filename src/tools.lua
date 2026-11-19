@@ -114,7 +114,12 @@ function toolHandler.selectTool(name)
         local modeValue = toolUtils.getPersistenceMode(handler)
         local layerValue = toolUtils.getPersistenceLayer(handler)
 
-        if modeValue then
+        if handler.resetModeOnSelect and handler.defaultMode then
+            -- Some tools are split into modes where one mode is the primary entry point. Always
+            -- start those tools in their default mode instead of restoring the last one.
+            toolHandler.setMode(handler.defaultMode, name)
+
+        elseif modeValue then
             toolHandler.setMode(modeValue, name)
         end
 

@@ -391,6 +391,7 @@ ui.about_window.credits=作者：Cruor 和 Vexatos
 ui.room_list.window_title=房间列表
 ui.room_list.action.edit=编辑
 ui.room_list.action.delete=删除
+ui.room_list.action.addRoom=添加房间 (40x23)
 
 # Color Grading Preview
 ui.color_grading_preview.window_title=调色预览
