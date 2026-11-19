@@ -2549,7 +2549,8 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
             return
         end
 
-        if ctrlHeld() then            if selectionStyles[style] then
+        if ctrlHeld() then
+            if selectionStyles[style] then
                 selectionStyles[style] = nil
                 anchorStyle = nil
 
@@ -2566,14 +2567,30 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
             return
         end
 
-        if shiftHeld() and anchorStyle then
+        if shiftHeld() then
             local anchorItem
 
-            for _, c in ipairs(self.children or {}) do
-                if c.data and c.data.style == anchorStyle then
-                    anchorItem = c
+            if anchorStyle then
+                for _, c in ipairs(self.children or {}) do
+                    if c.data and c.data.style == anchorStyle then
+                        anchorItem = c
 
-                    break
+                        break
+                    end
+                end
+            end
+
+            -- Programmatic selections (opening the panel, switching tabs, rebuilding the list and
+            -- keyboard navigation) set list.selected without going through setIsSelected, so no
+            -- shift anchor was recorded. Use the current selection as the anchor in that case,
+            -- otherwise the first shift-click would only select the clicked row.
+            if not anchorItem then
+                local selectedItem = self.selected
+
+                if selectedItem and selectedItem.data and selectedItem.data.style
+                    and self:getIsSelected(selectedItem) then
+                    anchorItem = selectedItem
+                    anchorStyle = selectedItem.data.style
                 end
             end
 
