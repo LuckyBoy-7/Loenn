@@ -1116,6 +1116,15 @@ local function filterMaterialItems(items, search, options)
         return items
     end
 
+    local hasModSearch = false
+
+    for _, part in ipairs(parts) do
+        if part.mode == "modName" then
+            hasModSearch = true
+            break
+        end
+    end
+
     local keep = {}
     local favoritesHeader
 
@@ -1150,6 +1159,85 @@ local function filterMaterialItems(items, search, options)
         end
     end
 
+    -- compactPathTree and the source merge below rewrite hierarchy data. Work on shallow copies so
+    -- typing another search does not mutate the unfiltered tree used to build the next result.
+    local itemClones = {}
+
+    for _, item in ipairs(filtered) do
+        itemClones[item] = table.shallowcopy(item)
+    end
+
+    for _, clone in pairs(itemClones) do
+        if clone.ancestors then
+            local ancestors = {}
+
+            for ancestryIndex, ancestor in ipairs(clone.ancestors) do
+                ancestors[ancestryIndex] = itemClones[ancestor] or ancestor
+            end
+
+            clone.ancestors = ancestors
+        end
+    end
+
+    local clonedFiltered = {}
+
+    for _, item in ipairs(filtered) do
+        table.insert(clonedFiltered, itemClones[item])
+    end
+
+    filtered = clonedFiltered
+
+    -- A single mod can contribute several source groups when its entries also list optional or
+    -- companion mods (for example "ChroniaHelper" and "ChroniaHelper + CommunalHelper"). Searching
+    -- by @mod should not split one mod into multiple source headers, so keep only the first group
+    -- for each primary source key.
+    if hasModSearch then
+        local primarySources = {}
+        local sourceReplacements = {}
+        local merged = {}
+
+        for _, item in ipairs(filtered) do
+            if item.isSource and not item.isFavoritesHeader then
+                local sourceKey = item.sourceKey or ""
+
+                if sourceKey ~= "" and primarySources[sourceKey] then
+                    sourceReplacements[item] = primarySources[sourceKey]
+
+                else
+                    if sourceKey ~= "" then
+                        primarySources[sourceKey] = item
+                    end
+
+                    table.insert(merged, item)
+                end
+
+            else
+                table.insert(merged, item)
+            end
+        end
+
+        if next(sourceReplacements) then
+            for _, item in ipairs(merged) do
+                for ancestryIndex, ancestor in ipairs(item.ancestors or {}) do
+                    local replacement = sourceReplacements[ancestor]
+
+                    while replacement do
+                        ancestor = replacement
+                        replacement = sourceReplacements[ancestor]
+                    end
+
+                    item.ancestors[ancestryIndex] = ancestor
+                end
+            end
+        end
+
+        filtered = merged
+    end
+
+    -- Filtering only keeps matching leaves and their ancestors. A chain that was compacted in the
+    -- full tree can become single-child again after filtering, so compact the result too instead
+    -- of leaving an extra hierarchy level behind.
+    compactPathTree(filtered)
     insertHierarchyGaps(filtered)
     normalizeSourceMargins(filtered)
 
