@@ -505,3 +505,12 @@ ui.coordinate_window.room=Room Pixel
 ui.coordinate_window.roomTiles=Room Tile
 ui.coordinate_window.roomSnap=Room Snap
 ui.coordinate_window.zoom=Zoom
+
+# Scripts
+scripts.addSpikesAroundObject.hint=Right-click a spike to copy its configuration. Defaults to normal spikes. Left-click around an object to add spikes.
+scripts.addSpikesAroundObject.no_room=Copy failed: no room is selected.
+scripts.addSpikesAroundObject.copy_failed=Copy failed: the right-clicked entity must contain "spike" in its name and end with Up, Down, Left, or Right.
+scripts.addSpikesAroundObject.copy_success=Copy succeeded: %s
+scripts.addSpikesAroundObject.no_target=Left-click position has no entity or foreground tile.
+scripts.addSpikesAroundObject.added=Added %d Spikes.
+scripts.addSpikesAroundObject.none=No Spikes added: the surrounding cells are already occupied or outside the room.

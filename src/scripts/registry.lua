@@ -12,6 +12,7 @@ registry.scripts = {
     require("scripts/decal_credits"),
     require("scripts/auto_bg_tiles"),
     require("scripts/auto_bg_tiles_around"),
+    require("scripts/add_spikes_around_object"),
     require("scripts/create_template_mod"),
     require("scripts/export_to_zip"),
     require("scripts/transfer_used_decals")

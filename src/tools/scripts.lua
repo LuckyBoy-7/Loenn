@@ -58,6 +58,12 @@ end
 function tool.setMaterial(name)
     tool.material = name
 
+    local script = name and registry.getByName(name)
+
+    if script and script.onSelected then
+        script.onSelected()
+    end
+
     return true
 end
 
@@ -203,10 +209,6 @@ local function getItemAt(mapX, mapY)
 end
 
 function tool.mouseclicked(x, y, button, istouch, pressed)
-    if button ~= configs.editor.toolActionButton then
-        return false
-    end
-
     local script = tool.material and registry.getByName(tool.material)
 
     if not script then
@@ -215,6 +217,37 @@ function tool.mouseclicked(x, y, button, istouch, pressed)
 
     local mouseMapX, mouseMapY = viewportHandler.getMapCoordinates(x, y or 0)
     local clickedItem = getItemAt(mouseMapX, mouseMapY)
+
+    -- Scripts that need a different secondary action (for example copying a spike config) can
+    -- handle a right click themselves. This does not affect normal left click execution.
+    if button == configs.editor.contextMenuButton and script.rightclick then
+        -- Match the left click behaviour: clicking an unselected room first focuses it, and the
+        -- script only runs on a click inside the focused/selected room.
+        if not clickedItem then
+            return false
+        end
+
+        if tool.layer ~= "allRooms" and not selectionUtils.isItemSelected(clickedItem) then
+            state.selectItem(clickedItem)
+
+            return true
+        end
+
+        script.rightclick({
+            mouseX = x,
+            mouseY = y or 0,
+            mouseMapX = mouseMapX,
+            mouseMapY = mouseMapY,
+            focusedItem = clickedItem
+        })
+
+        return true
+    end
+
+    if button ~= configs.editor.toolActionButton then
+        return false
+    end
+
     local addModifier = configs.editor.selectionAddModifier
 
     -- Current Room only runs on the focused/selected items. Clicking another room focuses it,

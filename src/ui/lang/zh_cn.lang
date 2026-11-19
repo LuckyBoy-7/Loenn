@@ -594,3 +594,12 @@ layers.name.decalsFg=前景贴花
 layers.name.decalsBg=背景贴花
 layers.name.stylegrounds=背景样式
 layers.name.sceneryObj=对象图块
+
+# Scripts
+scripts.addSpikesAroundObject.hint=右键对应的刺拷贝其配置, 默认用普通刺, 左键为对象周围添加 Spikes
+scripts.addSpikesAroundObject.no_room=拷贝失败: 没有选中房间。
+scripts.addSpikesAroundObject.copy_failed=拷贝失败: 右键位置没有名字包含 spike 且以 Up/Down/Left/Right 结尾的实体。
+scripts.addSpikesAroundObject.copy_success=拷贝成功: %s
+scripts.addSpikesAroundObject.no_target=左键位置没有实体或前景砖。
+scripts.addSpikesAroundObject.added=已添加 %d 个 Spikes。
+scripts.addSpikesAroundObject.none=没有添加 Spikes: 周围位置已被占用或超出房间。
