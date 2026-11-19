@@ -59,18 +59,23 @@ function triggerText.getRect(text, x, y, width, height, font, fontSize)
 end
 
 -- Widens the box around its center when the longest word does not fit, so words
--- are not cut in half. Uses the same font metrics the label is drawn with.
+-- are not cut in half. Parenthesized lines normally stay on one line, but a line
+-- that is far wider than the (possibly already widened) trigger is allowed to wrap
+-- instead of stretching the label across the whole room. Uses the same font
+-- metrics the label is drawn with.
 function triggerText.stretchRect(x, y, width, height, text, fontSize)
     fontSize = fontSize or 1
     local font = fonts.font
 
     -- Widths depend on the label size: selecting a room switches between the normal and the
-    -- doubled size, so the cache can not be keyed by text alone
-    local cacheKey = text .. "|" .. tostring(fontSize) .. "|" .. tostring(font)
+    -- doubled size, so the cache can not be keyed by text alone. The trigger width is part of
+    -- the key as well because it decides whether a parenthesized line is kept together.
+    local cacheKey = text .. "|" .. tostring(fontSize) .. "|" .. tostring(font) .. "|" .. tostring(width)
     local maxWidth = wordWidthCache[cacheKey]
 
     if not maxWidth then
-        maxWidth = 0
+        local wordWidth = 0
+        local parenthesizedWidths = {}
 
         for line in (text .. "\n"):gmatch("(.-)\n") do
             line = utils.trim(line)
@@ -78,12 +83,25 @@ function triggerText.stretchRect(x, y, width, height, text, fontSize)
             local parenthesized = line:sub(1, 1) == "(" and line:sub(-1) == ")"
 
             if parenthesized then
-                maxWidth = math.max(maxWidth, font:getWidth(line) * fontSize)
+                table.insert(parenthesizedWidths, font:getWidth(line) * fontSize)
 
             else
                 for word in line:gmatch("[^%s]+") do
-                    maxWidth = math.max(maxWidth, font:getWidth(word) * fontSize)
+                    wordWidth = math.max(wordWidth, font:getWidth(word) * fontSize)
                 end
+            end
+        end
+
+        -- Stretching the label to fit another long word already gives it extra width. Use that
+        -- effective width for the "too long" check, not just the raw trigger width.
+        local effectiveWidth = math.max(width, wordWidth)
+        maxWidth = wordWidth
+
+        for _, lineWidth in ipairs(parenthesizedWidths) do
+            -- Keep the line together while it stays within twice the effective label width.
+            -- Beyond that, wrap it instead of stretching the label across the room.
+            if lineWidth <= effectiveWidth * 2 then
+                maxWidth = math.max(maxWidth, lineWidth)
             end
         end
 
