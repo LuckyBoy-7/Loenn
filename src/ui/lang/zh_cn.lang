@@ -603,3 +603,11 @@ scripts.addSpikesAroundObject.copy_success=拷贝成功: %s
 scripts.addSpikesAroundObject.no_target=左键位置没有实体或前景砖。
 scripts.addSpikesAroundObject.added=已添加 %d 个 Spikes。
 scripts.addSpikesAroundObject.none=没有添加 Spikes: 周围位置已被占用或超出房间。
+
+scripts.addSpinnersInArea.hint=右键对应的 spinner(圆刺) 拷贝其配置, 默认用普通刺, 左键在一定范围内添加 Spinners, Alt + 滚轮调整添加范围
+scripts.addSpinnersInArea.no_room=无法添加 Spinners: 没有选中房间。
+scripts.addSpinnersInArea.copy_failed=拷贝失败: 右键位置的实体不是 spinner。
+scripts.addSpinnersInArea.copy_success=拷贝成功: %s
+scripts.addSpinnersInArea.added=已添加 %d 个 Spinners。
+scripts.addSpinnersInArea.none=没有添加 Spinners: 范围内没有足够的空位。
+scripts.addSpinnersInArea.radius=半径: %d

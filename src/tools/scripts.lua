@@ -289,6 +289,16 @@ function tool.unselected()
     return true
 end
 
+function tool.wheelmoved(dx, dy)
+    local script = tool.material and registry.getByName(tool.material)
+
+    if script and script.wheelmoved then
+        return script.wheelmoved(dx, dy)
+    end
+
+    return false
+end
+
 -- Cursor hint: a small square at the mouse position, like the scripts plugin. It shows where the
 -- selected script will run.
 function tool.draw()
@@ -296,6 +306,7 @@ function tool.draw()
         return
     end
 
+    local script = registry.getByName(tool.material)
     local mouseX, mouseY = viewportHandler.getMousePosition()
     local mapX, mapY = viewportHandler.getMapCoordinates(mouseX, mouseY)
 
@@ -304,6 +315,10 @@ function tool.draw()
             love.graphics.setColor(colors.brushColor)
             love.graphics.rectangle("line", mapX - 4, mapY - 4, 8, 8)
             love.graphics.rectangle("line", mapX - 1, mapY - 1, 2, 2)
+
+            if script and script.draw then
+                script.draw(mapX, mapY)
+            end
         end)
     end)
 end

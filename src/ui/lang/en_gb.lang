@@ -514,3 +514,11 @@ scripts.addSpikesAroundObject.copy_success=Copy succeeded: %s
 scripts.addSpikesAroundObject.no_target=Left-click position has no entity or foreground tile.
 scripts.addSpikesAroundObject.added=Added %d Spikes.
 scripts.addSpikesAroundObject.none=No Spikes added: the surrounding cells are already occupied or outside the room.
+
+scripts.addSpinnersInArea.hint=Right-click a spinner to copy its configuration. Defaults to a normal spinner. Left-click to add spinners in an area. Alt + mouse wheel changes the radius.
+scripts.addSpinnersInArea.no_room=Spinners could not be added: no room is selected.
+scripts.addSpinnersInArea.copy_failed=Copy failed: the right-clicked entity is not a spinner.
+scripts.addSpinnersInArea.copy_success=Copy succeeded: %s
+scripts.addSpinnersInArea.added=Added %d Spinners.
+scripts.addSpinnersInArea.none=No Spinners added: not enough free space inside the area.
+scripts.addSpinnersInArea.radius=Radius: %d

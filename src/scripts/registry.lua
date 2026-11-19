@@ -13,6 +13,7 @@ registry.scripts = {
     require("scripts/auto_bg_tiles"),
     require("scripts/auto_bg_tiles_around"),
     require("scripts/add_spikes_around_object"),
+    require("scripts/add_spinners_in_area"),
     require("scripts/create_template_mod"),
     require("scripts/export_to_zip"),
     require("scripts/transfer_used_decals")

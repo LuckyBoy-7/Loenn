@@ -64,6 +64,18 @@ function viewportDevice.resize()
 end
 
 function viewportDevice.wheelmoved(dx, dy)
+    -- Let the active tool consume the wheel first (for example a script that changes its radius
+    -- with Alt + wheel). Otherwise the wheel keeps zooming the viewport as usual.
+    local currentTool = require("tools").currentTool
+
+    if currentTool and currentTool.wheelmoved then
+        local handled = currentTool.wheelmoved(dx, dy)
+
+        if handled then
+            return true
+        end
+    end
+
     if dy > 0 then
         viewportHandler.zoomIn()
 
