@@ -2234,26 +2234,96 @@ local function moveSelectedStylesBlock(interactionData, fromList, fromListItem, 
     return true
 end
 
+-- After a drop the list is rebuilt by updateItems, which restores the selection by row index.
+-- The primary row can therefore point at a different style. Move the primary selection and the
+-- keyboard focus to the dropped row. A multi drag keeps the other selected rows; a single drag
+-- collapses the old selection onto the dragged row, just like clicking it would.
+local function focusDraggedStyleAfterMove(list, style, keepMultiSelection)
+    if not list or not style then
+        return
+    end
+
+    local function findTargetItem()
+        for _, item in ipairs(list.children or {}) do
+            if item.data and item.data.style == style then
+                return item
+            end
+        end
+    end
+
+    ui.runLate(function()
+        if not stylegroundWindow.isOpen() or not list.parent then
+            return
+        end
+
+        local targetItem = findTargetItem()
+
+        if not targetItem then
+            return
+        end
+
+        if not keepMultiSelection and list.clearStyleSelection then
+            list:clearStyleSelection()
+        end
+
+        -- setSelection only changes the primary row: selectionStyles keeps the other rows
+        -- highlighted, so an existing multi selection stays intact.
+        list:setSelection(targetItem.data, false, false)
+
+        if list.setStyleSelectionAnchor then
+            list:setStyleSelectionAnchor(style)
+        end
+
+        widgetUtils.focusElement(targetItem)
+
+        -- The list was rebuilt, so its rows may only be rooted after the layout pass that runs
+        -- after this callback. Look the row up again and focus it once the rebuild settled.
+        ui.runLate(function()
+            if not stylegroundWindow.isOpen() or not list.parent then
+                return
+            end
+
+            local newItem = findTargetItem()
+
+            if not newItem then
+                return
+            end
+
+            widgetUtils.focusElement(newItem)
+
+            if newItem.parent then
+                listWidgets.scrollSelectionVisible(list)
+            end
+        end)
+    end)
+end
+
 local function listItemDraggedHandler(interactionData)
     return function(fromList, fromListItem, toList, toListItem, fromIndex, toIndex)
         if moveSelectedStylesBlock(interactionData, fromList, fromListItem, toList, toListItem, toIndex) then
+            if fromListItem and fromListItem.data and fromListItem.data.style then
+                focusDraggedStyleAfterMove(fromList, fromListItem.data.style, true)
+            end
+
             return false
         end
 
         local fromData = fromListItem and fromListItem.data
         local fromIsGroup = fromData ~= nil and utils.typeof(fromData.style) == "apply"
         local groupData = getGroupDropData(toList, toListItem, toIndex, fromListItem)
+        local moved = false
 
         if fromIsGroup and fromData then
             -- Groups never enter another group: they are reordered between the top level rows
-            moveGroupToDropPosition(interactionData, fromData, toList, toListItem, toIndex)
+            -- and moveGroupToDropPosition already moves the selection/focus to the group
+            moved = moveGroupToDropPosition(interactionData, fromData, toList, toListItem, toIndex)
 
         elseif groupData and fromData then
             -- Dropping a style onto a group row puts it into that group (both halves of the row)
-            moveStyleIntoGroup(interactionData, fromData, groupData.style)
+            moved = moveStyleIntoGroup(interactionData, fromData, groupData.style)
 
         elseif isCrossParentDrag(fromListItem, toListItem) then
-            moveStyleBetweenParents(interactionData, fromListItem.data, toListItem.data)
+            moved = moveStyleBetweenParents(interactionData, fromListItem.data, toListItem.data)
 
         else
             -- Groups are always reordered as top level rows; treating a drop next to another group
@@ -2262,11 +2332,16 @@ local function listItemDraggedHandler(interactionData)
 
             if allowed then
                 moveStyle(fakeInteraction, offset)
+                moved = true
 
                 -- Force update movement buttons with the real data
                 -- We might have moved in a way that should disable/enable some buttons
                 updateMovementButtons(interactionData)
             end
+        end
+
+        if moved and fromData and fromData.style and not fromIsGroup then
+            focusDraggedStyleAfterMove(fromList, fromData.style)
         end
 
         -- Manually update the list
@@ -2626,6 +2701,12 @@ function stylegroundWindow.getStylegroundList(map, interactionData, fg)
     list.clearStyleSelection = function(self)
         clearSelection()
         self.selected = false
+    end
+
+    -- Moves the Shift range anchor without changing the current selection. Used after a drag so
+    -- a following Shift-click extends from the row that was just dragged.
+    list.setStyleSelectionAnchor = function(self, style)
+        anchorStyle = style
     end
 
     -- Selects a set of styles at once, for example after pasting a multi selection. The primary
