@@ -5,7 +5,7 @@
 
 local configs = require("configs")
 local fonts = require("fonts")
-local utils = require("utils")
+local textLayout = require("text_layout")
 
 local triggerText = {}
 
@@ -15,7 +15,6 @@ local CENTER_TOLERANCE = 7
 local NEIGHBOUR_PADDING = 3
 local NEIGHBOUR_PADDING_MAX = 6
 
-local wordWidthCache = {}
 local roomRects = {}
 local roomSignatures = {}
 
@@ -23,101 +22,12 @@ local roomSignatures = {}
 -- Text rectangle
 -- --------------------------------------------------------------------------
 
--- Layout always uses the original pixel font. A custom display font only changes the glyphs; the
--- trigger label boxes, wrapping and extrusion stay identical.
 function triggerText.getRect(text, x, y, width, height, font, fontSize)
-    font = font or fonts.font
-    fontSize = fontSize or 1
-
-    text = utils.trim(text)
-
-    local fontHeight = font:getHeight()
-    local fontLineHeight = font:getLineHeight()
-    local _, lines = font:getWrap(text, width / fontSize)
-    local textHeight = (#lines - 1) * (fontHeight * fontLineHeight) + fontHeight
-
-    local maxWidth = 0
-
-    for i = 1, #lines do
-        local lineWidth = font:getWidth(lines[i])
-
-        if lineWidth > maxWidth then
-            maxWidth = lineWidth
-        end
-    end
-
-    local actualWidth = maxWidth * fontSize
-    local offsetX = math.floor((width - actualWidth) / 2) + 1
-    local offsetY = math.floor((height - textHeight * fontSize) / 2) + 1
-
-    return {
-        x = x + offsetX,
-        y = y + offsetY,
-        width = actualWidth,
-        height = textHeight * fontSize
-    }
+    return textLayout.getRect(text, x, y, width, height, font, fontSize)
 end
 
--- Widens the box around its center when the longest word does not fit, so words
--- are not cut in half. Parenthesized lines normally stay on one line, but a line
--- that is far wider than the (possibly already widened) trigger is allowed to wrap
--- instead of stretching the label across the whole room. Uses the same font
--- metrics the label is drawn with.
-function triggerText.stretchRect(x, y, width, height, text, fontSize)
-    fontSize = fontSize or 1
-    local font = fonts.font
-
-    -- Widths depend on the label size: selecting a room switches between the normal and the
-    -- doubled size, so the cache can not be keyed by text alone. The trigger width is part of
-    -- the key as well because it decides whether a parenthesized line is kept together.
-    local cacheKey = text .. "|" .. tostring(fontSize) .. "|" .. tostring(font) .. "|" .. tostring(width)
-    local maxWidth = wordWidthCache[cacheKey]
-
-    if not maxWidth then
-        local wordWidth = 0
-        local parenthesizedWidths = {}
-
-        for line in (text .. "\n"):gmatch("(.-)\n") do
-            line = utils.trim(line)
-
-            local parenthesized = line:sub(1, 1) == "(" and line:sub(-1) == ")"
-
-            if parenthesized then
-                table.insert(parenthesizedWidths, font:getWidth(line) * fontSize)
-
-            else
-                for word in line:gmatch("[^%s]+") do
-                    wordWidth = math.max(wordWidth, font:getWidth(word) * fontSize)
-                end
-            end
-        end
-
-        -- Stretching the label to fit another long word already gives it extra width. Use that
-        -- effective width for the "too long" check, not just the raw trigger width.
-        local effectiveWidth = math.max(width, wordWidth)
-        maxWidth = wordWidth
-
-        for _, lineWidth in ipairs(parenthesizedWidths) do
-            -- Keep the line together while it stays within twice the effective label width.
-            -- Beyond that, wrap it instead of stretching the label across the room.
-            if lineWidth <= effectiveWidth * 2 then
-                maxWidth = math.max(maxWidth, lineWidth)
-            end
-        end
-
-        -- Wrapping divides the width by the font size again, rounding errors
-        -- would otherwise split an exactly fitting word into two lines
-        maxWidth = math.ceil(maxWidth) + 1
-
-        wordWidthCache[cacheKey] = maxWidth
-    end
-
-    if maxWidth > width then
-        x = x - (maxWidth - width) / 2
-        width = maxWidth
-    end
-
-    return x, y, width, height
+function triggerText.stretchRect(x, y, width, height, text, fontSize, font)
+    return textLayout.stretchRect(x, y, width, height, text, fontSize, font)
 end
 
 -- --------------------------------------------------------------------------
@@ -500,7 +410,7 @@ function triggerText.findTriggerAt(room, x, y)
 end
 
 function triggerText.clearCache()
-    wordWidthCache = {}
+    textLayout.clearCache()
     roomRects = {}
     roomSignatures = {}
 end

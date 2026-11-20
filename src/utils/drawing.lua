@@ -76,24 +76,33 @@ end
 
 -- TODO - Vertical offset is wrong based on scale?
 function drawing.printCenteredText(text, x, y, width, height, font, fontSize, trim)
-    font = font or love.graphics.getFont()
+    -- Entity/text drawables are drawn while the graphics state may still contain whichever font
+    -- the UI used last. Use the same display font as the other entity/trigger labels by default,
+    -- and actually bind the selected font before printing; measuring with `font` but drawing with
+    -- the current font was the reason custom entity text could show up in the wrong font.
+    font = font or require("fonts").getTriggerFont()
     fontSize = fontSize or 1
 
     if trim ~= false then
         text = utils.trim(text)
     end
 
+    local textLayout = require("text_layout")
+    local textX, textY, textWidth, textHeight = textLayout.stretchRect(x, y, width, height, text,
+        fontSize, font)
+
     local fontHeight = font:getHeight()
     local fontLineHeight = font:getLineHeight()
-    local longest, lines = font:getWrap(text, width / fontSize)
-    local textHeight = (#lines - 1) * (fontHeight * fontLineHeight) + fontHeight
+    local lines = textLayout.getLines(text, textWidth, font, fontSize)
+    local textHeightPixels = (#lines - 1) * (fontHeight * fontLineHeight) + fontHeight
 
     local offsetX = 1
-    local offsetY = math.floor((height - textHeight * fontSize) / 2) + 1
+    local offsetY = math.floor((textHeight - textHeightPixels * fontSize) / 2) + 1
 
-    love.graphics.push()
+    love.graphics.push("all")
+    love.graphics.setFont(font)
 
-    love.graphics.translate(math.floor(x) + offsetX, math.floor(y) + offsetY)
+    love.graphics.translate(math.floor(textX) + offsetX, math.floor(textY) + offsetY)
     love.graphics.scale(fontSize, fontSize)
 
     -- Lines are placed at whole pixel offsets: printf() centers each line with
@@ -102,7 +111,7 @@ function drawing.printCenteredText(text, x, y, width, height, font, fontSize, tr
     local lineHeight = fontHeight * fontLineHeight
 
     for index, line in ipairs(lines) do
-        local lineX = math.floor((width / fontSize - font:getWidth(line)) / 2)
+        local lineX = math.floor((textWidth / fontSize - font:getWidth(line)) / 2)
         local lineY = math.floor((index - 1) * lineHeight)
 
         love.graphics.print(line, lineX, lineY)

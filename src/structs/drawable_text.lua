@@ -1,6 +1,7 @@
 local drawing = require("utils.drawing")
 local utils = require("utils")
 local fonts = require("fonts")
+local textLayout = require("text_layout")
 
 local drawableText = {}
 local drawableTextMt = {}
@@ -21,7 +22,7 @@ local function drawWithLayout(drawable)
     local layoutFont = drawable.layoutFont
     local layoutFontSize = drawable.layoutFontSize or drawable.fontSize or 1
 
-    local _, lines = layoutFont:getWrap(drawable.text, drawable.width / layoutFontSize)
+    local lines = textLayout.getLines(drawable.text, drawable.width, layoutFont, layoutFontSize)
 
     -- The drawable is positioned in room coordinates, but the label has to be rasterized at the
     -- size it ends up on screen (just like celeste_render.drawScreenText does). The current

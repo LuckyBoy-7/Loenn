@@ -16,6 +16,7 @@ local virtualFs = require("virtual_fs")
 local depths = require("consts.object_depths")
 local logging = require("logging")
 local modificationWarner = require("modification_warner")
+local textLayout = require("text_layout")
 
 local entityHandler = require("entities")
 local triggerHandler = require("triggers")
@@ -297,6 +298,12 @@ local function sortTextDrawables(drawables)
 end
 
 local function addDrawableToBatchOrText(batches, textDrawables, drawable, depth)
+    if drawable._type == "drawableScreenText" then
+        table.insert(textDrawables, drawable)
+
+        return
+    end
+
     if drawable._type == "drawableText" then
         local displayFont = fonts.getTriggerFont()
         local labelFontSize = fonts.size(configs.font.textSize or 1)
@@ -1343,11 +1350,35 @@ end
 -- coordinates, but the font is rasterized at the final screen size instead of being drawn through
 -- the viewport transform or into a room canvas.
 local function drawScreenText(drawable, room, viewport)
+    if drawable._type == "drawableScreenText" then
+        -- A mod called printCenteredText through a drawable function. Preserve its font and
+        -- relative size, but lay it out and rasterize it in this screen-space pass.
+        drawable.font = drawable.font or fonts.getTriggerFont()
+        drawable.layoutFont = drawable.layoutFont or drawable.font
+        drawable.layoutFontSize = drawable.layoutFontSize or drawable.fontSize or 1
+
+        if configs.font.addShadowToFont and not drawable._screenShadow then
+            -- Match the trigger-label shadow: draw the same text offset by one label pixel, in
+            -- black, behind the main drawable. Placement previews use draw() directly and do not
+            -- get this pass.
+            local shadow = {}
+
+            for key, value in pairs(drawable) do
+                shadow[key] = value
+            end
+
+            local offset = math.max(1, drawable.fontSize or 1)
+
+            shadow._screenShadow = true
+            shadow.x = drawable.x + offset
+            shadow.y = drawable.y + offset
+            shadow.color = {0, 0, 0, 1}
+
+            drawScreenText(shadow, room, viewport)
+        end
+    end
+
     local scale = viewport.scale or 1
-    local x = ((room.x or 0) + drawable.x) * scale - viewport.x
-    local y = ((room.y or 0) + drawable.y) * scale - viewport.y
-    local width = drawable.width * scale
-    local height = drawable.height * scale
     local font = drawable.font
     local fontSize = drawable.fontSize or 1
 
@@ -1357,16 +1388,29 @@ local function drawScreenText(drawable, room, viewport)
 
     local layoutFont = drawable.layoutFont or fonts.font
     local layoutFontSize = drawable.layoutFontSize or fontSize
+    local drawX, drawY, drawWidth, drawHeight = drawable.x, drawable.y, drawable.width,
+        drawable.height
+
+    if drawable._type == "drawableScreenText" then
+        -- Keep whole words visible instead of letting getWrap split them. This is the same
+        -- center-stretching layout trigger labels use; extrusion is intentionally not applied.
+        drawX, drawY, drawWidth, drawHeight = textLayout.stretchRect(drawX, drawY, drawWidth,
+            drawHeight, drawable.text, layoutFontSize, layoutFont)
+    end
+
+    local x = ((room.x or 0) + drawX) * scale - viewport.x
+    local y = ((room.y or 0) + drawY) * scale - viewport.y
+    local width = drawWidth * scale
+    local height = drawHeight * scale
     local screenSize = math.max(1, math.floor(
         layoutFont:getHeight() * layoutFontSize * scale + 0.5))
-    local wrapLimit = drawable.width / layoutFontSize
     local layoutLines = drawable.layoutLines
 
-    if not layoutLines then
-        local _, lines = layoutFont:getWrap(drawable.text, wrapLimit)
+    if drawable._type == "drawableScreenText" or not layoutLines then
         layoutLines = {}
 
-        for index, line in ipairs(lines) do
+        for index, line in ipairs(textLayout.getLines(drawable.text, drawWidth, layoutFont,
+            layoutFontSize)) do
             layoutLines[index] = {
                 text = utils.trim(line)
             }
