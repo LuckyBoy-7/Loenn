@@ -587,6 +587,7 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
                 sourceKey = (associatedMods and associatedMods[1]) or "",
                 associatedMods = associatedMods,
                 tooltip = isTable and material.tooltipText or nil,
+                searchAttributes = isTable and material.searchAttributes or nil,
                 alternativeNames = searchNames
             })
         end
@@ -737,6 +738,9 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
                 tooltip = entry.tooltip,
                 alternativeNames = entry.alternativeNames,
                 associatedMods = entry.associatedMods,
+                searchAttributes = entry.searchAttributes
+                    or (type(entry.material) == "table" and entry.material.searchAttributes)
+                    or nil,
                 itemFavorited = true,
                 isFavoritesGroup = true,
                 placement = entry.material,
@@ -813,6 +817,9 @@ local function getPathTreeItems(materials, currentTool, currentLayer, favoritesL
             tooltip = entry.tooltip,
             alternativeNames = entry.alternativeNames,
             associatedMods = entry.associatedMods,
+            searchAttributes = entry.searchAttributes
+                or (type(entry.material) == "table" and entry.material.searchAttributes)
+                or nil,
             itemFavorited = not not favoritesLookup[entry.name],
             placement = entry.material,
             ancestors = chain
@@ -1084,8 +1091,166 @@ local function getThemeListHeaderColor(indent)
     }
 end
 
+local function parseAttributeFilterValue(value)
+    value = value:match("^%s*(.-)%s*$")
+
+    local lower = value:lower()
+
+    if lower == "true" then
+        return {kind = "boolean", value = true, text = lower}
+    end
+
+    if lower == "false" then
+        return {kind = "boolean", value = false, text = lower}
+    end
+
+    return {
+        kind = "string",
+        value = lower,
+        text = lower,
+        number = tonumber(value)
+    }
+end
+
+local function attributeValueMatches(actual, expected)
+    if actual == nil then
+        return false
+    end
+
+    if expected.kind == "boolean" then
+        if type(actual) == "boolean" then
+            return actual == expected.value
+        end
+
+        return tostring(actual):lower():find(tostring(expected.value), 1, true) ~= nil
+    end
+
+    local actualText = tostring(actual):lower()
+
+    -- First try numeric equality when both sides look numeric, then fall back to a
+    -- case-insensitive substring check.
+    if expected.number ~= nil then
+        local actualNumber = tonumber(actualText)
+
+        if actualNumber ~= nil and actualNumber == expected.number then
+            return true
+        end
+    end
+
+    return actualText:find(expected.value, 1, true) ~= nil
+end
+
+local function getItemSearchAttributes(item)
+    if item.searchAttributes then
+        return item.searchAttributes
+    end
+
+    local currentTool = toolHandler.currentTool
+    local debugTool = currentTool and currentTool.name == "debug" and toolHandler.tools
+        and toolHandler.tools.debug
+
+    if debugTool and debugTool.getSearchAttributes and item.data then
+        return debugTool.getSearchAttributes(item.data)
+    end
+end
+
+local function getMatchingInstances(attributes, filters)
+    local matches = {}
+
+    for _, instance in ipairs(attributes) do
+        local values = instance.values or instance
+        local ok = true
+
+        for _, filter in ipairs(filters) do
+            if not attributeValueMatches(values[filter.key], filter.expected) then
+                ok = false
+                break
+            end
+        end
+
+        if ok then
+            matches[#matches + 1] = instance
+        end
+    end
+
+    return matches
+end
+
+local function splitAttributeFilters(parts)
+    -- `field:value` terms become filters only for materials that carry searchAttributes (the
+    -- debug entity/trigger lists). Other lists keep the old colon-as-text behaviour.
+    local filters = {}
+    local nameParts = {}
+    local hasFilters = false
+
+    for _, part in ipairs(parts) do
+        local key, value = nil, nil
+
+        if part.mode == "name" then
+            key, value = part.text:match("^([^:]+)[:：](.*)$")
+        end
+
+        if key and key ~= "" then
+            filters[#filters + 1] = {
+                key = key:lower(),
+                expected = parseAttributeFilterValue(value)
+            }
+            hasFilters = true
+
+        else
+            nameParts[#nameParts + 1] = part
+        end
+    end
+
+    return filters, nameParts, hasFilters
+end
+
+local function itemMatchesAttributeFilters(item, filters)
+    for _, filter in ipairs(filters) do
+        local actual
+
+        for key, value in pairs(item) do
+            if type(key) == "string" and key:lower() == filter.key then
+                actual = value
+                break
+            end
+        end
+
+        if not attributeValueMatches(actual, filter.expected) then
+            return false
+        end
+    end
+
+    return true
+end
+
+local function setDebugAttributeFilter(filters)
+    local currentTool = toolHandler.currentTool
+
+    if not currentTool or currentTool.name ~= "debug" then
+        return
+    end
+
+    local debugTool = toolHandler.tools and toolHandler.tools.debug
+
+    if not debugTool or not debugTool.setAttributeFilter then
+        return
+    end
+
+    if filters and #filters > 0 then
+        debugTool.setAttributeFilter(function(item)
+            return itemMatchesAttributeFilters(item, filters)
+        end)
+
+    else
+        debugTool.setAttributeFilter(nil)
+    end
+end
+
 local function filterMaterialItems(items, search, options)
     if not search or search == "" then
+        setDebugAttributeFilter(nil)
+
         -- Keep the scores consistent: a stale mix of numbers and nils makes the sorting
         -- comparator compare a number with nil
         for _, item in ipairs(items) do
@@ -1116,6 +1281,9 @@ local function filterMaterialItems(items, search, options)
         return items
     end
 
+    local attributeFilters, nameParts, hasAttributeFilters = splitAttributeFilters(parts)
+    setDebugAttributeFilter(hasAttributeFilters and attributeFilters or nil)
+
     local hasModSearch = false
 
     for _, part in ipairs(parts) do
@@ -1127,13 +1295,41 @@ local function filterMaterialItems(items, search, options)
 
     local keep = {}
     local favoritesHeader
+    local currentTool = toolHandler.currentTool
+    local debugSearch = currentTool and currentTool.name == "debug"
 
     for _, item in ipairs(items) do
         if item.isFavoritesHeader then
             favoritesHeader = item
 
         elseif not item.isHeader then
-            local score = getMaterialScore(item, parts, caseSensitive, fuzzy)
+            local itemParts = parts
+            local score
+
+            if hasAttributeFilters then
+                local attributes = getItemSearchAttributes(item)
+
+                if attributes then
+                    if #getMatchingInstances(attributes, attributeFilters) > 0 then
+                        itemParts = nameParts
+                    else
+                        itemParts = nil
+                    end
+
+                elseif debugSearch then
+                    itemParts = nil
+
+                else
+                    itemParts = parts
+                end
+
+            else
+                itemParts = parts
+            end
+
+            if itemParts then
+                score = getMaterialScore(item, itemParts, caseSensitive, fuzzy)
+            end
 
             if score then
                 item._filterScore = score
@@ -1273,6 +1469,11 @@ local function materialFavoriteDoubleClickedCallback(self, button)
     local layer = toolHandler.getLayer()
 
     local material = self.data
+
+    if type(material) == "table" then
+        material = material.name
+    end
+
     local favorited = self.itemFavorited
 
     updateFavorite(self.parent, self.itemData, tool, layer, material, not favorited)
@@ -4087,7 +4288,8 @@ getMaterialItems = function(layer)
             table.insert(debugMaterials, {
                 name = name,
                 associatedMods = modName and {modName} or nil,
-                displayNameNoMods = displayName
+                displayNameNoMods = displayName,
+                searchAttributes = type(material) == "table" and material.searchAttributes or nil
             })
         end
 

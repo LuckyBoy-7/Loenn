@@ -21,6 +21,9 @@ tool.name = "debug"
 tool.group = "debug"
 tool.order = 10
 
+-- Latest attributes collected by getMaterials, used as a fallback by the material search.
+local searchAttributesByName = {}
+
 -- Room logic is left to the default handling, so clicking a room changes focus
 -- like it does for every other tool
 
@@ -51,6 +54,9 @@ end
 -- Entity / trigger name whose usages are highlighted
 local selectedName
 
+-- KVP predicate from the active search, applied to individual usages while drawing.
+local activeAttributeFilter
+
 -- Player preview that shows where a click would teleport to
 local playerSprite
 
@@ -76,9 +82,10 @@ end
 local function getUsedNames(layer)
     local map = loadedState.map
     local counts = {}
+    local attributes = {}
 
     if not map then
-        return counts
+        return counts, attributes
     end
 
     if isTileLayer(layer) then
@@ -101,7 +108,7 @@ local function getUsedNames(layer)
             end
         end
 
-        return counts
+        return counts, attributes
     end
 
     for _, room in ipairs(map.rooms or {}) do
@@ -110,11 +117,41 @@ local function getUsedNames(layer)
 
             if name then
                 counts[name] = (counts[name] or 0) + 1
+
+                -- Debug search can filter entities/triggers by their actual map attributes.
+                -- Keep one normalized attribute table per used instance so multi-filter queries
+                -- have to match the same instance, not a mix of different instances.
+                if layer == "entities" or layer == "triggers" then
+                    local instances = attributes[name]
+
+                    if not instances then
+                        instances = {}
+                        attributes[name] = instances
+                    end
+
+                    local values = {}
+
+                    for key, value in pairs(item) do
+                        local valueType = type(value)
+
+                        if type(key) == "string"
+                            and (valueType == "string" or valueType == "number" or valueType == "boolean") then
+                            values[key:lower()] = value
+                        end
+                    end
+
+                    instances[#instances + 1] = {
+                        values = values,
+                        item = item,
+                        room = room,
+                        layer = layer
+                    }
+                end
             end
         end
     end
 
-    return counts
+    return counts, attributes
 end
 
 local function getLeafName(name)
@@ -132,11 +169,14 @@ local function getTilesetDisplayName(layer, id)
     return tostring(id)
 end
 
--- Materials for the tools window: every used entity / trigger / decal / tileset
+-- Materials for the tools window: every used entity / trigger / decal / tileset.
+-- Entity and trigger materials also carry their per-instance attributes so the search field can
+-- apply `field:value` filters without changing the generic material list.
 function tool.getMaterials(layer)
     layer = layer or tool.layer
 
-    local counts = getUsedNames(layer)
+    local counts, attributes = getUsedNames(layer)
+    searchAttributesByName = attributes
     local names = table.keys(counts)
 
     table.sort(names)
@@ -144,35 +184,56 @@ function tool.getMaterials(layer)
     local materials = {}
 
     for _, name in ipairs(names) do
+        local material
+
         if isTileLayer(layer) then
-            table.insert(materials, {
+            material = {
                 name = name,
                 displayNameNoMods = string.format("%s (%d)", getTilesetDisplayName(layer, name), counts[name])
-            })
+            }
 
         elseif isDecalLayer(layer) then
             -- Decals are handled like the normal decal list: the owner mod is resolved by the
             -- list itself (resolveOwner), so only the plain name is needed here
-            table.insert(materials, {
+            material = {
                 name = name
-            })
+            }
 
         else
             local modName = string.match(name, "^([^/]+)/")
 
-            table.insert(materials, {
+            material = {
                 name = name,
                 associatedMods = modName and {modName} or nil,
                 displayNameNoMods = string.format("%s (%d)", getLeafName(name), counts[name])
-            })
+            }
         end
+
+        if attributes[name] then
+            material.searchAttributes = attributes[name]
+        end
+
+        table.insert(materials, material)
     end
 
     return materials
 end
 
-function tool.setMaterial(name)
-    selectedName = name
+function tool.getSearchAttributes(name)
+    if not searchAttributesByName[name] and loadedState.map then
+        local _, attributes = getUsedNames(tool.layer)
+        searchAttributesByName = attributes
+    end
+
+    return searchAttributesByName[name]
+end
+
+function tool.setAttributeFilter(filter)
+    activeAttributeFilter = filter
+end
+
+function tool.setMaterial(material)
+    selectedName = material
 
     return true
 end
@@ -386,7 +447,8 @@ function tool.draw()
 
             else
                 for _, item in ipairs(targetRoom[layer] or {}) do
-                    if getItemName(item, layer) == selectedName then
+                    if getItemName(item, layer) == selectedName
+                        and (not activeAttributeFilter or activeAttributeFilter(item)) then
                         local x = (targetRoom.x or 0) + (item.x or 0) + (item.width or 0) / 2
                         local y = (targetRoom.y or 0) + (item.y or 0) + (item.height or 0) / 2
 
