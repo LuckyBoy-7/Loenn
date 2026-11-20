@@ -2,10 +2,6 @@
 	path = src/selene
 	url = https://github.com/Vexatos/Selene.git
 	branch = lua5.1
-[submodule "OlympUI"]
-	path = src/olympUI/ui
-	url = https://github.com/EverestAPI/OlympUI.git
-	branch = main
 [submodule "luajit-request"]
 	path = src/lib/luajit-request
 	url = https://github.com/Vexatos/luajit-request.git
